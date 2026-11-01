@@ -13,7 +13,7 @@ public actor CommandProcess {
     private var closed = false
     private var timeoutTask: Task<Void, Never>?
     public init() {}
-    public func run(executable: String, arguments: [String], cwd: String? = nil, timeout: Double = 45) async throws -> CommandOutput {
+    public func run(executable: String, arguments: [String], cwd: String? = nil, timeout: Double = 45, environment: [String: String] = [:]) async throws -> CommandOutput {
         try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
@@ -21,6 +21,7 @@ public actor CommandProcess {
                 self.continuation = continuation
                 let p = Process(); let stdout = Pipe(); let stderr = Pipe()
                 p.executableURL = URL(fileURLWithPath: executable); p.arguments = arguments
+                p.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
                 if let cwd { p.currentDirectoryURL = URL(fileURLWithPath: cwd) }
                 p.standardInput = FileHandle.nullDevice; p.standardOutput = stdout; p.standardError = stderr
                 p.terminationHandler = { [weak self] process in Task { await self?.exited(process.terminationStatus) } }

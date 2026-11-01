@@ -30,7 +30,7 @@ struct FilesView: View {
             if let answer = model.files.answer { ScrollView { Text(answer.answer).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 180).padding().background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12)) }
             if let message = model.files.message { Text(message).font(.caption) }
             if !model.files.failures.isEmpty { DisclosureGroup("\(model.files.failures.count) skipped files or import limitations") { ScrollView { Text(model.files.failures.joined(separator: "\n")).font(.caption).textSelection(.enabled) }.frame(maxHeight: 100) } }
-            List(model.files.files) { file in
+            ScrollView { LazyVStack(spacing: 8) { ForEach(model.files.files) { file in
                 HStack(spacing: 12) {
                     Toggle("Select \(file.title)", isOn: Binding(get: { model.files.selectedIDs.contains(file.id) }, set: { _ in model.files.toggle(file) })).labelsHidden()
                     Image(systemName: file.kind == "Image OCR" ? "photo" : "doc.text").foregroundStyle(model.tint)
@@ -38,11 +38,11 @@ struct FilesView: View {
                         Text(file.title).font(.headline)
                         Text("\(file.kind) · \(file.text.count) characters · \(file.warnings.isEmpty ? "Ready" : "Partial extraction")").font(.caption).foregroundStyle(.secondary)
                     }; Spacer()
-                    Button("Preview") { preview = file }
-                    Button("Show file") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)]) }
-                    Button("Remove") { model.files.remove(file) }
-                }.padding(.vertical, 5)
-            }
+                    Button("Preview") { preview = file }.accessibilityLabel("Preview " + file.title)
+                    Button("Show file") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)]) }.accessibilityLabel("Show " + file.title)
+                    Button("Remove") { model.files.remove(file) }.accessibilityLabel("Detach " + file.title)
+                }.padding(.vertical, 5).buttonStyle(.borderless).accessibilityElement(children: .contain)
+            } } }
             DisclosureGroup("Organize files and undo") {
                 ScrollView { FileOperationsView(model: model) }.frame(maxHeight: 220)
             }

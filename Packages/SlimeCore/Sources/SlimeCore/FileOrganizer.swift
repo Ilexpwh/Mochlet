@@ -11,10 +11,17 @@ public struct FileMove: Codable, Sendable, Identifiable {
     public let createdAt: Date
     public var state: String
     public var message: String?
+    public var destinationRoot: String?
+    public var rootIdentity: String?
+    public var reason: String?
 }
 
 /// Reviewed regular-file moves. Never overwrites; cross-volume moves fail closed.
 public actor FileOrganizer {
+    public nonisolated static func canonicalPath(_ path: String) -> String {
+        let input = URL(fileURLWithPath: path).standardizedFileURL
+        return input.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(input.lastPathComponent).path
+    }
     private let database: DatabaseQueue
     public init(folder: URL) throws {
         database = try DatabaseQueue(path: folder.appendingPathComponent("file-operations.sqlite").path)
@@ -61,8 +68,7 @@ public actor FileOrganizer {
         guard resource.isDirectory == true else { throw MochletError.message("Choose an existing destination folder.") }
         var moves: [FileMove] = []; var destinations = Set<String>()
         for path in paths {
-            let input = URL(fileURLWithPath: path).standardizedFileURL
-            let source = input.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(input.lastPathComponent)
+            let source = URL(fileURLWithPath: Self.canonicalPath(path))
             let target = destination.appendingPathComponent(source.lastPathComponent).path
             guard source.path != target, !exists(target), destinations.insert(target).inserted else {
                 throw MochletError.message("Destination already exists or two files have the same name: \(source.lastPathComponent). Nothing was moved.")
@@ -72,6 +78,44 @@ public actor FileOrganizer {
         }
         for move in moves { try save(move) }
         return moves
+    }
+    public func previewOrganization(_ proposal: FileOrganizationProposal, files: [FileExtraction], destination: URL) throws -> [FileMove] {
+        try proposal.validate(files: files)
+        let root = destination.resolvingSymlinksInPath().standardizedFileURL
+        let identity = try directoryIdentity(root.path)
+        var moves: [FileMove] = []
+        for item in proposal.moves {
+            guard let file = files.first(where: { $0.id == item.fileID }) else { throw MochletError.message("The selected file is unavailable.") }
+            let source = URL(fileURLWithPath: Self.canonicalPath(file.path))
+            let target = root.appendingPathComponent(item.destination).path
+            guard source.path != target, !exists(target) else { throw MochletError.message("Destination already exists: " + item.destination) }
+            try validateParents(target: target, root: root.path, create: false)
+            let fingerprint = try fingerprint(source.path)
+            guard fingerprint.hasSuffix(":" + file.revision) else { throw MochletError.message("File changed since it was read. Re-feed it before organizing: " + file.title) }
+            moves.append(FileMove(id: UUID().uuidString, source: source.path, destination: target, fingerprint: fingerprint,
+                                  createdAt: Date(), state: "planned", destinationRoot: root.path, rootIdentity: identity, reason: item.reason))
+        }
+        for move in moves { try save(move) }
+        return moves
+    }
+    private func directoryIdentity(_ path: String) throws -> String {
+        let attrs = try FileManager.default.attributesOfItem(atPath: path)
+        guard attrs[.type] as? FileAttributeType == .typeDirectory,
+              URL(fileURLWithPath: path).resolvingSymlinksInPath().path == path else { throw MochletError.message("Destination folder changed or uses a symbolic link.") }
+        return "\(attrs[.systemNumber] ?? ""):\(attrs[.systemFileNumber] ?? "")"
+    }
+    private func validateParents(target: String, root: String, create: Bool) throws {
+        guard target.hasPrefix(root + "/"), FileOrganizationProposal.validRelativePath(String(target.dropFirst(root.count + 1))) else { throw MochletError.message("Destination escaped the reviewed folder.") }
+        let parts = String(target.dropFirst(root.count + 1)).split(separator: "/").dropLast()
+        var parent = URL(fileURLWithPath: root)
+        for part in parts {
+            parent.appendPathComponent(String(part), isDirectory: true)
+            if exists(parent.path) { _ = try directoryIdentity(parent.path) }
+            else if create {
+                try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
+                _ = try directoryIdentity(parent.path)
+            }
+        }
     }
     public func apply(id: String, undo: Bool = false) throws -> FileMove {
         guard let data = try database.read({ try Data.fetchOne($0, sql: "SELECT payload FROM file_moves WHERE id=?", arguments: [id]) }) else {
@@ -86,6 +130,14 @@ public actor FileOrganizer {
             throw MochletError.message("Destination changed or already exists. Nothing was overwritten.")
         }
         move.state = undo ? "undoing" : "applying"; move.message = nil; try save(move)
+        if !undo, let root = move.destinationRoot {
+            do {
+                guard try directoryIdentity(root) == move.rootIdentity else { throw MochletError.message("The reviewed destination folder was replaced.") }
+                try validateParents(target: to, root: root, create: true)
+            } catch {
+                move.state = "failed"; move.message = error.localizedDescription; try save(move); throw error
+            }
+        }
         let result = renamex_np(from, to, UInt32(RENAME_EXCL))
         if result != 0 {
             let failure = errno

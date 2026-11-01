@@ -203,3 +203,12 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Pinned Yams 6.1.0 replaces ad-hoc scalar parsing. Unknown types are accepted; malformed/duplicate/empty types fail. Compact and block alias forms are rejected before parsing. Draft/deprecated/stale/invalid lifecycle states are visible for review and excluded before retrieval limits; expiry is checked again at evidence validation.
 - Native walkthrough in disposable data imported two concepts, inspected a deprecated exclusion, saved a lifecycle review and exported the correct nested concept paths. [Native review screenshot](evidence/native-memory-lifecycle.png). No inference, external sources or user data were used.
 - `scripts/check.sh` passes: 89 reported tests (86 fixture declarations and three opt-in live skips), native Debug build and runtime regression host. Review findings on alias amplification, lifecycle reachability and retrieval limiting were fixed and rechecked. [Contracts and limits](okf-bundles.md).
+
+## Reviewed folder organization — 2026-11-01
+
+- Added local grouping and optional selected-model proposals across loaded files, schema-validated IDs/relative destinations/reasons and a separate exact-path review. Nested folders are created only on Apply. Existing journaled same-volume moves/undo now pin the destination-root identity and reject changed ingestion revisions.
+- Seven focused file-operation fixtures pass. Full checks pass 93 reported tests (90 fixture declarations plus three opt-in live skips), Debug build and native runtime host. Independent review found no remaining Required/Critical issues.
+- Native disposable-folder walkthrough prepared a two-file grouping, inspected the populated preview, applied both moves and undid both. A second direct-move walkthrough verified stale attachments are removed and both files restore unchanged. [Preview evidence](evidence/native-file-organization.png).
+- The walkthrough caught and fixed SwiftUI preview state capture, folder-picker focus and `/private/var` versus `/var` attachment invalidation. AI provider quality/live inference, whole-directory relocation and cross-volume copying remain unverified or unsupported; [behavior and bounds](file-organization.md).
+
+The final native accessibility pass exposes each file’s Preview, Show and Detach controls separately. Opened the fictional meeting preview and detached its attachment through those controls; the original fixture remained on disk. Debug rebuild passed after the accessibility layout change.

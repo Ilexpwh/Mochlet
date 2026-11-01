@@ -49,9 +49,10 @@ struct RuntimeSettings: View {
                 Text("New turns use on-request approvals. Changing this setting affects the next run, not active work.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Account limits") {
-                Button("Refresh",action:{Task {await model.refreshUsage()}}).disabled(model.runtime == nil)
-                if let date=model.usageDate {Text("Updated \(date.formatted())").font(.caption);Text(model.usage.formatted).font(.system(.caption,design:.monospaced)).textSelection(.enabled)}
+                Button(model.runtime == nil ? "Connect Codex and read limits" : "Refresh", action: { Task { await model.connectAndReadUsage() } }).disabled(model.connectingRuntime)
+                if model.usageDate != nil { UsageCard(value: model.usage, observedAt: model.usageDate) }
                 else {Text("Unavailable until a supported Codex account is connected. Missing values are not zero usage.").foregroundStyle(.secondary)}
+                DisclosureGroup("Protocol details") { Text(model.usage.formatted).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
             }
         }.formStyle(.grouped)
     }

@@ -3,6 +3,7 @@ import SlimeCore
 
 struct WorkspaceView: View {
     @Bindable var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var section = "Companion"
     var body: some View {
         NavigationSplitView {
@@ -38,7 +39,7 @@ struct WorkspaceView: View {
                 }
             }.frame(maxWidth:.infinity,maxHeight:.infinity)
         }
-        .tint(model.tint.mix(with:.black,by:0.25))
+        .tint(colorScheme == .dark ? model.tint : model.tint.mix(with:.black,by:0.35))
         .alert("Mochlet needs your attention",isPresented:Binding(get:{model.errorMessage != nil},set:{if !$0 {model.errorMessage=nil}})) { Button("OK") { model.errorMessage=nil } } message: { Text(model.errorMessage ?? "") }
     }
     private var projectList: some View {
@@ -78,13 +79,24 @@ struct WorkspaceView: View {
                 Toggle("Hide when idle", isOn: $model.hideWhenIdle)
                 Text("Hover to peek. Click to open. Escape to fold. Drafts, pending requests and pinned panels stay open.").font(.caption).foregroundStyle(.secondary)
             }
+            Section("Keyboard") { ShortcutSettings(shortcuts: model.shortcuts) }
             Section { Text("Motion follows the macOS Reduce Motion setting. Your choice of character is independent of the agent and model.").foregroundStyle(.secondary) }
         }.formStyle(.grouped)
     }
 }
 
+private struct ShortcutSettings: View {
+    @Bindable var shortcuts: HotKeyCenter
+    var body: some View {
+        Toggle("Enable global shortcuts", isOn: $shortcuts.enabled)
+        Text("⌃⌥Space opens or folds Mochlet. Hold ⌃⌥V to record a command; release to transcribe, then review and Send. Release before recording starts cancels the request. Recording is capped at two minutes.").font(.caption).foregroundStyle(.secondary)
+        ForEach(shortcuts.conflicts, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+    }
+}
+
 struct CompanionView: View {
     @Bindable var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     var compact = false
     @FocusState private var composerFocused: Bool
     var body: some View {
@@ -110,6 +122,14 @@ struct CompanionView: View {
             }
             if !compact, let pending=model.pendingInputs.first { AttentionView(input:pending,model:model).id(pending.id) }
             if model.isBusy { HStack {ProgressView().controlSize(.small);Text(model.activity).font(.caption);Spacer();Button("Stop",action:model.cancelRun)} }
+            if !model.queue.isEmpty {
+                HStack {
+                    Text("\(model.queue.count) queued").font(.caption)
+                    Spacer()
+                    if !model.isBusy { Button("Resume queue") { Task { await model.runNext() } } }
+                    Button("Cancel queued", action: model.cancelQueue)
+                }
+            }
             if let task = model.selectedTask {
               HStack { Text(task.state.rawValue.capitalized).font(.caption.weight(.semibold));Spacer();Button("New conversation") { model.selectedTaskID=nil } }
               if let workspace = model.taskWorkspaces[task.id] {
@@ -136,7 +156,7 @@ struct CompanionView: View {
                     Button { model.files.choose() } label: { Image(systemName: "paperclip") }.accessibilityLabel("Attach files").disabled(model.files.busy)
                     VoiceControls(speech: model.speech)
                     Button(action:model.submit) { Image(systemName:"arrow.up").font(.headline).frame(width:24,height:24) }
-                        .buttonStyle(.borderedProminent).tint(model.tint.mix(with:.black,by:0.25))
+                        .buttonStyle(.borderedProminent).tint(colorScheme == .dark ? model.tint : model.tint.mix(with:.black,by:0.35))
                         .disabled(model.files.busy || model.speech.active || model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return,modifiers:.command).help("Send · Command Return").accessibilityLabel("Send task")
                 }

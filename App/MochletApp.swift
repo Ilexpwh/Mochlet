@@ -10,6 +10,7 @@ import SlimeCore
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
     var surfaces: SurfaceController?
+    private var shortcutRecording = false
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             var folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Mochlet", isDirectory: true)
@@ -25,6 +26,18 @@ import SlimeCore
             NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(captureInterrupted), name: NSWorkspace.willSleepNotification, object: nil)
             DistributedNotificationCenter.default().addObserver(self, selector: #selector(captureInterrupted), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
             surfaces = SurfaceController(model: model)
+            model.shortcuts.start { [weak self] id, down in
+                guard let self, let model = self.model else { return }
+                if id == 1, down { self.surfaces?.togglePanel() }
+                if id == 2 {
+                    if down, !model.speech.active, !model.meetings.active {
+                        self.surfaces?.openForVoice()
+                        model.speech.start(); self.shortcutRecording = model.speech.active
+                    } else if !down, self.shortcutRecording {
+                        self.shortcutRecording = false; model.speech.stop()
+                    }
+                }
+            }
             Task { await model.load() }
             surfaces?.showWorkspace()
         } catch {
@@ -34,6 +47,8 @@ import SlimeCore
         }
     }
     @objc private func captureInterrupted() {
+        shortcutRecording = false
+        model?.shortcuts.releaseHeldKeys()
         if model?.speech.active == true { model?.speech.cancel(); model?.speech.message = "Voice command cancelled on lock or sleep. Start a new recording when ready." }
         model?.speech.stopSpeaking()
         Task { await model?.meetings.pause(reason: "Paused on lock or sleep. Resume explicitly.") }
@@ -47,6 +62,7 @@ import SlimeCore
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
         }
         model?.speech.cancel(); model?.speech.stopSpeaking()
+        model?.shortcuts.stop()
         Task { [model] in
             await model?.meetings.shutdown()
             if let runtime=model?.runtime {await runtime.client.stop()}

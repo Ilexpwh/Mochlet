@@ -28,6 +28,9 @@ public actor Store {
         migrations.registerMigration("task_workspaces") { db in
             try db.execute(sql: "CREATE TABLE task_workspaces (taskID TEXT PRIMARY KEY REFERENCES tasks(id), payload BLOB NOT NULL)")
         }
+        migrations.registerMigration("durable_queue") { db in
+            try db.execute(sql: "CREATE TABLE queued_commands (sequence INTEGER PRIMARY KEY AUTOINCREMENT, taskID TEXT NOT NULL UNIQUE REFERENCES tasks(id), prompt TEXT NOT NULL, readOnly BOOLEAN NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -35,7 +38,10 @@ public actor Store {
     public func tasks() throws -> [WorkTask] { try database.read { try WorkTask.order(Column("createdAt").desc).fetchAll($0) } }
     public func save(_ task: WorkTask) throws { try database.write { try task.save($0) } }
     public func begin(_ task: WorkTask, run: Run) throws {
-        try database.write { db in try task.save(db); try run.insert(db) }
+        try database.write { db in
+            try task.save(db); try run.insert(db)
+            try db.execute(sql: "DELETE FROM queued_commands WHERE taskID=?", arguments: [task.id])
+        }
     }
     public func finish(_ task: WorkTask, runID: String) throws {
         try database.write { db in
@@ -51,6 +57,7 @@ public actor Store {
     public func recover() throws {
         try database.write { db in
             try db.execute(sql: "UPDATE tasks SET state = 'interrupted' WHERE state IN ('running','waiting')")
+            try db.execute(sql: "UPDATE tasks SET state = 'interrupted' WHERE state='queued' AND id NOT IN (SELECT taskID FROM queued_commands)")
             try db.execute(sql: "UPDATE runs SET state = 'interrupted', endedAt = ? WHERE state IN ('running','waiting')", arguments: [Date().timeIntervalSince1970])
         }
     }
@@ -63,6 +70,27 @@ public actor Store {
 }
 
 extension Store {
+    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool) throws {
+        guard task.state == .queued else { throw MochletError.message("Only queued tasks can be enqueued.") }
+        try database.write { db in
+            try task.save(db)
+            try db.execute(sql: "INSERT INTO queued_commands(taskID,prompt,readOnly) VALUES(?,?,?)", arguments: [task.id, prompt, readOnly])
+        }
+    }
+    public func queuedCommands() throws -> [(WorkTask, String, Bool)] {
+        try database.read { db in
+            try Row.fetchAll(db, sql: "SELECT taskID,prompt,readOnly FROM queued_commands ORDER BY sequence").compactMap { row in
+                guard let task = try WorkTask.fetchOne(db, key: row["taskID"] as String) else { return nil }
+                return (task, row["prompt"], row["readOnly"])
+            }
+        }
+    }
+    public func cancelQueuedCommands() throws {
+        try database.write { db in
+            try db.execute(sql: "UPDATE tasks SET state='cancelled' WHERE id IN (SELECT taskID FROM queued_commands)")
+            try db.execute(sql: "DELETE FROM queued_commands")
+        }
+    }
     public func workspace(taskID: String) throws -> TaskWorkspace? {
         try database.read { db in try Data.fetchOne(db, sql: "SELECT payload FROM task_workspaces WHERE taskID=?", arguments: [taskID]).map { try JSONDecoder().decode(TaskWorkspace.self, from: $0) } }
     }

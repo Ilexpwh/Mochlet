@@ -33,3 +33,5 @@ Grok Bot visual direction reference: https://x.ai/news/designing-grok-bot. No Gr
 ## Meeting audio ports — 2026-11-01
 
 `Resampler16k` and the microphone tap in `App/MeetingCapture.swift` adapt Coucou's `ParakeetEngine.swift` and `NoteAudio.swift` at b6a85f2. They retain MIT attribution. Mochlet adds conversion error propagation, timestamped bounded buffering and device-change handling. System audio uses ScreenCaptureKit with explicit application/all-system selection, following Apple's capture APIs; Coucou's global Core Audio tap and plaintext recording storage are not copied.
+
+`App/UsageCard.swift` adapts `GaugeRowView` from `ClaudePlanCardView.swift`, using semantic colors and stale-state handling instead of assuming a past reset implies zero usage. `App/HotKeyCenter.swift` adapts Carbon registration from Coucou's `HotKeyCenter.swift`, adds key-release handling and repeat suppression for push-to-talk, and retains the source/bundled MIT notice.

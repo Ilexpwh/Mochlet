@@ -117,6 +117,7 @@ final class CompanionPanel: NSPanel {
         panel.makeKeyAndOrderFront(nil)
         scheduleDismissal()
     }
+    func openForVoice() { openIsland() }
     private func collapse() {
         island.interaction.collapse(); render()
         panel.resignKey(); scheduleDismissal()

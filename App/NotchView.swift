@@ -80,6 +80,7 @@ struct NotchView: View {
             if count > 0 { island.tab = "Attention" }
             stateChanged()
         }
+        .onChange(of: model.files.busy) { _, _ in stateChanged() }
         .onChange(of: model.speech.phase) { _, _ in stateChanged() }
         .onChange(of: model.isBusy) { _, _ in stateChanged() }
         .onChange(of: model.draft.isEmpty) { _, _ in stateChanged() }

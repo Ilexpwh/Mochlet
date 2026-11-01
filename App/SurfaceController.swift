@@ -55,6 +55,19 @@ final class CompanionPanel: NSPanel {
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         container.addSubview(hosting)
+        let dropView = FileDropNSView(frame: container.bounds)
+        dropView.autoresizingMask = [.width, .height]
+        dropView.acceptsPoint = { [weak self] point in
+            guard let self else { return false }
+            return self.islandFrame.contains(self.panel.convertPoint(toScreen: point))
+        }
+        dropView.hover = { [weak self] inside in
+            guard let self else { return }; self.model.files.hovering = inside
+            if inside { self.island.interaction.open(); self.render() }
+            self.scheduleDismissal()
+        }
+        dropView.receive = { [weak self] urls in self?.model.files.ingest(urls) }
+        container.addSubview(dropView)
         panel.contentView = container
         panel.ignoresMouseEvents = true
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -87,7 +100,7 @@ final class CompanionPanel: NSPanel {
         scheduleDismissal()
     }
 
-    private var heldOpen: Bool { island.dragging || model.speech.active || !model.draft.isEmpty || !model.pendingInputs.isEmpty }
+    private var heldOpen: Bool { island.dragging || model.files.busy || model.files.hovering || model.speech.active || !model.draft.isEmpty || !model.pendingInputs.isEmpty }
     private var heldVisible: Bool { heldOpen || model.isBusy }
 
     private func hover(_ inside: Bool) {

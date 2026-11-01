@@ -12,6 +12,7 @@ struct WorkspaceView: View {
                     Label("Companion",systemImage:"bubble.left.and.bubble.right").tag("Companion")
                     Label("Projects",systemImage:"folder").tag("Projects")
                     Label("Task history",systemImage:"clock").tag("History")
+                    Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
                     Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
                     Label("Speech & Models",systemImage:"waveform").tag("Speech")
@@ -24,6 +25,7 @@ struct WorkspaceView: View {
                 switch section {
                 case "Projects": projectList
                 case "History": history
+                case "Files": FilesView(model: model)
                 case "Knowledge": KnowledgeView(model: model)
                 case "Appearance": appearance
                 case "Speech": SpeechSettingsView(speech: model.speech)
@@ -114,17 +116,20 @@ struct CompanionView: View {
                 Spacer(minLength:0)
             }
             VStack(spacing:10) {
+                if !model.files.selected.isEmpty { AttachmentChips(files: model.files, tint: model.tint) }
                 TextField("What shall we work on?",text:$model.draft,axis:.vertical).lineLimit(compact ? 1...3 : 3...6).textFieldStyle(.plain).focused($composerFocused)
                 HStack {
                     Text(model.selectedProject?.name ?? "Choose a project to begin").font(.caption).foregroundStyle(.secondary)
                     Spacer()
+                    Button { model.files.choose() } label: { Image(systemName: "paperclip") }.accessibilityLabel("Attach files").disabled(model.files.busy)
                     VoiceControls(speech: model.speech)
                     Button(action:model.submit) { Image(systemName:"arrow.up").font(.headline).frame(width:24,height:24) }
                         .buttonStyle(.borderedProminent).tint(model.tint.mix(with:.black,by:0.25))
-                        .disabled(model.speech.active || model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                        .disabled(model.files.busy || model.speech.active || model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return,modifiers:.command).help("Send · Command Return").accessibilityLabel("Send task")
                 }
             }.padding(14).background(.background,in:RoundedRectangle(cornerRadius:14)).overlay(RoundedRectangle(cornerRadius:14).stroke(.quaternary))
+            if model.files.busy { HStack { ProgressView().controlSize(.small); Text("Reading files…").font(.caption); Button("Cancel") { model.files.cancel() } } }
             if let message = model.speech.message { Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
             if compact, let error=model.errorMessage { Text(error).font(.caption).foregroundStyle(.red).lineLimit(3) }
         }.padding(compact ? 16:30).frame(minWidth:compact ? 360:420)

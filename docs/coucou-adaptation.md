@@ -25,3 +25,7 @@ Desktop detach/reattach, corner placement, global shortcuts, multi-display selec
 Coucou code: Copyright (c) 2026 Louis Raillé, MIT. Full notice: [Coucou MIT license](../LICENSES/Coucou-MIT.txt). Reference repository: https://github.com/Louis-CFM/coucou. The Mochi character, Coucou branding and sound assets are separate from the code license and are not redistributed here.
 
 Grok Bot visual direction reference: https://x.ai/news/designing-grok-bot. No Grok Bot assets are bundled.
+
+## File feeding ports — 2026-11-01
+
+`App/FileDropView.swift` adapts `FileDropNSView` from Coucou revision `b6a85f29719b5291651c092e33b3f9d4004d091e`. It preserves the AppKit drag-destination / click-through arrangement and adds actual-island hit acceptance. `AttachmentChips` adapts `ContextChip` layout from `IslandViewContent.swift`. Mochlet uses semantic colors, accessible removal and actual extraction completion. Coucou's fixed-duration simulated upload handler is not copied. Both adaptations retain the MIT attribution in source and bundled notices.

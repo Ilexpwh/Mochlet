@@ -65,3 +65,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Core fixtures now include invalid citations, uncertainty, correction conflicts and forgetting history. Twelve fixture tests pass; the live Codex test remains opt-in. Native build passes.
 - Native walkthrough in an isolated Debug data directory created a fixture memory and retrieved it with a Cantonese query. [Screenshot](evidence/native-memory.png). `MOCHLET_DATA_DIR` is Debug-only and allows repeatable native walkthroughs without changing the personal database.
 - Complete OKF v0.2 import/export, unknown-frontmatter preservation, rich source extraction, knowledge-quality evaluation and authenticated model-answer walkthroughs remain open. Citation-ID validation is not proof that every generated claim is supported.
+
+## File feeding — 2026-11-01
+
+- Ported Coucou's native drop destination and attachment chip layout. Added multi-file/folder extraction for UTF-8 text, PDF text and image OCR, with source hashes, page/line labels, explicit limits and visible partial failures. Hidden folder entries, symbolic links and common build/vendor trees are skipped. Chewing tracks actual extraction activity.
+- Added file selection, preview, attachment removal, optional cited summaries, explicit save-to-memory and selected file context on coding submissions. Input stays local until an explicit summary or coding request. Current attachments are session-local; selected extracted content can be retained as memory. Full visual reasoning, rich document formats and reviewed file moves remain open.
+- Thirteen core fixture tests pass, one live Codex test is skipped, and native build passes. Native walkthrough imported a synthetic Markdown file through the file picker, verified its notch/workspace receipt and ready state, and saved it to isolated test memory. [Screenshot](evidence/native-files.png). Native drag/drop and image/PDF quality matrix remain pending.

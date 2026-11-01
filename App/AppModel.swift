@@ -3,6 +3,7 @@ import AppKit
 import SlimeCore
 
 @MainActor @Observable final class AppModel {
+    let files = FileController()
     let speech = SpeechController()
     let knowledge: KnowledgeController
     var includeKnowledge = false
@@ -48,6 +49,7 @@ import SlimeCore
     }
     var slimeMood: SlimeMood {
         if !pendingInputs.isEmpty { return .attention }
+        if files.busy || files.hovering { return .chewing }
         if speech.phase == .recording { return .listening }
         if isBusy || speech.phase == .transcribing { return .working }
         if errorMessage != nil { return .error }
@@ -103,9 +105,12 @@ import SlimeCore
         }
     }
     func submit() {
-        guard !speech.active, let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
+        guard !speech.active, !files.busy, let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
         let prompt=draft;draft=""
         let useKnowledge = includeKnowledge; let usePersonal = includePersonalKnowledge; let runReadOnly = readOnly
+        let attachments = files.selectedIDs
+        let attachmentContext: String
+        do { attachmentContext = try files.context() } catch { draft = prompt; report(error); return }
         let task: WorkTask
         if let existing=selectedTask,existing.projectID == project.id, existing.id != activeTaskID,
            existing.state != .queued {task=existing}
@@ -114,7 +119,7 @@ import SlimeCore
             do {
                 try ProjectResolver.validateRoot(project)
                 var queued=task;queued.state = .queued
-                var contextPrompt = prompt
+                var contextPrompt = prompt + attachmentContext
                 if useKnowledge, let vault = knowledge.vault {
                     let notes = try await vault.search(prompt, scope: project.id, includePersonal: usePersonal, limit: 6)
                     if !notes.isEmpty {
@@ -123,8 +128,9 @@ import SlimeCore
                     }
                 }
                 try await store.save(queued);try await refresh();selectedTaskID=queued.id
+                files.selectedIDs.subtract(attachments)
                 queue.append((queued,contextPrompt,runReadOnly));await runNext()
-            } catch {draft=prompt;report(error)}
+            } catch {draft = draft.isEmpty ? prompt : prompt + "\n" + draft;report(error)}
         }
     }
     func runNext() async {

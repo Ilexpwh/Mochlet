@@ -15,6 +15,7 @@ struct WorkspaceView: View {
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Meetings",systemImage:"waveform").tag("Meetings")
                     Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
+                    Label("Connections",systemImage:"link").tag("Connections")
                     Label("Google",systemImage:"person.crop.circle.badge.checkmark").tag("Google")
                     Label("GitHub",systemImage:"point.3.connected.trianglepath.dotted").tag("GitHub")
                     Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
@@ -31,6 +32,7 @@ struct WorkspaceView: View {
                 case "History": history
                 case "Meetings": MeetingsView(model: model)
                 case "Files": FilesView(model: model)
+                case "Connections": ConnectionsView(model: model) { section = "Companion" }
                 case "Google": GoogleView(model: model) { section = "Companion" }
                 case "GitHub": GitHubView(model: model)
                 case "Knowledge": KnowledgeView(model: model)

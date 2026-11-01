@@ -75,7 +75,11 @@ extension Store {
               try JSONDecoder().decode(ConnectedAccount.self, from: data) == account else { throw MochletError.message("Connection or project permissions changed. Refresh before continuing.") }
     }
     private static func requireSource(_ source: ConnectedSource, account: ConnectedAccount, in db: Database) throws {
-        let scope = ["gmail": GoogleScope.mail, "calendar": GoogleScope.calendar, "drive": GoogleScope.drive][source.service]
+        let googleScopes = ["gmail": GoogleScope.mail, "calendar": GoogleScope.calendar, "drive": GoogleScope.drive]
+        let scope: String?
+        if let team = TeamService(rawValue: source.service), account.provider == team.rawValue { scope = team.readCapability }
+        else if account.provider == "google" { scope = googleScopes[source.service] }
+        else { scope = nil }
         guard source.accountID == account.id, let scope, account.scopes.contains(scope),
               let data = try Data.fetchOne(db, sql: "SELECT payload FROM connected_sources WHERE accountID=? AND sourceID=?", arguments: [account.id, source.id]),
               try JSONDecoder().decode(ConnectedSource.self, from: data) == source else {

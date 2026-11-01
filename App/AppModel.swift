@@ -8,6 +8,7 @@ import SlimeCore
     let shortcuts = HotKeyCenter.shared
     let knowledge: KnowledgeController
     let meetings: MeetingController
+    let connections: ConnectionsController
     let google: GoogleController
     let github: GitHubController
     var includeKnowledge = false
@@ -115,6 +116,7 @@ import SlimeCore
         self.meetings = MeetingController(folder: folder, speech: speech)
         self.github = GitHubController(store: store)
         self.google = GoogleController(store: store)
+        self.connections = ConnectionsController(store: store)
         slimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
         palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
     }
@@ -126,6 +128,7 @@ import SlimeCore
         await speech.load()
         await meetings.load()
         await google.load()
+        await connections.load()
         do {
             try await store.recover()
             try await refresh()
@@ -179,7 +182,7 @@ import SlimeCore
         if let sourceDraft {
             guard sourceDraft.projectID == project.id, sourceDraft.taskID == selectedTaskID,
                   selectedTask?.id != activeTaskID, selectedTask?.state != .queued else {
-                report(MochletError.message("This source draft is bound to its original task and project. Return to that task, or discard the source draft and prepare it again from Google.")); return
+                report(MochletError.message("This source draft is bound to its original task and project. Return to that task, or discard the source draft and prepare it again from its connection.")); return
             }
         }
         let prompt=draft;draft=""
@@ -203,6 +206,7 @@ import SlimeCore
                     guard task.id == sourceDraft.taskID else { throw MochletError.message("The source task changed before submission.") }
                     try await store.validateConnectedTask(task.id)
             try await google.validateTask(task.id)
+            try await connections.validateTask(task.id)
                     guard try await store.connections().contains(sourceDraft.account) else { throw MochletError.message("Source account permissions changed. Prepare this draft again.") }
                     contextPrompt += "\n\n" + (try sourceDraft.source.context(account: sourceDraft.account))
                 }
@@ -250,6 +254,7 @@ import SlimeCore
             try await store.begin(task,run:run); claimed = true; try await refresh()
             try await store.validateConnectedTask(task.id)
             try await google.validateTask(task.id)
+            try await connections.validateTask(task.id)
             if let binding = try await store.githubTaskBinding(taskID: task.id) {
                 guard binding.projectID == project.id else { throw MochletError.message("Issue task project does not match its repository binding.") }
                 try await GitHubClient.verifyRemote(project: project, repository: binding.repository)

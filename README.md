@@ -13,7 +13,7 @@ Implemented native workflows include:
 - GitHub account/repository binding, issue synchronization, isolated task worktrees and local diff review.
 - Google Desktop OAuth configuration, account/project bindings, Gmail threads, calendar agenda/availability and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 
-Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Slack/Lark/Linear, Google incremental sync/live validation, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Google incremental sync/live validation, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 
@@ -54,7 +54,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, external-session observation, Lark, Slack and Linear, plus Google accounts with Gmail, Calendar and selected Drive/Docs/Sheets/Slides sources. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, external-session observation, team write-back and incremental Google synchronization. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 

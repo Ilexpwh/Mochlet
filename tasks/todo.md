@@ -776,6 +776,8 @@ All paths describe intended responsibilities, not an existing implementation. Ex
 
 - [ ] Complete T24.
 
+**Implementation evidence (2026-11-01):** Native selection and managed Pi 1.4.0 runs now implement stream/lifecycle translation, exact session binding, verified cwd/tool preflight, approval extension, dialogs, cancellation and separate session usage. Process and native fixtures pass; real Pi no-inference preflight passes. Live authenticated generation and real tool approvals remain unverified, so the full gate stays open. See [Pi compatibility](../docs/pi-compatibility.md).
+
 **Dependencies:** T05, T07, T08.
 **Scope:** Medium; one focused implementation slice.
 **Likely files:** `Packages/SlimeCore/Sources/SlimeCore/Providers/Pi/PiAdapter.swift`, `App/Surfaces/RuntimeSettings.swift`, `Packages/SlimeCore/Tests/SlimeCoreTests/PiAdapterTests.swift`, `Packages/SlimeCore/Tests/Fixtures/pi-rpc.jsonl`.

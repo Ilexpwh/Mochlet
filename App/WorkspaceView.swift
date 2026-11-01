@@ -99,6 +99,14 @@ struct CompanionView: View {
     @Environment(\.colorScheme) private var colorScheme
     var compact = false
     @FocusState private var composerFocused: Bool
+    private func submit() {
+        // Command-Return keeps the AppKit field editor active. End that edit
+        // before clearing the binding, as a mouse click on Send already does.
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        composerFocused = false
+        model.submit()
+        DispatchQueue.main.async { composerFocused = true }
+    }
     var body: some View {
         VStack(spacing: compact ? 8 : 16) {
             HStack {
@@ -160,7 +168,7 @@ struct CompanionView: View {
                     Spacer()
                     Button { model.files.choose() } label: { Image(systemName: "paperclip") }.accessibilityLabel("Attach files").disabled(model.files.busy)
                     VoiceControls(speech: model.speech)
-                    Button(action:model.submit) { Image(systemName:"arrow.up").font(.headline).frame(width:24,height:24) }
+                    Button(action:submit) { Image(systemName:"arrow.up").font(.headline).frame(width:24,height:24) }
                         .buttonStyle(.borderedProminent).tint(colorScheme == .dark ? model.tint : model.tint.mix(with:.black,by:0.35))
                         .disabled(model.files.busy || model.speech.active || model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return,modifiers:.command).help("Send · Command Return").accessibilityLabel("Send task")

@@ -75,3 +75,8 @@ For Swift, first validate a direct CLI adapter against the installed version. Us
 This research used official repositories, GitHub metadata/release endpoints, publisher documentation and Context7 queries for AppAuth and FluidAudio. No package was installed, no model downloaded, no credentials accessed and no live recording made by this research task. The report makes no measured performance or language-quality claims.
 
 Before integrating a candidate: pin its revision; preserve its notices; verify macOS 15 builds; run targeted fixture and native interaction tests; record live provider evidence separately. Repository activity and README examples alone do not satisfy the release gates in the implementation plan.
+
+
+## Pi adoption update — 1 November 2026
+
+Implemented the documented RPC transport against [Pi 1.4.0](https://github.com/earendil-works/pi/tree/v1.4.0), with an original host-verification/approval extension and no bundled Node/Pi runtime. The pinned protocol, isolated actual-CLI preflight and native fixture evidence are in [pi-compatibility.md](pi-compatibility.md). This advances the provider recommendation above; it does not establish live authenticated model/tool compatibility.

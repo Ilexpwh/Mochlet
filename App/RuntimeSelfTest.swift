@@ -82,7 +82,42 @@ import SlimeCore
             }
             model.shutdown()
         }
+        if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
+            try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
+        }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
     }
+    static func piWorkflow(root: URL, executable: String) async throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let oldPath = UserDefaults.standard.object(forKey: "piPath")
+        defer { if let oldPath { UserDefaults.standard.set(oldPath, forKey: "piPath") } else { UserDefaults.standard.removeObject(forKey: "piPath") } }
+        let store = try Store(path: root.appendingPathComponent("store.sqlite").path)
+        let project = Project(name: "Pi fixture", root: root.path); try await store.save(project)
+        let model = AppModel(store: store, folder: root); model.piPath = executable
+        defer { model.shutdown() }
+        model.projects = [project]; model.selectedProjectID = project.id
+        var task = WorkTask(projectID: project.id, title: "Pi native fixture"); task.provider = "pi"
+        var session: String?
+        for turn in 0..<2 {
+            task.state = .queued
+            try await store.enqueue(task, prompt: "Native fixture", readOnly: false)
+            try await model.refresh(); model.queue = try await store.queuedCommands()
+            await model.runNext()
+            try await wait { model.pendingInputs.first?.method == "item/commandExecution/requestApproval" }
+            model.answer(model.pendingInputs[0], result: .object(["decision": .string("decline")]))
+            try await wait { model.pendingInputs.first?.method == "item/tool/requestUserInput" }
+            model.answer(model.pendingInputs[0], result: .object(["answers": .object(["choice": .object(["answers": .array([.string("Mochlet")])])])]))
+            try await wait { !model.isBusy }
+            task = model.tasks.first!
+            try require(task.state == .review && task.sessionConfirmed, "Pi native task did not finish with a confirmed session")
+            try require(task.output.components(separatedBy: "PI_FIXTURE_OK").count == turn + 2, "Pi snapshots duplicated or erased a turn")
+            try require(!task.output.contains("provisional"), "Pi final output did not replace provisional text")
+            if let session { try require(task.threadID == session, "Pi native follow-up changed session") }
+            session = task.threadID
+            try require(model.providerUsageProvider == .pi && model.usageDate == nil, "Pi usage was confused with Codex account allowance")
+        }
+        print("Native Pi fixtures passed: decline, question, exact resume, output replacement, provider usage.")
+    }
+
 }
 #endif

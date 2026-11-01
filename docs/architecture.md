@@ -35,8 +35,8 @@ flowchart LR
 | Knowledge | OKF documents + derived SQLite FTS index | Portable authoritative knowledge with bounded scoped retrieval; embeddings optional after evaluation |
 | Secrets | Keychain for app-owned credentials | Keep connector credentials separate from logs and prompts |
 | Codex | Structured app-server adapter | Control protocol rather than parsing decorative terminal output |
-| Pi | Structured RPC adapter | Isolated process and event translation |
-| Claude | Dedicated bridge selected after a capability/authentication spike | Interactive callbacks may require an SDK helper; do not commit to a bundled runtime before verifying distribution |
+| Pi | Version-pinned 1.4.0 RPC adapter | Separate wire protocol, verified session/cwd handshake and original approval extension; see pi-compatibility.md |
+| Claude | Version-pinned 2.1.296 control-protocol adapter | Dedicated event/permission translation; stronger pre-dispatch cwd verification remains open |
 | Speech | Swappable transcription interface | Benchmark local options against target hardware/languages; no engine selected yet |
 | Packaging | Local development build, then signed/notarized direct distribution | App Store/sandbox feasibility remains a separate study because the product launches user-installed CLIs |
 

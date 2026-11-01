@@ -24,11 +24,16 @@ struct AttentionView: View {
                             } else { answers[id] = [label] }
                         }
                     }
-                    if q["isSecret"] == .bool(true) {
+                    if q["allowCustom"] != .bool(false) {
+                      if q["isSecret"] == .bool(true) {
                         SecureField("Your answer", text: Binding(get: { custom[id] ?? "" }, set: { custom[id] = $0 }))
                     } else {
                         TextField("Your answer", text: Binding(get: { custom[id] ?? "" }, set: { custom[id] = $0 }))
+                      }
                     }
+                }
+                if input.params["canDismiss"] == .bool(true) {
+                    Button("Dismiss question") { model.answer(input, result: .object(["cancelled": .bool(true)])) }
                 }
                 Button("Send answers") {
                     let response=Dictionary(uniqueKeysWithValues:input.params["questions"].array.map { q in let id=q["id"].string ?? ""; return (id,JSONValue.object(["answers":.array(values(id).map(JSONValue.string))])) })
@@ -44,6 +49,11 @@ struct AttentionView: View {
             }
         }.disabled(model.deliveringInputs.contains(input.id))
             .overlay(alignment: .topTrailing) { if model.deliveringInputs.contains(input.id) { ProgressView().controlSize(.small).padding(8) } }
+            .onAppear {
+                for question in input.params["questions"].array {
+                    if let id = question["id"].string, let prefill = question["prefill"].string { custom[id] = prefill }
+                }
+            }
             .padding(14).background(.orange.opacity(0.09),in:RoundedRectangle(cornerRadius:12))
     }
 }
@@ -64,8 +74,14 @@ struct RuntimeSettings: View {
             Section("Claude Code · experimental") {
                 TextField("Claude executable", text: $model.claudePath)
                 Text("Requires CLI 2.1.296 with its own authentication. Local CLI permission rules apply. Read-only offers Read, Glob, Grep and questions; writable runs also offer Edit, Write and Bash. Background tools and MCP are disabled in this adapter.").font(.caption).foregroundStyle(.secondary)
-                if model.providerUsage != .null {
-                    Text("Last Claude turn · reported API usage (not subscription allowance)").font(.caption)
+            }
+            Section("Pi · experimental") {
+                TextField("Pi executable", text: $model.piPath)
+                Text("Requires Pi 1.4.0 with its own model and authentication. Mochlet checks the exact session and folder, and requests approval for Bash, Edit and Write. Read-only runs offer read, grep, find and ls. Custom extensions, MCP, skills and slash commands are disabled. Tool permissions are not an OS sandbox.").font(.caption).foregroundStyle(.secondary)
+            }
+            if model.providerUsage != .null {
+                Section("Last \(model.providerUsageProvider?.title ?? "agent") usage") {
+                    Text("Provider-reported API statistics, not subscription allowance. Pi reports cumulative session totals.").font(.caption)
                     Text(model.providerUsage.formatted).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 }
             }

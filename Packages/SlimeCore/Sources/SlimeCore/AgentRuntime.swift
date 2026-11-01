@@ -1,8 +1,8 @@
 import Foundation
 
 public enum AgentProvider: String, CaseIterable, Codable, Sendable {
-    case codex, claude
-    public var title: String { self == .codex ? "Codex" : "Claude Code" }
+    case codex, claude, pi
+    public var title: String { switch self { case .codex: "Codex"; case .claude: "Claude Code"; case .pi: "Pi" } }
 }
 
 /// UI-facing events use Mochlet's normalized method/params envelope. Provider wire
@@ -30,8 +30,8 @@ public enum SessionRoute {
     public static func validate(task: WorkTask, project: Project) throws {
         guard AgentProvider(rawValue: task.provider) != nil else { throw MochletError.message("This task's agent provider is unavailable.") }
         if task.threadID != nil {
-            if task.provider == AgentProvider.claude.rawValue, !task.sessionConfirmed {
-                throw MochletError.message("Claude never confirmed this session. Start a new conversation instead of resuming an unverified session.")
+            if task.provider != AgentProvider.codex.rawValue, !task.sessionConfirmed {
+                throw MochletError.message("The agent never confirmed this session. Start a new conversation instead of resuming an unverified session.")
             }
             if let cwd = task.sessionCWD { try ProjectResolver.verifyCWD(expected: cwd, actual: project.root) }
             else if task.provider != AgentProvider.codex.rawValue {

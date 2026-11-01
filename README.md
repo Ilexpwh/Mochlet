@@ -2,7 +2,7 @@
 
 A native macOS companion that lives at the notch, runs work through your selected local AI CLI, and keeps projects, tasks and files organized.
 
-**Status:** launchable native development build (2026-11-01), with real Codex and Claude start/resume workflows. The complete release plan is still in progress. `slime-app` is the development folder.
+**Status:** launchable native development build (2026-11-01), with real Codex and Claude start/resume workflows and an experimental Pi RPC adapter. The complete release plan is still in progress. `slime-app` is the development folder.
 
 Implemented native workflows include:
 
@@ -12,7 +12,7 @@ Implemented native workflows include:
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
 - GitHub account/repository binding, issue synchronization, isolated task worktrees and local diff review.
 
-Voice and meetings require your own API configuration and further live validation. Pi, Slack/Lark/Linear/Google, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Slack/Lark/Linear/Google, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 
@@ -25,7 +25,7 @@ The approved [technical specification](docs/technical-spec.md), [visual design s
 open build/Build/Products/Debug/Mochlet.app
 ```
 
-Builds use `/Applications/Xcode.app/Contents/Developer` without changing global Xcode selection. The personal development build is ad-hoc signed for Apple Silicon; macOS 15 is the deployment target, not yet a tested OS configuration. Add a project folder, configure an agent executable in Agent settings, then send a task. Claude support is currently pinned to CLI 2.1.296; existing CLI authentication is used. Command–Return sends; Escape folds the island; Command–Shift–Space toggles it while Mochlet receives keyboard events. Global shortcuts are registered for Control–Option–Space (companion) and hold Control–Option–V (voice); physical-key/audio validation remains pending.
+Builds use `/Applications/Xcode.app/Contents/Developer` without changing global Xcode selection. The personal development build is ad-hoc signed for Apple Silicon; macOS 15 is the deployment target, not yet a tested OS configuration. Add a project folder, configure an agent executable in Agent settings, then send a task. Claude support is pinned to CLI 2.1.296; Pi support is pinned to 1.4.0. Existing CLI authentication is used. Pi has passed real no-inference preflight and native fixture workflows; live authenticated generation remains unverified. See [Pi compatibility](docs/pi-compatibility.md). Command–Return sends; Escape folds the island; Command–Shift–Space toggles it while Mochlet receives keyboard events. Global shortcuts are registered for Control–Option–Space (companion) and hold Control–Option–V (voice); physical-key/audio validation remains pending.
 
 Coucou's island geometry and motion code are adapted under MIT; see [attribution and parity notes](docs/coucou-adaptation.md). No Coucou character or audio assets are bundled.
 
@@ -53,7 +53,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, Pi, external-session observation, Lark, Slack and Linear, plus Google accounts with Gmail, Calendar and selected Drive/Docs/Sheets/Slides sources. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, external-session observation, Lark, Slack and Linear, plus Google accounts with Gmail, Calendar and selected Drive/Docs/Sheets/Slides sources. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 
@@ -68,6 +68,6 @@ The roadmap remains broader than the development build. Consult the evidence led
 
 ## Verification and research
 
-`./scripts/check.sh` runs core fixtures, builds the app and runs native orchestration regressions against disposable CLI processes. Live agent tests are opt-in: `MOCHLET_LIVE_CODEX=1` or `MOCHLET_LIVE_CLAUDE=1` with the corresponding test filter. They use your local CLI authentication.
+`./scripts/check.sh` runs core fixtures, builds the app and runs native orchestration regressions against disposable CLI processes. Live agent tests are opt-in: `MOCHLET_LIVE_CODEX=1` or `MOCHLET_LIVE_CLAUDE=1` with the corresponding test filter. They use your local CLI authentication. `MOCHLET_LIVE_PI_PATH=/absolute/path/to/pi` with the `livePiGuardPreflightWithoutModelInference` filter runs a real Pi preflight in an isolated empty agent directory without model inference.
 
 [Component research](docs/component-research.md) and [Coucou porting details](docs/coucou-porting-research.md) record pinned upstream sources, licenses and adoption decisions. Coucou code is adapted with its MIT attribution; no proprietary character assets are included.

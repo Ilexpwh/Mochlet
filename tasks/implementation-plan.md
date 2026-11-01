@@ -37,3 +37,8 @@ Implement a usable slice, run focused checks and native build, then commit. Keep
 ## Native reference decision — 2026-11-01
 
 The user requested close Coucou UI/UX and motion parity and authorized reuse of its design code. Adapt its MIT-licensed island geometry, fixed panel hosting and motion timings; retain attribution. Keep Mochlet's simple pastel character original. Track remaining detach/corner/drop/greeting/global-shortcut parity in [coucou-adaptation.md](../docs/coucou-adaptation.md); this does not mark the complete B/F release gates passed.
+
+
+## Stage G provider progress — 2026-11-01
+
+Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. External-session observation and Slack/Lark/Linear/Google connectors remain planned. Existing unchecked release criteria are retained.

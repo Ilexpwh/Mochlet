@@ -25,6 +25,8 @@ import SlimeCore
     var runtimeProvider: AgentProvider?
     private var runtimeGeneration = UUID()
     var providerUsage: JSONValue = .null
+    var providerUsageProvider: AgentProvider?
+    private var activeOutputBase = ""
     var connectingRuntime = false
     private var connectionTask: Task<any AgentRuntime, Error>?
     private var dispatchTask: Task<Void, Never>?
@@ -48,6 +50,9 @@ import SlimeCore
     }
     var claudePath: String = UserDefaults.standard.string(forKey: "claudePath") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/claude").path {
         didSet { UserDefaults.standard.set(claudePath, forKey: "claudePath") }
+    }
+    var piPath: String = UserDefaults.standard.string(forKey: "piPath") ?? "/opt/homebrew/bin/pi" {
+        didSet { UserDefaults.standard.set(piPath, forKey: "piPath") }
     }
     var defaultProvider = AgentProvider(rawValue: UserDefaults.standard.string(forKey: "agentProvider") ?? "codex") ?? .codex {
         didSet { UserDefaults.standard.set(defaultProvider.rawValue, forKey: "agentProvider") }
@@ -198,6 +203,7 @@ import SlimeCore
         isBusy=true;activeTaskID=queued.id
         var task=queued;task.state = .running
         if !task.output.isEmpty {task.output += "\n\n— Follow-up —\n\(prompt)\n\n"}
+        activeOutputBase = task.output
         let run=Run(taskID:task.id,prompt:prompt);activeRunID=run.id
         var claimed = false
         do {
@@ -250,7 +256,7 @@ import SlimeCore
         }
     }
     func refreshUsage() async {
-        guard let runtime else{return}
+        guard let runtime, runtimeProvider == .codex else { usage = .null; usageDate = nil; return }
         do {usage=try await runtime.readUsage();usageDate=Date()}
         catch {usage = .null;usageDate=nil}
     }
@@ -261,11 +267,15 @@ import SlimeCore
         runtimeGeneration = UUID(); let generation = runtimeGeneration
         runtimeEvents?.cancel()
         if let runtime { await runtime.stop() }
-        runtime = nil; runtimeProvider = nil; usage = .null; usageDate = nil; providerUsage = .null
-        let codexExecutable = codexPath; let claudeExecutable = claudePath
+        runtime = nil; runtimeProvider = nil; usage = .null; usageDate = nil; providerUsage = .null; providerUsageProvider = nil
+        let codexExecutable = codexPath; let claudeExecutable = claudePath; let piExecutable = piPath
         let job = Task<any AgentRuntime, Error> { @MainActor in
             let r: any AgentRuntime
-            if provider == .codex { r = CodexRuntime() } else { r = ClaudeRuntime(executable: claudeExecutable) }
+            switch provider {
+            case .codex: r = CodexRuntime()
+            case .claude: r = ClaudeRuntime(executable: claudeExecutable)
+            case .pi: r = PiRuntime(executable: piExecutable, directory: folder.appendingPathComponent("Agents/Pi"))
+            }
             runtimeEvents = Task { [weak self] in
                 for await event in r.events {
                     guard let self, self.runtimeGeneration == generation else { return }
@@ -296,7 +306,7 @@ import SlimeCore
             if isBusy, !cancellingStartup {errorMessage=p["reason"].string;await finish(.interrupted,continueQueue:false)}
             return
         }
-        if method == "mochlet/providerUsage" { providerUsage=p["usage"];return }
+        if method == "mochlet/providerUsage" { providerUsage=p["usage"];providerUsageProvider=runtimeProvider;return }
         if method == "account/rateLimits/updated" {usage=p;usageDate=Date();return}
         guard isBusy,let taskID=activeTaskID else{return}
         if let thread=p["threadId"].string,thread != activeThreadID {return}
@@ -316,6 +326,16 @@ import SlimeCore
             switch method {
             case "mochlet/sessionVerified":
                 if let index = tasks.firstIndex(where: { $0.id == taskID }) { tasks[index].sessionConfirmed = true; try await store.save(tasks[index]) }
+            case "mochlet/outputSnapshot":
+                if let index = tasks.firstIndex(where: { $0.id == taskID }), let text = p["text"].string {
+                    tasks[index].output = String((activeOutputBase + text).suffix(1_000_000))
+                }
+            case "mochlet/providerNotice": activity = p["message"].string ?? "Agent notification"
+            case "mochlet/cancelledDrafts":
+                if let text = p["text"].string {
+                    draft = draft.isEmpty ? text : draft + "\n\n" + text
+                    if let runID = activeRunID { try await store.event(runID: runID, kind: "cancelledProviderDrafts", body: text) }
+                }
             case "item/agentMessage/delta":
                 if let index=tasks.firstIndex(where:{$0.id == taskID}),let delta=p["delta"].string {
                     tasks[index].output += delta
@@ -330,7 +350,7 @@ import SlimeCore
                 if let error=p["turn"]["error"]["message"].string {errorMessage=error}
                 await finish(state == "completed" ? .review : state == "interrupted" ? .cancelled:.failed)
             case "serverRequest/resolved": pendingInputs.removeAll {$0.rpcID == p["requestId"]}
-            case "error": errorMessage=p["error"]["message"].string ?? "Codex reported an error."
+            case "error": errorMessage=p["error"]["message"].string ?? "The agent reported an error."
             default:break
             }
         } catch {report(error)}
@@ -343,7 +363,7 @@ import SlimeCore
             do {try await store.finish(task,runID:runID);try await refresh()} catch {report(error)}
         }
         isBusy=false;activeTaskID=nil;activeRunID=nil;activeThreadID=nil;activeTurnID=nil;pendingInputs=[];deliveringInputs=[];items=[:]
-        if runtimeProvider == .claude, let old = runtime {
+        if runtimeProvider != .codex, let old = runtime {
             runtimeGeneration = UUID(); runtimeEvents?.cancel(); runtime = nil; runtimeProvider = nil
             await old.stop()
         }

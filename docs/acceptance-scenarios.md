@@ -57,3 +57,18 @@ These are test specifications, not passing results. Build deterministic fixtures
 | GOOGLE-10 | App sleeps during refresh; calendar changes remotely meanwhile | Resume revalidates state, shows freshness and conflicts, and creates no duplicate task/event |
 
 All routing/scope/duplicate-write cases are release blockers. The knowledge-quality rubric additionally measures supported answers and abstention on a frozen corpus; see [knowledge design](knowledge-memory.md). Live smoke checks remain separate from fixture tests and require the applicable authorization already established in the session.
+
+
+## Pi provider scenarios
+
+| ID | Setup / request | Required result |
+|---|---|---|
+| PI-01 | Saved UUID/file header, live handshake or cwd disagrees | Fail before sending user text; never fall back to latest session |
+| PI-02 | Concurrent confirm/select/input/editor requests; one expires | Replies match the exact ID; expired cards close; no inferred approval |
+| PI-03 | A writable tool is requested before host verification, in read-only mode or after dialog failure | Extension blocks execution |
+| PI-04 | `agent_end`, retry, then `agent_settled`; final text differs from deltas | One final result with corrected text, after settlement |
+| PI-05 | Cancel while dialogs and queued follow-ups exist | Clear queue first, cancel dialogs, abort; preserve unsent text without executing it |
+| PI-06 | Statistics fail after successful settlement | Result remains reviewable; usage is unavailable, not zero or a subscription quota |
+| UI-01 | Submit through Command-Return and through Send, then type another request | Submitted draft clears visually; composer regains focus; no stale resend |
+
+Evidence and the distinction between fixtures and live provider checks are recorded in [Pi compatibility](pi-compatibility.md).

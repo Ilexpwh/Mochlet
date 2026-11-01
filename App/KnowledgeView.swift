@@ -46,9 +46,8 @@ import SlimeCore
             let result = try KnowledgeAnswer.decode(text, notes: sources)
             // Recheck authoritative files after inference; deleted or corrected evidence
             // must not be presented as a current answer from the old snapshot.
-            let current = try await vault.search("", scope: scope, includePersonal: includePersonal, limit: 100)
-            guard sources.allSatisfy({ old in current.contains(where: { $0.id == old.id && $0.revision == old.revision }) }) else {
-                throw MochletError.message("Sources changed during analysis. Ask again using the current memory.")
+            for source in sources {
+                guard try await vault.isCurrent(source) else { throw MochletError.message("Sources changed during analysis. Ask again using the current memory.") }
             }
             guard !Task.isCancelled else { return }
             answer = result; answerSources = sources.filter { result.citations.contains($0.id) }; message = nil
@@ -71,6 +70,7 @@ struct KnowledgeView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Knowledge & Memory").font(.largeTitle.bold()); Spacer()
+                Button("Import OKF…") { importDocuments() }
                 Button("Add memory", systemImage: "plus") { editing = KnowledgeNote(scope: scope, title: "", body: "") }
             }
             HStack {
@@ -103,6 +103,7 @@ struct KnowledgeView: View {
                         Text(note.title).font(.headline); Spacer()
                         Button("Edit") { editing = note }
                         Button("Show file") { knowledge.reveal(note) }
+                        Button("Export…") { exportDocument(note) }
                         Button("Forget", role: .destructive) { forgetting = note }
                     }
                     Text(note.body).lineLimit(3).foregroundStyle(.secondary)
@@ -120,6 +121,31 @@ struct KnowledgeView: View {
             } message: { Text("The local note and its search entry will be deleted. Existing agent conversations may still contain previously submitted context.") }
     }
     private func refresh() async { await knowledge.refresh(query: query, scope: scope, includePersonal: includePersonal) }
+    private func importDocuments() {
+        let window = NSApp.keyWindow; defer { window?.makeKeyAndOrderFront(nil) }
+        let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = true
+        panel.message = "Import Markdown notes with scalar OKF type frontmatter into the selected scope. Unknown metadata is retained. Bundle relationships are not imported."
+        guard panel.runModal() == .OK, let vault = knowledge.vault else { return }
+        let urls = Array(panel.urls.prefix(100)); let selectedScope = scope
+        Task {
+            var failures: [String] = []; var count = 0
+            for url in urls {
+                do { _ = try await vault.importDocument(url, scope: selectedScope); count += 1 }
+                catch { failures.append(url.lastPathComponent + ": " + error.localizedDescription) }
+            }
+            knowledge.clearAnswer(); knowledge.message = "Imported \(count) notes. " + failures.joined(separator: "\n"); await refresh()
+        }
+    }
+    private func exportDocument(_ note: KnowledgeNote) {
+        let window = NSApp.keyWindow; defer { window?.makeKeyAndOrderFront(nil) }
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.message = "Choose a folder for this portable Markdown note. Existing files will not be replaced."
+        guard panel.runModal() == .OK, let directory = panel.url, let vault = knowledge.vault else { return }
+        Task {
+            do { let file = try await vault.exportDocument(note.id, directory: directory); knowledge.message = "Exported " + file.lastPathComponent }
+            catch { knowledge.message = error.localizedDescription }
+        }
+    }
 }
 
 private struct MemoryEditor: View {

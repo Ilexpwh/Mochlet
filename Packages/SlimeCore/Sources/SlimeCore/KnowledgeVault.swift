@@ -46,11 +46,10 @@ public actor KnowledgeVault {
         }
         var note=original;note.updatedAt=Date().timeIntervalSince1970
         note.revision=SHA256.hash(data:Data(note.body.utf8)).map{String(format:"%02x",$0)}.joined()
-        let fields:[String:String]=["type":"Note","title":note.title,"x-mochlet-id":note.id,"x-mochlet-scope":note.scope,"x-mochlet-source":note.source]
-        let header=try fields.sorted(by:{$0.key<$1.key}).map {key,value in
-            "\(key): \(String(decoding:try JSONEncoder().encode(value),as:UTF8.self))"
-        }.joined(separator:"\n")
-        let markdown="---\n\(header)\n---\n\n\(note.body)"
+        let fields:[String:String]=["title":note.title,"x-mochlet-id":note.id,"x-mochlet-scope":note.scope,"x-mochlet-source":note.source]
+        let document = try PortableKnowledge(existing.map { String(decoding: $0, as: UTF8.self) } ?? "---\ntype: Note\n---\n")
+        guard document.scalar("type") != nil else { throw MochletError.message("The note's type is missing or uses unsupported YAML syntax. Repair it before editing in Mochlet.") }
+        let markdown = try document.replacing(fields, body: note.body)
         note.revision=SHA256.hash(data:Data(markdown.utf8)).map{String(format:"%02x",$0)}.joined()
         try markdown.write(to:url(note.id),atomically:true,encoding:.utf8)
         try index(note)
@@ -110,4 +109,28 @@ public actor KnowledgeVault {
         return notes.filter {FileManager.default.fileExists(atPath:url($0.id).path)}
     }
     public func url(_ id:String) -> URL { directory.appendingPathComponent(UUID(uuidString:id)?.uuidString ?? "invalid").appendingPathExtension("md") }
+    public func isCurrent(_ note: KnowledgeNote) throws -> Bool {
+        let data = try Data(contentsOf: url(note.id))
+        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() == note.revision
+    }
+    public func importDocument(_ source: URL, scope: String) throws -> String {
+        let attrs = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard attrs.isRegularFile == true, attrs.isSymbolicLink != true, (attrs.fileSize ?? Int.max) <= 2_000_000 else {
+            throw MochletError.message("Import a regular Markdown file up to 2 MB.")
+        }
+        let document = try PortableKnowledge(String(contentsOf: source, encoding: .utf8))
+        guard document.scalar("type") != nil else { throw MochletError.message("This importer requires a scalar OKF type. Complex YAML types and bundles need manual conversion.") }
+        let id = UUID().uuidString
+        let markdown = try document.replacing(["x-mochlet-id": id, "x-mochlet-scope": scope,
+            "x-mochlet-source": document.scalar("x-mochlet-source") ?? source.path,
+            "title": document.scalar("title") ?? source.deletingPathExtension().lastPathComponent])
+        try markdown.write(to: url(id), atomically: true, encoding: .utf8)
+        try rebuild(); return id
+    }
+    public func exportDocument(_ id: String, directory: URL) throws -> URL {
+        guard UUID(uuidString: id) != nil else { throw MochletError.message("Invalid memory identity.") }
+        let destination = directory.appendingPathComponent(id).appendingPathExtension("md")
+        try FileManager.default.copyItem(at: url(id), to: destination)
+        return destination
+    }
 }

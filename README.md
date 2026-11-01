@@ -13,9 +13,9 @@ Implemented native workflows include:
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
 - GitHub account/repository binding, issue synchronization, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
 - Slack/Lark/Feishu/Linear verified token connections, selected source capture, project-bound task drafts, explicit memory copies and reviewed replies with durable delivery records.
-- Google Desktop OAuth configuration, account/project bindings, Gmail threads, calendar agenda/availability, durable selected-calendar sync with offline records and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
+- Google Desktop OAuth configuration, account/project bindings, Gmail threads with explicit tracked-thread history sync, calendar agenda/availability, durable selected-calendar sync with offline records and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 
-Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Gmail incremental sync and live Google validation, live PR publishing, complete OKF conformance and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, live Google account validation, live PR publishing, complete OKF conformance and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 
@@ -56,7 +56,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer task profiles/manual ordering, GitHub Projects/PR workflows, external-client liveness/control, richer team write-back and Gmail incremental synchronization. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer task profiles/manual ordering, GitHub Projects/PR workflows, external-client liveness/control, richer team write-back and broader connector workflows. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 
@@ -84,3 +84,5 @@ Build a local Release ZIP with `./scripts/package-local.sh`. See [packaging and 
 [Reviewed file organization](docs/file-organization.md) describes grouping, AI proposals, path validation and partial-failure undo.
 
 [Calendar synchronization](docs/google-calendar-sync.md) documents atomic paging, expiry recovery, recurring cancellations and offline browsing.
+
+[Tracked Gmail threads](docs/gmail-sync.md) documents bounded history refresh, offline reading and expired-cursor recovery without downloading unselected conversations.

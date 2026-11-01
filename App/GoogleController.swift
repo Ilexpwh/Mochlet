@@ -5,21 +5,24 @@ import SlimeCore
     let store: Store
     let oauth: GoogleOAuth
     var accounts: [ConnectedAccount] = []
-    var accountID = "" { didSet { if oldValue != accountID { sources = []; selected = nil; calendars = []; calendarID = ""; answer = nil } } }
+    var accountID = "" { didSet { if oldValue != accountID { sources = []; selected = nil; calendars = []; calendarID = ""; answer = nil; trackedMailIDs = []; mailSyncSummary = nil; mailRecordsMode = false } } }
     var account: ConnectedAccount? { accounts.first { $0.id == accountID } }
     var sources: [ConnectedSource] = []
     var selected: ConnectedSource?
     var calendars: [JSONValue] = []
     var calendarID = "" { didSet { availability = nil; if oldValue != calendarID { clearCalendarResults() } } }
     var availability: String?
-    var service = "gmail" { didSet { sources = []; selected = nil; answer = nil; calendarRecordsMode = false; calendarSyncSummary = nil } }
+    var service = "gmail" { didSet { sources = []; selected = nil; answer = nil; calendarRecordsMode = false; calendarSyncSummary = nil; mailRecordsMode = false; mailSyncSummary = nil } }
     var calendarRecordsMode = false
     var calendarSyncSummary: String?
     var calendarCancellations: [GoogleCalendarCancellation] = []
+    var trackedMailIDs: Set<String> = []
+    var mailRecordsMode = false
+    var mailSyncSummary: String?
     var calendarRecordQuery = "" { didSet { displayLimit = 100 } }
     var displayLimit = 100
     var filteredSources: [ConnectedSource] {
-        guard calendarRecordsMode, !calendarRecordQuery.isEmpty else { return sources }
+        guard calendarRecordsMode || mailRecordsMode, !calendarRecordQuery.isEmpty else { return sources }
         return sources.filter { $0.title.localizedCaseInsensitiveContains(calendarRecordQuery) || $0.body.localizedCaseInsensitiveContains(calendarRecordQuery) }
     }
     var visibleSources: [ConnectedSource] { Array(filteredSources.prefix(displayLimit)) }
@@ -47,7 +50,58 @@ import SlimeCore
             accounts = try await store.connections().filter { $0.provider == "google" }
             if !accounts.contains(where: { $0.id == accountID }) { accountID = accounts.first?.id ?? "" }
             await loadSavedCalendars()
+            await loadMailTracking()
         } catch { message = error.localizedDescription }
+    }
+    func loadMailTracking() async {
+        guard let account, account.scopes.contains(GoogleScope.mail) else { trackedMailIDs = []; return }
+        do {
+            let snapshot = try await store.mailSnapshot(account: account)
+            guard self.accountID == account.id else { return }
+            trackedMailIDs = snapshot?.threadIDs ?? []
+        } catch { message = error.localizedDescription }
+    }
+    private func showMailSnapshot(_ snapshot: GoogleMailSnapshot) {
+        sources = snapshot.records; selected = nil; answer = nil; trackedMailIDs = snapshot.threadIDs
+        mailRecordsMode = true; calendarRecordsMode = false; calendarSyncSummary = nil; displayLimit = 100; calendarRecordQuery = ""
+        mailSyncSummary = snapshot.threadIDs.isEmpty ? "No threads tracked. Search and choose Track this thread to start." :
+            "Tracked threads: \(snapshot.threadIDs.count). " + (snapshot.syncedAt.map { "Last synchronized \($0.formatted()). Saved content may be out of date." } ?? "A full refresh of tracked threads is pending. Previously read content is shown when available.")
+    }
+    func trackSelectedMail() {
+        guard let account, let selected, selected.service == "gmail" else { return }
+        run {
+            let source = try await self.fresh(selected, account: account)
+            let snapshot = try await self.store.trackMail(source, account: account)
+            self.showMailSnapshot(snapshot)
+            self.message = "Thread added. Click Sync tracked threads to establish its history cursor."
+        }
+    }
+    func untrackSelectedMail() {
+        guard let account, let selected, selected.service == "gmail" else { return }
+        run {
+            self.showMailSnapshot(try await self.store.untrackMail(threadID: selected.remoteID, account: account))
+            self.message = "Stopped tracking this thread. Existing memory copies and task history remain."
+        }
+    }
+    func syncMail(rebuild: Bool = false) {
+        guard let account else { return }
+        run {
+            self.sources = []; self.selected = nil; self.answer = nil; self.mailSyncSummary = nil
+            let snapshot = try await self.reader(account, scope: GoogleScope.mail).syncTrackedMail(store: self.store, rebuild: rebuild)
+            try Task.checkCancellation(); self.showMailSnapshot(snapshot)
+            self.message = "Tracked mail synchronized. No messages were sent or marked read."
+        }
+    }
+    func loadTrackedMail() {
+        guard let account else { return }
+        run {
+            self.sources = []; self.selected = nil; self.answer = nil; self.mailSyncSummary = nil
+            guard let snapshot = try await self.store.mailSnapshot(account: account), snapshot.accountGeneration == account.generation else {
+                throw MochletError.message("No tracked mail for these account permissions. Track a thread or rebuild existing tracking first.")
+            }
+            self.showMailSnapshot(snapshot)
+            self.message = "Loaded local tracked threads. Read current content before relying on a saved copy."
+        }
     }
     func loadSavedCalendars() async {
         guard calendars.isEmpty, let account else { return }
@@ -116,6 +170,7 @@ import SlimeCore
             try Task.checkCancellation(); try await self.store.saveSources(result, account: account)
             self.sources = result; self.selected = nil; self.answer = nil; self.displayLimit = 100
             self.calendarRecordsMode = false; self.calendarSyncSummary = nil
+            self.mailRecordsMode = false; self.mailSyncSummary = nil
             self.message = "\(result.count) items retrieved from \(account.label)."
         }
     }

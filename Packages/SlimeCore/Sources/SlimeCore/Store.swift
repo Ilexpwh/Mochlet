@@ -73,6 +73,9 @@ public actor Store {
         migrations.registerMigration("google_calendar_sync") { db in
             try db.execute(sql: "CREATE TABLE google_calendar_sync(accountID TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE, calendarID TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(accountID,calendarID))")
         }
+        migrations.registerMigration("google_mail_sync") { db in
+            try db.execute(sql: "CREATE TABLE google_mail_sync(accountID TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE, payload BLOB NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

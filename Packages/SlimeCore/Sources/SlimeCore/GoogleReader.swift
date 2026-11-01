@@ -48,6 +48,9 @@ public struct GoogleReader: Sendable {
     }
     public func thread(_ id: String) async throws -> ConnectedSource {
         try await verify(scope: GoogleScope.mail)
+        return try await readVerifiedThread(id)
+    }
+    func readVerifiedThread(_ id: String) async throws -> ConnectedSource {
         let value = try await get("gmail.googleapis.com", ["gmail", "v1", "users", "me", "threads", id], ["format": "full"])
         guard value["id"].string == id, value["messages"].array.count <= 100 else { throw MochletError.message("Thread identity or size is invalid.") }
         var text: [String] = []; var warnings: [String] = []; var title = "Email thread"

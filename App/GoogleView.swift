@@ -55,14 +55,25 @@ struct GoogleView: View {
                 Link("Manage access in Google Account", destination: URL(string: "https://myaccount.google.com/connections")!).font(.caption)
             }
         }.disabled(google.busy)
-        .task(id: google.accountID) { await google.loadSavedCalendars() }
+        .task(id: google.accountID) { await google.loadSavedCalendars(); await google.loadMailTracking() }
     }
     @ViewBuilder private func sourceSection(_ google: GoogleController) -> some View {
         @Bindable var google = google
         VStack(alignment: .leading, spacing: 14) {
             Picker("Service", selection: $google.service) { Text("Gmail").tag("gmail"); Text("Calendar").tag("calendar"); Text("Drive").tag("drive") }.pickerStyle(.segmented)
             switch google.service {
-            case "gmail": TextField("Gmail search, e.g. newer_than:7d", text: $google.query)
+            case "gmail":
+                TextField("Gmail search, e.g. newer_than:7d", text: $google.query)
+                DisclosureGroup("Tracked email threads (\(google.trackedMailIDs.count))") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Read a search result and choose Track this thread. Sync reads account history to refresh only tracked conversations, up to 100 threads. It does not download new conversations, send mail, or mark messages read.").font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Sync tracked threads") { google.syncMail() }.disabled(google.trackedMailIDs.isEmpty)
+                            Button("Rebuild tracked threads") { google.syncMail(rebuild: true) }.disabled(google.trackedMailIDs.isEmpty)
+                            Button("Load saved threads", action: google.loadTrackedMail)
+                        }
+                    }.padding(.top, 8)
+                }
             case "drive":
                 TextField("Drive filter, e.g. name contains 'Design'", text: $google.driveQuery)
                 Text("Leave blank to list available files. Docs and Slides export text; Sheets export only the first sheet. Binary files remain in Drive.").font(.caption).foregroundStyle(.secondary)
@@ -89,7 +100,9 @@ struct GoogleView: View {
             }
             Button(google.service == "calendar" ? "Refresh agenda" : "Search", action: google.search).buttonStyle(.borderedProminent)
             if let summary = google.calendarSyncSummary { Text(summary).font(.callout).foregroundStyle(.secondary) }
+            if let summary = google.mailSyncSummary { Text(summary).font(.callout).foregroundStyle(.secondary) }
             if google.calendarRecordsMode { TextField("Filter saved calendar records", text: $google.calendarRecordQuery) }
+            if google.mailRecordsMode { TextField("Filter tracked email threads", text: $google.calendarRecordQuery) }
             if google.sources.isEmpty { Text("Results appear here after retrieval.").foregroundStyle(.secondary).padding(.vertical) }
             ForEach(google.visibleSources) { source in
                 Button { google.selected = source; google.answer = nil } label: {
@@ -115,6 +128,10 @@ struct GoogleView: View {
                 }
                 HStack {
                     Button("Read current content", action: google.read)
+                    if source.service == "gmail" {
+                        if google.trackedMailIDs.contains(source.remoteID) { Button("Stop tracking", action: google.untrackSelectedMail) }
+                        else { Button("Track this thread", action: google.trackSelectedMail) }
+                    }
                     if let url = URL(string: source.url), url.scheme == "https" { Link("Open source", destination: url) }
                 }
                 if source.service == "calendar" { CalendarEventCard(source: source) }

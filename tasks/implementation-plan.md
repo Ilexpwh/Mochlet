@@ -48,3 +48,5 @@ Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's
 G06 now has committed-workspace review, explicit push/draft-PR publication, immutable commit identities and crash reconciliation. G07 has read-only PR lifecycle refresh independent of local task state. [Publication contract](../docs/github-publication.md) records fixture/native evidence and remaining live/Projects/write-back limitations. The full milestone remains open.
 
 Calendar incremental synchronization now has transactional per-account/calendar cursors, bounded rebuilds, cancellation-exception retention and offline native browsing. [Contract and evidence](../docs/google-calendar-sync.md). U07 remains open for Gmail history synchronization and live revocation/recovery evidence.
+
+Gmail history synchronization now refreshes an explicit tracked set with complete-page transactions, bounded rebuilds and offline native browsing. [Contract and evidence](../docs/gmail-sync.md). U07 remains open for live account/revocation checks, backoff and broader sleep/network validation. No unchecked acceptance criteria have been removed.

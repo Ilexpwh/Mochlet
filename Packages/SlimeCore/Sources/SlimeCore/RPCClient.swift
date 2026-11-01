@@ -11,11 +11,12 @@ public actor RPCClient {
     private var framer=JSONLineFramer()
     private var closed=false
     public init() { let pair=AsyncStream<JSONValue>.makeStream(bufferingPolicy:.bufferingNewest(2048));events=pair.stream;eventSink=pair.continuation }
-    public func launch(executable: String, arguments: [String], cwd: String) throws {
+    public func launch(executable: String, arguments: [String], cwd: String, environment: [String: String] = [:]) throws {
         guard process == nil else { throw MochletError.message("Agent transport is already started.") }
         let p=Process();let stdin=Pipe();let stdout=Pipe();let stderr=Pipe()
         p.executableURL=URL(fileURLWithPath:executable);p.arguments=arguments;p.currentDirectoryURL=URL(fileURLWithPath:cwd)
         p.standardInput=stdin;p.standardOutput=stdout;p.standardError=stderr
+        p.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
         try p.run();process=p;input=stdin.fileHandleForWriting
         _ = fcntl(stdin.fileHandleForWriting.fileDescriptor,F_SETNOSIGPIPE,1)
         Task.detached { [weak self] in
@@ -49,6 +50,7 @@ public actor RPCClient {
     public func notify(_ method: String, params: JSONValue = .object([:])) throws { try write(.object(["method":.string(method),"params":params])) }
     public func reply(id: JSONValue, result: JSONValue) throws { try write(.object(["id":id,"result":result])) }
     public func reject(id: JSONValue, message: String) throws { try write(.object(["id":id,"error":.object(["code":.number(-32601),"message":.string(message)])])) }
+    public func writeRaw(_ value: JSONValue) throws { try write(value) }
     private func write(_ value: JSONValue) throws {
         guard let input,!closed else { throw MochletError.message("Agent is disconnected.") }
         var data=try JSONEncoder().encode(value);data.append(10);try input.write(contentsOf:data)

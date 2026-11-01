@@ -110,7 +110,12 @@ struct CompanionView: View {
                         Toggle("Include personal memory", isOn: $model.includePersonalKnowledge).disabled(!model.includeKnowledge)
                     }.font(.caption).fixedSize()
                 }
-                Spacer();Label("Codex",systemImage:"terminal").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                if let task = model.selectedTask, task.projectID == model.selectedProjectID {
+                    Label(model.destinationProvider.title, systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Picker("Agent", selection: $model.defaultProvider) { ForEach(AgentProvider.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden().frame(maxWidth: 140)
+                }
             }
             if !compact, model.meetings.active { MeetingStatusView(meetings: model.meetings) }
             if !compact {
@@ -126,7 +131,7 @@ struct CompanionView: View {
                 HStack {
                     Text("\(model.queue.count) queued").font(.caption)
                     Spacer()
-                    if !model.isBusy { Button("Resume queue") { Task { await model.runNext() } } }
+                    if !model.isBusy { Button("Resume queue") { Task { await model.resumeQueue() } } }
                     Button("Cancel queued", action: model.cancelQueue)
                 }
             }

@@ -103,3 +103,143 @@ The named `ScreenCapture.swift` in this checkout is not the Notetaker's system-a
 | Provider and source-linked output | Coucou's Notetaker selects local Parakeet and Claude/Apple/off summaries; its Claude helper can retry a different model. `NoteTodo` stores text/owner/due/done but no transcript citation IDs. | Use the selected OpenRouter profile with no silent fallback. Scope speaker IDs to each request, retain transcript revisions, and cite source segment IDs in summaries and proposed tasks. |
 
 Recommendation: port **MicCapture + the isolated Resampler16k** first if they improve the current audio layer; borrow ChannelRecorder's timing concepts without its persistence policy. Keep meeting orchestration, ScreenCaptureKit selection, encrypted segment retention, provider scheduling and revision recovery native to Mochlet. Reusing the entire Notetaker would add FluidAudio/model downloads, Flow UI/state, Anthropic calls and incompatible lifecycle policies.
+
+## Provider adapter follow-up: Pi RPC and Claude control transport
+
+Verified 1 November 2026. This section describes implementable contracts, not integrated or live-tested adapters. Only installed executable discovery, `claude --version` and `claude --help` were run locally; no authentication, private sessions or remote inference were accessed. Context7 documentation was cross-checked against pinned first-party source.
+
+| Provider | Research pin | Local evidence and license |
+|---|---|---|
+| Pi | [`v1.4.0`, commit `4a080252f06caf63a525d7873c5d94d3c23887e0`](https://github.com/earendil-works/pi/tree/v1.4.0) | No `pi` executable on PATH. Repository moved from `badlogic/pi-mono` to `earendil-works/pi`; [MIT](https://github.com/earendil-works/pi/blob/v1.4.0/LICENSE). Preserve notice if incorporating its extension/examples. |
+| Claude | Installed `/Users/ilexpoon/.local/bin/claude`, version **2.1.296**. SDK protocol reference [`claude-agent-sdk-python v0.2.176`, commit `2146f9d8985513053e904b13200c8f744b36785a`](https://github.com/anthropics/claude-agent-sdk-python/tree/v0.2.176) | The [Python SDK license is MIT](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/LICENSE); that does not license Claude Code binaries or service access. Source-compatible envelopes still need a fixture and an authorized live check against the installed CLI before declaring support. |
+
+### Pi: native JSONL transport
+
+Run a long-lived `pi --mode rpc` process with `Process.currentDirectoryURL` set to the registered project root. Read stdout continuously as LF-delimited JSON; keep stderr separate. Assign unique string request IDs and register completion listeners before writing prompts. `prompt` responses acknowledge acceptance; `agent_settled` marks settlement after queued work, retries and compaction. `agent_end` alone is insufficient. A prompt disposition of `handled` does not promise a subsequent settled event. These are documented RPC contracts in [rpc.md](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc.md), with [stream events in json.md](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/json.md).
+
+Persist the exact `sessionId` and `sessionFile` returned by `get_state`. For a new task, use a fresh process/session, or `new_session` when idle. For resumption, prefer the absolute stored session path over prefix matching:
+
+```jsonl
+{"id":"state-1","type":"get_state"}
+{"id":"resume-1","type":"switch_session","sessionPath":"/absolute/mochlet-owned/session.jsonl"}
+{"id":"state-2","type":"get_state"}
+{"id":"prompt-1","type":"prompt","message":"Implement the confirmed change in this project."}
+```
+
+Wait for each dependent response. `new_session` and `switch_session` can return `success:true` with `data.cancelled:true` when an extension blocks them; do not dispatch after that. Recheck identity after switching. The documented `get_state` response contains no working-directory assertion: Mochlet must validate its project/session binding and launch directory itself. CLI `--session <path|id>` also supports exact paths, whereas `--session-id` creates an absent session and `--resume` opens a selector; neither is the right substitute for verified exact resume. Do not use `--no-session` from minimal examples for durable tasks. [RPC commands](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-commands.md), [CLI session options](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/cli.md#sessions).
+
+Representative stream records:
+
+```jsonl
+{"type":"message_update","assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Working…"}}
+{"type":"tool_execution_start","toolCallId":"tool-1","toolName":"bash","args":{"command":"swift test"}}
+{"type":"tool_execution_end","toolCallId":"tool-1","toolName":"bash","result":{"content":[]},"isError":false}
+{"type":"agent_settled","aborted":false}
+```
+
+Reconcile final content with `message_end`; do not append finalized blocks twice. Keep thinking separate from user-facing answers. Settlement is not proof of success: retain provider errors and tool outcomes. See [JSON event and message reference](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/json.md).
+
+Cancellation is deliberately more than a signal. For “stop all queued work”, send and await `clear_queue`, preserve its returned steering/follow-up messages as canceled drafts, then send `abort`. `abort` waits for idle but does not clear the queue. Separate `abort_retry` and `abort_bash` exist for retry delays and explicit RPC bash execution. Ordinary prompt submissions while busy must deliberately specify `streamingBehavior:"steer"` or `"followUp"`; Mochlet's initial one-run queue should avoid doing this implicitly. [Command reference](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-commands.md).
+
+### Pi: questions, approval boundary and usage
+
+Extensions use `extension_ui_request` with a request `id`. Handle `select`, `confirm`, `input` and `editor`; respond through `extension_ui_response`, not a generic RPC response. For example:
+
+```jsonl
+{"type":"extension_ui_request","id":"question-1","method":"confirm","title":"Allow operation?","message":"Requested operation details","timeout":10000}
+{"type":"extension_ui_response","id":"question-1","confirmed":false}
+```
+
+`select`, `input` and `editor` return `value`; dismissal returns `cancelled:true`. Timed requests may resolve before the user responds, so expire local cards and do not claim late delivery. `notify`, `setStatus`, `setWidget`, `setTitle` and `set_editor_text` are notifications and require no response. RPC supports the documented dialog bridge, not arbitrary terminal `ctx.ui.custom()` renderers. See [rpc-extension-ui.md](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-extension-ui.md).
+
+**Pi's RPC dialog bridge does not automatically gate tool execution.** A Mochlet-controlled extension must intercept `tool_call`, await a dialog and return `{block:true,reason:...}` on denial. Upstream's [permission-gate.ts](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/examples/extensions/permission-gate.ts) is only a small dangerous-bash-pattern example; copying it is not a complete approval policy. Tool hooks also see nested calls made through `ctx.executeTool`. Extensions run with the process's OS permissions and can perform effects outside tool hooks, so this mechanism is not a sandbox. [Extension contract](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/extensions.md).
+
+Recommended first supported Pi configuration: load only the app's reviewed permission extension with `--no-extensions -e <absolute-extension-path>`; this still permits explicitly specified extensions. Decide project trust visibly: `--no-approve` ignores trust-gated project-local resources and is **not** “ask before every tool”. `--tools` does not by itself remove all MCP reachability; use the documented MCP exclusion or `--no-mcp` for an initial configuration without MCP. These are deliberate compatibility settings, not an assertion that arbitrary user extensions are safely controllable. [CLI resources/tool options](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/cli.md).
+
+`get_session_stats` exposes tokens (`input`, `output`, `cacheRead`, `cacheWrite`, `total`), estimated `cost`, message/tool counts and optional `contextUsage`. Totals span the session, including tool-reported usage and summary generation; context estimates may be null after compaction. Display these as session usage, not account balances or weekly limits. No account quota contract is established by these RPC fields. [Statistics contract](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-commands.md#get_session_stats).
+
+### Claude: bidirectional approval transport
+
+The official SDK spawns the CLI using `--output-format stream-json --verbose --input-format stream-json`; enabling `can_use_tool` adds `--permission-prompt-tool stdio`. Use the default permission mode for interactive approval behavior, an explicit launch directory, and `--resume=<exact-session-id>` for a resumed task. The equals form binds the value reliably even if it begins with a dash. `--allowedTools` changes auto-approval, not tool availability; broad entries can prevent the desired callback. The current SDK command builder does not add `-p` for its streaming path. [Pinned subprocess command builder](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/transport/subprocess_cli.py), [stdio permission configuration](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L2281), [permission evaluation](https://code.claude.com/docs/en/agent-sdk/permissions).
+
+Wire sequence, with initialization completed before the user message:
+
+```jsonl
+{"type":"control_request","request_id":"init-1","request":{"subtype":"initialize","hooks":null}}
+{"type":"user","session_id":"","message":{"role":"user","content":"Implement the confirmed change."},"parent_tool_use_id":null}
+```
+
+The CLI can then request permission:
+
+```jsonl
+{"type":"control_request","request_id":"approval-1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"swift test"},"tool_use_id":"tool-1"}}
+```
+
+Reply once using the **request ID**, preserving the original input for an unmodified approval:
+
+```jsonl
+{"type":"control_response","response":{"subtype":"success","request_id":"approval-1","response":{"behavior":"allow","updatedInput":{"command":"swift test"}}}}
+```
+
+Or decline:
+
+```jsonl
+{"type":"control_response","response":{"subtype":"success","request_id":"approval-1","response":{"behavior":"deny","message":"User declined this operation."}}}
+```
+
+Do not echo `permission_suggestions` into `updatedPermissions` for “allow once”; that would change permissions. `control_cancel_request` with the same request ID invalidates an outstanding card, and no response should follow it. Concurrent control requests need separate durable identities and UI states. Unknown control subtypes should return a correlated error rather than silently approve. These envelopes and cancellation behavior come directly from [query.py](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/query.py#L395) and [typed request definitions](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L2801).
+
+`AskUserQuestion` arrives through the same permission callback. Render the original `questions` array, retaining each full question string as its answer key. Return an allow response with `updatedInput` containing the original questions plus `answers`; values can be selected labels, arrays for multi-select, or user-entered text. Keep this distinct from an action approval in the UI. [Official user-input contract](https://code.claude.com/docs/en/agent-sdk/user-input#handle-clarifying-questions).
+
+Cancel an active turn with:
+
+```jsonl
+{"type":"control_request","request_id":"cancel-1","request":{"subtype":"interrupt"}}
+```
+
+Track `result.is_error`, `terminal_reason` and the actual session ID; `subtype:"success"` alone can coexist with an API failure. `aborted_streaming` / `aborted_tools` indicate interruption. A result ends a turn, but background tasks can keep the run alive. The pinned SDK requests `CLAUDE_CODE_SDK_READS_SESSION_STATE=1` and tracks `system/session_state_changed` plus task lifecycle before closing stdin. A native adapter must preserve that distinction or explicitly limit unsupported background behavior; closing stdin at the first result can break later permissions. [Result model](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L1695), [run completion and interrupt implementation](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/query.py#L454), [environment opt-in](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/transport/subprocess_cli.py#L850).
+
+Claude result records provide optional `total_cost_usd`, `usage` and per-model usage. These describe inference activity and must not be presented as subscription weekly remaining capacity. Preserve unavailable values as unavailable. A native Swift transport is feasible from these first-party envelopes, but the public supported abstraction is the SDK; pin CLI compatibility fixtures and retain an explicit unsupported-version state. Do not infer a permanently stable public wire API from SDK internals. [Pinned result schema](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L1695).
+
+### Next implementation acceptance cases
+
+Before marking either adapter complete, verify fragmented/coalesced JSONL, out-of-order request replies, expired dialogs, process loss while approval is pending, duplicate UI responses, exact-session mismatch and cancellation with queued/background work. Pi additionally needs a deliberate approved/denied tool-call test through its controlled extension. Claude needs separate AskUserQuestion, allow-once, deny and canceled-request tests against **2.1.296**, including a result followed by background activity. Keep fixture evidence separate from authenticated live evidence and account-quota availability. No live provider validation was performed for this research.
+
+### Claude minimal adapter: precise launch and completion constraints
+
+Follow-up verification against installed **2.1.296** help and pinned SDK **v0.2.176**:
+
+- `--tools Read,Glob,Grep,Edit,Write,Bash,AskUserQuestion` is the supported built-in availability syntax. The SDK joins its `tools` list into that flag. This is different from `--allowedTools`, which grants auto-approval. `--tools` does not establish control over configured MCP tools; add `--strict-mcp-config` with no configured servers, and validate the effective `system/init.tools` and `mcp_servers` fields. Some lifecycle tools may be implicit: current docs say `EndConversation` cannot be removed while other tools remain. [SDK command builder](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/transport/subprocess_cli.py#L592), [CLI reference](https://code.claude.com/docs/en/cli-reference).
+- Installed help lists permission modes `acceptEdits`, `auto`, `bypassPermissions`, **`manual`**, `dontAsk`, `plan`. Use `--permission-mode manual` for this pinned CLI; do not pass the older literal `default` from SDK documentation. Manual mode still auto-approves some read-only calls. A `can_use_tool` check that rejects only `Bash.run_in_background` is not a complete control because auto-approved calls never reach that callback.
+- Set `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` in the child's environment. The official environment reference says it removes `run_in_background` from Bash/PowerShell/subagent tools and disables automatic backgrounding of subagents, timed-out shell commands and long MCP calls. **MCP tasks and Monitor remain exceptions.** Excluding those tools/MCP connections is therefore part of this minimal configuration. `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` additionally disables background sessions. These settings control Claude's background mechanisms, not arbitrary shell daemonization (`&`, `nohup`, subprocesses) and are not an OS sandbox. [Environment variable reference](https://code.claude.com/docs/en/env-vars).
+- Do not add `--bare` solely for task containment: installed help confirms it changes authentication by skipping OAuth/keychain. If an isolated capability slice needs customizations disabled, `--safe-mode` preserves normal authentication but deliberately removes user/project customization. Keep this visible in the connection profile; managed policy can still apply. Do not silently change the user's normal configuration.
+
+Keep `CLAUDE_CODE_SDK_READS_SESSION_STATE=1` and parse the lifecycle even with the background switch. It detects deviations and avoids a premature success. The wire field is `state`, with **`running`**, **`requires_action`**, and **`idle`**, not `busy`:
+
+```jsonl
+{"type":"system","subtype":"session_state_changed","state":"running","uuid":"event-1","session_id":"session-uuid","sdk_host_only":true}
+{"type":"system","subtype":"session_state_changed","state":"requires_action","uuid":"event-2","session_id":"session-uuid","sdk_host_only":true}
+{"type":"system","subtype":"session_state_changed","state":"idle","uuid":"event-3","session_id":"session-uuid","sdk_host_only":true}
+```
+
+The exact shape is covered by the SDK's [session-state fixture](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/tests/test_query.py#L763). `sdk_host_only` is optional metadata, not a reason for the native host to ignore the event.
+
+Task lifecycle records use these shapes; IDs below are illustrative:
+
+```jsonl
+{"type":"system","subtype":"task_started","task_id":"agent-1","task_type":"local_agent","description":"Review change","tool_use_id":"tool-1","uuid":"event-4","session_id":"session-uuid"}
+{"type":"system","subtype":"task_updated","task_id":"agent-1","patch":{"status":"completed"},"uuid":"event-5","session_id":"session-uuid"}
+{"type":"system","subtype":"task_notification","task_id":"agent-1","status":"completed","output_file":"/output/path","summary":"Review finished","uuid":"event-6","session_id":"session-uuid"}
+```
+
+The SDK tracks only `task_type` **`local_agent`** and **`local_workflow`** for deferred run completion. Remove IDs idempotently on `task_notification`, or `task_updated.patch.status` in **`completed`, `failed`, `stopped`, `killed`**. There is no required `task_completed` event. A terminal update may have no notification. The SDK deliberately does not reconcile this ledger with `background_tasks_changed`: that snapshot omits foreground agents which later become background and can contain observers without matching lifecycle records. It also excludes shell tasks from its wait-for-agent ledger because a server or `tail -f` might never complete. [Task schema](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L1543), [tracking implementation](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/query.py#L870).
+
+Implement completion as a state machine: remember each result, keep stdin open through `running` and `requires_action`, and settle only after a result plus `idle` with no tracked agents or unanswered controls. Idle can arrive before the result; evaluate after either. New work reopens the run. A result with an empty task ledger is insufficient because a completed agent may still owe its parent a follow-up turn. If the CLI supplies no state events, the SDK falls back to result+ledger; Mochlet should label that weaker compatibility and not promise full background support. A timeout must report interruption/uncertainty, not successful completion. [SDK result handling](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/query.py#L454), [state handling](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/_internal/query.py#L924).
+
+### Claude session identity: handshake versus persisted session
+
+The `initialize` **control response** is a capability/commands/output-style handshake, not a documented session-ID guarantee. Do not wait for `response.session_id` there before sending the first user message. The separate **`system` / `init`** event carries `session_id`, `cwd`, `tools`, `mcp_servers`, model and version at the start of each turn. The result also carries `session_id`, including an error result. Capture both and reject disagreement. [get_server_info](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/client.py#L540), [SystemInitData](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L1461), [session guide](https://code.claude.com/docs/en/agent-sdk/sessions#capture-the-session-id).
+
+For a new Mochlet task, generate and journal a fresh UUID before launch, pass `--session-id=<uuid>`, then mark the binding confirmed only when the CLI reports that ID. Merely allocating a UUID is not proof of a saved session; an early crash may leave nothing resumable. Leave persistence enabled (omit `--no-session-persistence`). On later runs use only `--resume=<confirmed-uuid>`, not `--session-id` as an attempted resume and not `--continue`. Do not combine `--resume` with `--session-id` unless intentionally forking; the SDK explicitly documents that restriction. Resuming without forking preserves session identity and history; a missing session must surface an error rather than create unrelated work. [SDK session options](https://github.com/anthropics/claude-agent-sdk-python/blob/v0.2.176/src/claude_agent_sdk/types.py#L2398), [session persistence/resume](https://code.claude.com/docs/en/agent-sdk/sessions).
+
+Current CLI ID lookup can search other projects, so an exact UUID alone does not prove project-root agreement. Validate Mochlet's existing binding and canonical launch root before dispatch, then verify `system/init.cwd` and session ID as soon as received. That event is turn-start metadata, **not a verified pre-prompt routing handshake**. This research did not establish a supported no-inference preflight call that verifies the resumed cwd. If pre-dispatch effective-directory proof is mandatory, keep that acceptance gate open rather than claiming `initialize` provides it. No authenticated launch or persistence probe was run.

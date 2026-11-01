@@ -42,6 +42,9 @@ public actor Store {
             }
             try db.execute(sql: "DROP TABLE github_tasks; ALTER TABLE github_tasks_v2 RENAME TO github_tasks;")
         }
+        migrations.registerMigration("agent_session_route") { db in
+            try db.execute(sql: "ALTER TABLE tasks ADD COLUMN provider TEXT NOT NULL DEFAULT 'codex'; ALTER TABLE tasks ADD COLUMN sessionCWD TEXT; ALTER TABLE tasks ADD COLUMN sessionConfirmed BOOLEAN NOT NULL DEFAULT 0;")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

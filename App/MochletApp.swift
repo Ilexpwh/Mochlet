@@ -12,6 +12,15 @@ import SlimeCore
     var surfaces: SurfaceController?
     private var shortcutRecording = false
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["MOCHLET_RUNTIME_SELF_TEST"] == "1" {
+            Task {
+                do { try await RuntimeSelfTest.run(); exit(0) }
+                catch { print("Native runtime fixture failed: \(error)"); exit(1) }
+            }
+            return
+        }
+        #endif
         do {
             var folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Mochlet", isDirectory: true)
             #if DEBUG
@@ -65,7 +74,7 @@ import SlimeCore
         model?.shortcuts.stop()
         Task { [model] in
             await model?.meetings.shutdown()
-            if let runtime=model?.runtime {await runtime.client.stop()}
+            if let runtime=model?.runtime {await runtime.stop()}
             NSApp.reply(toApplicationShouldTerminate:true)
         }
         return .terminateLater

@@ -21,9 +21,14 @@ import SlimeCore
     var errorMessage: String?
     var isBusy = false
     var status = "Ready when you are"
-    var runtime: CodexRuntime?
+    var runtime: (any AgentRuntime)?
+    var runtimeProvider: AgentProvider?
+    private var runtimeGeneration = UUID()
+    var providerUsage: JSONValue = .null
     var connectingRuntime = false
-    private var connectionTask: Task<CodexRuntime, Error>?
+    private var connectionTask: Task<any AgentRuntime, Error>?
+    private var dispatchTask: Task<Void, Never>?
+    private var cancellingStartup = false
     var runtimeEvents: Task<Void,Never>?
     var activeTaskID: String?
     var activeRunID: String?
@@ -41,8 +46,16 @@ import SlimeCore
     var codexPath: String = UserDefaults.standard.string(forKey:"codexPath") ?? "/opt/homebrew/bin/codex" {
         didSet { UserDefaults.standard.set(codexPath,forKey:"codexPath") }
     }
+    var claudePath: String = UserDefaults.standard.string(forKey: "claudePath") ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin/claude").path {
+        didSet { UserDefaults.standard.set(claudePath, forKey: "claudePath") }
+    }
+    var defaultProvider = AgentProvider(rawValue: UserDefaults.standard.string(forKey: "agentProvider") ?? "codex") ?? .codex {
+        didSet { UserDefaults.standard.set(defaultProvider.rawValue, forKey: "agentProvider") }
+    }
+    var destinationProvider: AgentProvider { selectedTask.flatMap { $0.projectID == selectedProjectID ? AgentProvider(rawValue: $0.provider) : nil } ?? defaultProvider }
     var queue: [(WorkTask,String,Bool)] = []
     var cancellingQueue = false
+    private var queuePaused = false
     private var queueGeneration = 0
     var slimeName: String { didSet { UserDefaults.standard.set(slimeName, forKey: "slimeName") } }
     var palette: String { didSet { UserDefaults.standard.set(palette, forKey: "palette") } }
@@ -99,7 +112,7 @@ import SlimeCore
         do {
             try await store.recover()
             try await refresh()
-            queue = try await store.queuedCommands()
+            queue = try await store.queuedCommands(); queuePaused = !queue.isEmpty
             if !queue.isEmpty { status = "\(queue.count) queued tasks recovered. Review and resume when ready." }
             selectedProjectID = projects.first?.id ?? ""
         } catch { report(error) }
@@ -143,7 +156,7 @@ import SlimeCore
         let task: WorkTask
         if let existing=selectedTask,existing.projectID == project.id, existing.id != activeTaskID,
            existing.state != .queued {task=existing}
-        else {task=WorkTask(projectID:project.id,title:prompt)}
+        else {var fresh=WorkTask(projectID:project.id,title:prompt);fresh.provider=destinationProvider.rawValue;task=fresh}
         Task {
             do {
                 try ProjectResolver.validateRoot(project)
@@ -171,7 +184,15 @@ import SlimeCore
         }
     }
     func runNext() async {
-        guard !cancellingQueue,!isBusy,!queue.isEmpty else{return}
+        guard !queuePaused, dispatchTask == nil, !cancellingStartup, !cancellingQueue, !isBusy, !queue.isEmpty else { return }
+        let job = Task { @MainActor in await self.dispatchNext() }
+        dispatchTask = job
+        await job.value
+        dispatchTask = nil
+        if !isBusy, !cancellingStartup { await runNext() }
+    }
+    private func dispatchNext() async {
+        guard !Task.isCancelled, !cancellingQueue,!isBusy,!queue.isEmpty else{return}
         let (queued,prompt,readOnly)=queue.removeFirst()
         guard var project=projects.first(where:{$0.id == queued.projectID}) else{return}
         isBusy=true;activeTaskID=queued.id
@@ -192,17 +213,23 @@ import SlimeCore
             } else if try await store.githubTaskBinding(taskID: task.id) != nil {
                 throw MochletError.message("This issue's workspace is not ready. Prepare it again from GitHub.")
             }
-            let runtime = try await connectRuntime(cwd: project.root)
+            try Task.checkCancellation()
+            try SessionRoute.validate(task: task, project: project)
+            guard let provider = AgentProvider(rawValue: task.provider) else { throw MochletError.message("Unknown task provider.") }
+            let runtime = try await connectRuntime(cwd: project.root, provider: provider)
+            try Task.checkCancellation()
             let thread=try await runtime.prepare(project:project,threadID:task.threadID,readOnly:readOnly)
-            task.threadID=thread;activeThreadID=thread
+            try Task.checkCancellation()
+            task.threadID=thread;task.sessionCWD=project.root;if provider == .codex {task.sessionConfirmed=true};activeThreadID=thread
             try await store.save(task);try await refresh()
+            try Task.checkCancellation()
             let turn = try await runtime.send(threadID:thread,text:prompt)
             guard activeRunID == run.id else { return }
             activeTurnID = turn
-            status="Working in \(project.name)";activity="Codex is working"
+            status="Working in \(project.name)";activity="\(provider.title) is working"
             await refreshUsage()
         } catch {
-            if activeRunID == run.id {
+            if activeRunID == run.id, !Task.isCancelled {
                 report(error)
                 if claimed { await finish(.failed) }
                 else {
@@ -212,9 +239,10 @@ import SlimeCore
             }
         }
     }
+    func resumeQueue() async { queuePaused = false; await runNext() }
     func cancelQueue() {
         guard !cancellingQueue else { return }
-        cancellingQueue = true; queueGeneration += 1; queue = []
+        cancellingQueue = true; queueGeneration += 1; queue = []; queuePaused = false
         Task {
             defer { cancellingQueue = false }
             do { try await store.cancelQueuedCommands(); try await refresh() }
@@ -223,28 +251,39 @@ import SlimeCore
     }
     func refreshUsage() async {
         guard let runtime else{return}
-        do {usage=try await runtime.client.call("account/rateLimits/read");usageDate=Date()}
+        do {usage=try await runtime.readUsage();usageDate=Date()}
         catch {usage = .null;usageDate=nil}
     }
-    private func connectRuntime(cwd: String) async throws -> CodexRuntime {
-        if let connectionTask { return try await connectionTask.value }
-        if let runtime { return runtime }
+    private func connectRuntime(cwd: String, provider: AgentProvider = .codex) async throws -> any AgentRuntime {
+        if let connectionTask { _ = try await connectionTask.value }
+        if let runtime, runtimeProvider == provider, provider == .codex { return runtime }
         connectingRuntime = true
-        let path = codexPath
-        let job = Task { @MainActor in
-            let r = CodexRuntime()
-            runtimeEvents?.cancel()
+        runtimeGeneration = UUID(); let generation = runtimeGeneration
+        runtimeEvents?.cancel()
+        if let runtime { await runtime.stop() }
+        runtime = nil; runtimeProvider = nil; usage = .null; usageDate = nil; providerUsage = .null
+        let codexExecutable = codexPath; let claudeExecutable = claudePath
+        let job = Task<any AgentRuntime, Error> { @MainActor in
+            let r: any AgentRuntime
+            if provider == .codex { r = CodexRuntime() } else { r = ClaudeRuntime(executable: claudeExecutable) }
             runtimeEvents = Task { [weak self] in
-                for await event in r.client.events { await self?.receive(event) }
+                for await event in r.events {
+                    guard let self, self.runtimeGeneration == generation else { return }
+                    await self.receive(event)
+                }
             }
-            do { try await r.connect(executable: path, cwd: cwd); runtime = r; return r }
-            catch { await r.client.stop(); throw error }
+            do {
+                if let codex = r as? CodexRuntime { try await codex.connect(executable: codexExecutable, cwd: cwd) }
+                try Task.checkCancellation()
+                runtime = r; runtimeProvider = provider; return r
+            } catch { await r.stop(); throw error }
         }
         connectionTask = job
         defer { connectionTask = nil; connectingRuntime = false }
         return try await job.value
     }
     func connectAndReadUsage() async {
+        guard !isBusy || tasks.first(where: { $0.id == activeTaskID })?.provider == AgentProvider.codex.rawValue else { return }
         do {
             _ = try await connectRuntime(cwd: selectedProject?.root ?? folder.path)
             await refreshUsage()
@@ -253,10 +292,11 @@ import SlimeCore
     func receive(_ event:JSONValue) async {
         let method=event["method"].string ?? "";let p=event["params"]
         if method == "mochlet/disconnected" {
-            runtime=nil;usageDate=nil
-            if isBusy {errorMessage=p["reason"].string;await finish(.interrupted,continueQueue:false)}
+            runtime=nil;runtimeProvider=nil;usageDate=nil
+            if isBusy, !cancellingStartup {errorMessage=p["reason"].string;await finish(.interrupted,continueQueue:false)}
             return
         }
+        if method == "mochlet/providerUsage" { providerUsage=p["usage"];return }
         if method == "account/rateLimits/updated" {usage=p;usageDate=Date();return}
         guard isBusy,let taskID=activeTaskID else{return}
         if let thread=p["threadId"].string,thread != activeThreadID {return}
@@ -269,15 +309,17 @@ import SlimeCore
                 activity="Needs your input"
                 do {if var task=tasks.first(where:{$0.id == taskID}) {task.state = .waiting;try await store.save(task);try await refresh()}}
                 catch{report(error)}
-            } else {try? await runtime.client.reject(id:event["id"],message:"This request type is not supported by Mochlet yet.")}
+            } else {try? await runtime.reject(id:event["id"],message:"This request type is not supported by Mochlet yet.")}
             return
         }
         do {
             switch method {
+            case "mochlet/sessionVerified":
+                if let index = tasks.firstIndex(where: { $0.id == taskID }) { tasks[index].sessionConfirmed = true; try await store.save(tasks[index]) }
             case "item/agentMessage/delta":
                 if let index=tasks.firstIndex(where:{$0.id == taskID}),let delta=p["delta"].string {
                     tasks[index].output += delta
-                    if tasks[index].output.utf8.count > 2_000_000 {tasks[index].output=String(tasks[index].output.suffix(1_000_000));activity="Showing recent output; full session remains in Codex"}
+                    if tasks[index].output.utf8.count > 2_000_000 {tasks[index].output=String(tasks[index].output.suffix(1_000_000));activity="Showing recent output; full session remains in the agent CLI"}
                 }
             case "item/started","item/completed":
                 let item=p["item"];if let id=item["id"].string {items[id]=item}
@@ -295,11 +337,16 @@ import SlimeCore
     }
     func finish(_ state:WorkState,continueQueue:Bool = true) async {
         guard let taskID=activeTaskID else{return}
+        if !continueQueue { queuePaused = true }
         if var task=tasks.first(where:{$0.id == taskID}),let runID=activeRunID {
             task.state=state
             do {try await store.finish(task,runID:runID);try await refresh()} catch {report(error)}
         }
         isBusy=false;activeTaskID=nil;activeRunID=nil;activeThreadID=nil;activeTurnID=nil;pendingInputs=[];deliveringInputs=[];items=[:]
+        if runtimeProvider == .claude, let old = runtime {
+            runtimeGeneration = UUID(); runtimeEvents?.cancel(); runtime = nil; runtimeProvider = nil
+            await old.stop()
+        }
         status=state == .review ? "Work is ready to review" : state.rawValue.capitalized;activity=status
         if state == .review, speech.spokenReplies, let output = tasks.first(where: { $0.id == taskID })?.output { speech.speak(output) }
         if continueQueue {await runNext()}
@@ -310,21 +357,33 @@ import SlimeCore
         Task {
             defer { deliveringInputs.remove(input.id) }
             do {
-                try await runtime.client.reply(id:input.rpcID,result:result)
+                try await runtime.reply(id:input.rpcID,result:result)
                 pendingInputs.removeAll {$0.id == input.id}
                 if pendingInputs.isEmpty,let index=tasks.firstIndex(where:{$0.id == activeTaskID}) {tasks[index].state = .running;try await store.save(tasks[index])}
             } catch {report(error)}
         }
     }
     func cancelRun() {
-        guard let runtime,let thread=activeThreadID,let turn=activeTurnID else{return}
-        Task {do {try await runtime.interrupt(threadID:thread,turnID:turn)} catch {report(error)}}
+        guard isBusy else { return }
+        if let runtime, let thread = activeThreadID, let turn = activeTurnID {
+            Task { do { try await runtime.interrupt(threadID: thread, turnID: turn) } catch { report(error) } }
+        } else {
+            guard !cancellingStartup else { return }
+            cancellingStartup = true
+            let dispatch = dispatchTask; dispatch?.cancel(); connectionTask?.cancel()
+            Task {
+                defer { cancellingStartup = false }
+                if let runtime { await runtime.stop() }
+                await dispatch?.value
+                if isBusy { await finish(.cancelled, continueQueue: false) }
+            }
+        }
     }
     func shutdown() {
         speech.cancel(); speech.stopSpeaking()
-        connectionTask?.cancel()
+        dispatchTask?.cancel(); connectionTask?.cancel()
         runtimeEvents?.cancel()
-        if let runtime {Task {await runtime.client.stop()}}
+        if let runtime {Task {await runtime.stop()}}
     }
 
 }

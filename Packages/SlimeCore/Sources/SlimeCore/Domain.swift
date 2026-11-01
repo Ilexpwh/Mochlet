@@ -25,6 +25,9 @@ public struct WorkTask: Codable, Identifiable, Sendable, FetchableRecord, Persis
     public var title: String
     public var state: WorkState
     public var threadID: String?
+    public var provider: String = AgentProvider.codex.rawValue
+    public var sessionCWD: String?
+    public var sessionConfirmed = false
     public var createdAt: Double
     public var output: String
     public init(projectID: String, title: String) {

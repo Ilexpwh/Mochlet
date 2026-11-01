@@ -97,20 +97,21 @@ struct KnowledgeView: View {
                 }.padding().background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
             }
             if let message = knowledge.message { Text(message).font(.caption).foregroundStyle(.secondary) }
-            List(knowledge.notes) { note in
+            ScrollView { LazyVStack(alignment: .leading, spacing: 12) { ForEach(knowledge.notes) { note in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(note.title).font(.headline); Spacer()
-                        Button("Edit") { editing = note }
-                        Button("Show file") { knowledge.reveal(note) }
-                        Button("Export…") { exportDocument(note) }
-                        Button("Forget", role: .destructive) { forgetting = note }
+                        Button("Edit") { editing = note }.accessibilityLabel("Edit " + note.title)
+                        Button("Show file") { knowledge.reveal(note) }.accessibilityLabel("Show file for " + note.title)
+                        Button("Export…") { exportDocument(note) }.accessibilityLabel("Export " + note.title)
+                        Button("Forget", role: .destructive) { forgetting = note }.accessibilityLabel("Forget " + note.title)
                     }
                     Text(note.body).lineLimit(3).foregroundStyle(.secondary)
                     Text("\(note.source) · \(Date(timeIntervalSince1970: note.updatedAt).formatted(date: .abbreviated, time: .shortened))")
                         .font(.caption).foregroundStyle(.secondary)
-                }.padding(.vertical, 7)
-            }.overlay { if knowledge.notes.isEmpty { ContentUnavailableView("A little knowledge goes a long way", systemImage: "books.vertical", description: Text("Add preferences, project facts or source notes in the selected scope.")) } }
+                }.padding(.vertical, 7).accessibilityElement(children: .contain).buttonStyle(.borderless)
+                Divider()
+            } } }.overlay { if knowledge.notes.isEmpty { ContentUnavailableView("A little knowledge goes a long way", systemImage: "books.vertical", description: Text("Add preferences, project facts or source notes in the selected scope.")) } }
         }.padding(24)
             .task(id: "\(scope)|\(includePersonal)|\(query)") { await refresh() }
             .onChange(of: scope) { _, _ in knowledge.clearAnswer() }

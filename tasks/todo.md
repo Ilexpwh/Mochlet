@@ -1,6 +1,6 @@
 # Implementation checklist: Mochlet
 
-Status: not started. All application tasks remain unchecked. Updated 2026-11-01 for knowledge/memory, project-aware Codex sessions, GitHub and native experience quality.
+Status: implementation in progress. Unchecked tasks retain their complete acceptance gates; implemented slices and verification evidence are tracked in docs/build-status.md. Updated 2026-11-01 for knowledge/memory, project-aware Codex sessions, GitHub and native experience quality.
 
 Existing T01–T33 IDs and acceptance criteria are retained, with dependencies strengthened where necessary. New R/K/G/Q/U tasks extend the same plan. **The order below, not numeric ID order, is the default delivery sequence.** Project context and connector foundations are deliberately pulled forward.
 

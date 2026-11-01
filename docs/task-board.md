@@ -15,4 +15,12 @@ Edits compare the exact task and details revision transactionally. Queued/runnin
 - Full check passes 71 fixture declarations (two parameterized across six cases), three opt-in live tests skipped, native build and AppModel host.
 - Native isolated-data walkthrough creates a draft, edits priority/description/due date, adds a comment, reopens persisted fields and filters the board. [Details evidence](evidence/native-task-details.png), [responsive board after relaunch](evidence/native-task-board.png). No agent or external service was invoked.
 
-Manual card dragging/order, multiple character/profile assignments and per-attempt output reconstruction remain open. Agent assignment is available on unbound drafts. Large-board and VoiceOver evaluation remain release checks; this slice does not mark the entire T14 milestone complete.
+Manual card dragging/order, multiple character/profile assignments remain open. Agent assignment is available on unbound drafts. Large-board and VoiceOver evaluation remain release checks; this slice does not mark the entire T14 milestone complete.
+
+## Per-attempt output — 2026-11-01
+
+New attempts save their own assistant text separately from the combined task conversation. Expand an attempt to read its original instructions and reply. The last 1,000,000 UTF-8 bytes are retained without splitting characters; a visible notice identifies truncated replies. Provider snapshots replace the current attempt text. Older attempts remain explicitly unavailable rather than reconstructing an unreliable history.
+
+Output checkpoints occur at completed provider items and terminal transitions. A hard crash can lose the unfinished fragment since the last item checkpoint. Active-run checks, output and combined task text commit together; cancellation wins over a late checkpoint. Optional spoken replies now speak only the current attempt.
+
+Four core fixtures cover separate follow-ups, snapshots, Unicode truncation, reopening, wrong-task guards and concurrent cancellation. Native Codex/Pi orchestration fixtures verify recorded output. The full check passes 107 reported tests (104 fixture declarations plus three opt-in live skips), Debug build and native runtime host. A final accessibility-label rebuild passes. The native walkthrough reopened two fictional attempts and verified distinct prompts/replies through uniquely named disclosure controls. [Native evidence](evidence/native-attempt-output.png).

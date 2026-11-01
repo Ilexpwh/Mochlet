@@ -76,6 +76,9 @@ public actor Store {
         migrations.registerMigration("google_mail_sync") { db in
             try db.execute(sql: "CREATE TABLE google_mail_sync(accountID TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE, payload BLOB NOT NULL)")
         }
+        migrations.registerMigration("run_outputs") { db in
+            try db.execute(sql: "CREATE TABLE run_outputs(runID TEXT PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE, text TEXT NOT NULL, truncated BOOLEAN NOT NULL, updatedAt DOUBLE NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -88,10 +91,13 @@ public actor Store {
             try db.execute(sql: "DELETE FROM queued_commands WHERE taskID=?", arguments: [task.id])
             guard db.changesCount == 1 else { throw MochletError.message("This queued task was cancelled or already started.") }
             try task.save(db); try run.insert(db)
+            try Self.writeRunOutput(runID: run.id, taskID: task.id, output: .init(), db: db)
         }
     }
-    public func finish(_ task: WorkTask, runID: String) throws {
+    public func finish(_ task: WorkTask, runID: String, output: RunOutputBuffer? = nil) throws {
         try database.write { db in
+            guard try Run.fetchOne(db, key: runID)?.taskID == task.id else { throw MochletError.message("Cannot finish an attempt belonging to another task.") }
+            if let output { try Self.writeRunOutput(runID: runID, taskID: task.id, output: output, db: db) }
             try task.save(db)
             try db.execute(sql: "UPDATE runs SET state = ?, endedAt = ? WHERE id = ?", arguments: [task.state.rawValue, Date().timeIntervalSince1970, runID])
         }

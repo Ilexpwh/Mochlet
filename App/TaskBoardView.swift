@@ -154,10 +154,7 @@ private struct TaskDetailView: View {
                     Divider()
                     DisclosureGroup("Attempts (latest 100) · \(attempts.count)") {
                         ForEach(attempts) { run in
-                            VStack(alignment: .leading) {
-                                Text("\(Date(timeIntervalSince1970: run.startedAt).formatted()) · \(run.state.rawValue)").font(.caption.bold())
-                                Text(run.prompt).textSelection(.enabled).lineLimit(8)
-                            }.padding(.vertical, 5)
+                            AttemptOutputView(run: run, store: model.store)
                         }
                     }
                     DisclosureGroup("Latest output") { Text(original.output.isEmpty ? "No agent output yet." : original.output).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
@@ -192,6 +189,51 @@ private struct TaskDetailView: View {
     }
     private func load() async {
         do { comments = try await model.store.comments(taskID: original.id); attempts = try await model.store.attempts(taskID: original.id) }
+        catch { message = error.localizedDescription }
+    }
+}
+
+private struct AttemptOutputView: View {
+    let run: Run
+    let store: Store
+    @State private var expanded = false
+    @State private var output: SavedRunOutput?
+    @State private var loading = false
+    @State private var message: String?
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            if expanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Instructions for this attempt").font(.caption.bold())
+                    Text(run.prompt).textSelection(.enabled)
+                    Divider()
+                    if loading { ProgressView().controlSize(.small) }
+                    if let output {
+                        Text("Saved \(Date(timeIntervalSince1970: output.updatedAt).formatted())").font(.caption).foregroundStyle(.secondary)
+                        if output.truncated { Text("Showing the most recent 1 MB of this attempt. Full history remains with the agent CLI.").font(.caption).foregroundStyle(.secondary) }
+                        Text(output.text.isEmpty ? "No assistant text saved for this attempt yet." : output.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    } else if !loading, message == nil {
+                        Text("Separate output was not recorded for this older attempt. The combined conversation remains in Latest output.").font(.callout).foregroundStyle(.secondary)
+                    }
+                    if let message { Text(message).font(.caption).foregroundStyle(.red) }
+                    if [.running, .waiting].contains(run.state) {
+                        Text("Active output is checkpointed when an item completes. Reload to read its latest saved text.").font(.caption).foregroundStyle(.secondary)
+                        Button("Reload saved output") { Task { await load() } }.disabled(loading)
+                    }
+                }.padding(.vertical, 8).task { await load() }
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(Date(timeIntervalSince1970: run.startedAt).formatted()) · \(run.state.rawValue)").font(.caption.bold())
+                Text(run.prompt).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }.accessibilityElement(children: .combine)
+                .accessibilityLabel("Attempt \(run.id.prefix(8)), \(run.state.rawValue), \(run.prompt)")
+        }.padding(.vertical, 5)
+    }
+    private func load() async {
+        loading = true; message = nil
+        defer { loading = false }
+        do { output = try await store.runOutput(runID: run.id, taskID: run.taskID) }
         catch { message = error.localizedDescription }
     }
 }

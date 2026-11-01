@@ -46,6 +46,8 @@ import SlimeCore
                 elif method=='account/rateLimits/read': result={'rateLimits':{}}
                 emit({'id':value.get('id'),'result':result})
                 if method=='turn/start':
+                    emit({'method':'item/agentMessage/delta','params':{'threadId':'fixture-thread','turnId':'fixture-turn','delta':'CODEX_ATTEMPT_OK'}})
+                    emit({'method':'item/completed','params':{'threadId':'fixture-thread','turnId':'fixture-turn','item':{'id':'fixture-message','type':'agentMessage'}}})
                     emit({'method':'turn/completed','params':{'threadId':'fixture-thread','turn':{'id':'fixture-turn','status':'completed'}}})
             """#.write(to: fixture, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
@@ -78,7 +80,10 @@ import SlimeCore
                 try require(!(try String(contentsOf: requests, encoding: .utf8)).contains("turn/start"), "Interrupted startup sent a prompt")
                 await model.resumeQueue()
                 try await wait { !model.isBusy && model.queue.isEmpty }
-                try require(model.tasks.contains { $0.title == "Second" && $0.state == .review }, "Explicit Resume did not complete the queued successor")
+                  try require(model.tasks.contains { $0.title == "Second" && $0.state == .review }, "Explicit Resume did not complete the queued successor")
+                  if let finished = model.tasks.first(where: { $0.title == "Second" }), let attempt = try await store.attempts(taskID: finished.id).first {
+                      try require(try await store.runOutput(runID: attempt.id, taskID: finished.id)?.text == "CODEX_ATTEMPT_OK", "Codex delta output was not retained for its attempt")
+                  }
             }
             model.shutdown()
         }
@@ -382,7 +387,14 @@ import SlimeCore
             task = model.tasks.first!
             try require(task.state == .review && task.sessionConfirmed, "Pi native task did not finish with a confirmed session")
             try require(task.output.components(separatedBy: "PI_FIXTURE_OK").count == turn + 2, "Pi snapshots duplicated or erased a turn")
-            try require(!task.output.contains("provisional"), "Pi final output did not replace provisional text")
+              try require(!task.output.contains("provisional"), "Pi final output did not replace provisional text")
+              let attempts = try await store.attempts(taskID: task.id)
+              try require(attempts.count == turn + 1, "Pi follow-up lost attempt history")
+              for attempt in attempts {
+                  let saved = try await store.runOutput(runID: attempt.id, taskID: task.id)
+                  try require(saved?.text.components(separatedBy: "PI_FIXTURE_OK").count == 2 && saved?.text.contains("provisional") == false,
+                              "Pi per-attempt output mixed turns or retained provisional text")
+              }
             if let session { try require(task.threadID == session, "Pi native follow-up changed session") }
             session = task.threadID
             try require(model.providerUsageProvider == .pi && model.usageDate == nil, "Pi usage was confused with Codex account allowance")

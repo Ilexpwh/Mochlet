@@ -35,6 +35,7 @@ import SlimeCore
     var providerUsage: JSONValue = .null
     var providerUsageProvider: AgentProvider?
     private var activeOutputBase = ""
+    private var activeRunOutput = RunOutputBuffer()
     var connectingRuntime = false
     private var connectionTask: Task<any AgentRuntime, Error>?
     private var dispatchTask: Task<Void, Never>?
@@ -248,6 +249,7 @@ import SlimeCore
         var task=queued;task.state = .running
         if !task.output.isEmpty {task.output += "\n\n— Follow-up —\n\(prompt)\n\n"}
         activeOutputBase = task.output
+        activeRunOutput = RunOutputBuffer()
         let run=Run(taskID:task.id,prompt:prompt);activeRunID=run.id
         var claimed = false
         do {
@@ -381,6 +383,7 @@ import SlimeCore
                 if let index = tasks.firstIndex(where: { $0.id == taskID }) { tasks[index].sessionConfirmed = true; try await store.save(tasks[index]) }
             case "mochlet/outputSnapshot":
                 if let index = tasks.firstIndex(where: { $0.id == taskID }), let text = p["text"].string {
+                    activeRunOutput.replace(text)
                     tasks[index].output = String((activeOutputBase + text).suffix(1_000_000))
                 }
             case "mochlet/providerNotice": activity = p["message"].string ?? "Agent notification"
@@ -391,13 +394,16 @@ import SlimeCore
                 }
             case "item/agentMessage/delta":
                 if let index=tasks.firstIndex(where:{$0.id == taskID}),let delta=p["delta"].string {
+                    activeRunOutput.append(delta)
                     tasks[index].output += delta
                     if tasks[index].output.utf8.count > 2_000_000 {tasks[index].output=String(tasks[index].output.suffix(1_000_000));activity="Showing recent output; full session remains in the agent CLI"}
                 }
             case "item/started","item/completed":
                 let item=p["item"];if let id=item["id"].string {items[id]=item}
                 activity=item["type"].string ?? "Working"
-                if method == "item/completed",let task=tasks.first(where:{$0.id == taskID}) {try await store.save(task)}
+                if method == "item/completed",let task=tasks.first(where:{$0.id == taskID}) {
+                    if let runID = activeRunID { try await store.checkpointRunOutput(runID: runID, taskID: taskID, output: activeRunOutput, combinedOutput: task.output) }
+                }
             case "turn/completed":
                 let state=p["turn"]["status"].string
                 if let error=p["turn"]["error"]["message"].string {errorMessage=error}
@@ -410,10 +416,11 @@ import SlimeCore
     }
     func finish(_ state:WorkState,continueQueue:Bool = true) async {
         guard let taskID=activeTaskID else{return}
+        let spokenOutput = activeRunOutput.text
         if !continueQueue { queuePaused = true }
         if var task=tasks.first(where:{$0.id == taskID}),let runID=activeRunID {
             task.state=state
-            do {try await store.finish(task,runID:runID);try await refresh()} catch {report(error)}
+            do {try await store.finish(task,runID:runID,output:activeRunOutput);try await refresh()} catch {report(error)}
         }
         isBusy=false;activeTaskID=nil;activeRunID=nil;activeThreadID=nil;activeTurnID=nil;pendingInputs=[];deliveringInputs=[];items=[:]
         if runtimeProvider != .codex, let old = runtime {
@@ -421,7 +428,7 @@ import SlimeCore
             await old.stop()
         }
         status=state == .review ? "Work is ready to review" : state.rawValue.capitalized;activity=status
-        if state == .review, speech.spokenReplies, let output = tasks.first(where: { $0.id == taskID })?.output { speech.speak(output) }
+        if state == .review, speech.spokenReplies, !spokenOutput.isEmpty { speech.speak(spokenOutput) }
         if continueQueue {await runNext()}
     }
     func answer(_ input:AgentInput,result:JSONValue) {

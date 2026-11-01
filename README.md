@@ -11,7 +11,7 @@ Implemented native workflows include:
 - Durable project/task history, a recoverable queue, exact agent sessions, project-scoped stored Codex history browsing, approvals/questions and available Codex allowance windows.
 - Personal/project memory, source-linked answers, reviewed OKF folder import/export with lifecycle controls, file feeding, opt-in visual image summaries, local/AI organization proposals and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
-- GitHub account/repository binding, issue synchronization, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
+- GitHub account/repository binding, issue synchronization, cached discussions with comment-pinned task context, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
 - Slack/Lark/Feishu/Linear verified token connections, selected source capture, project-bound task drafts, explicit memory copies and reviewed replies with durable delivery records.
 - Google Desktop OAuth configuration, account/project bindings, Gmail threads with explicit tracked-thread history sync, calendar agenda/availability, durable selected-calendar sync with offline records and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 

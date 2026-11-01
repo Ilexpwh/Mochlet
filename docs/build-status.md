@@ -250,3 +250,7 @@ Added persisted presentation-only task order, same-column drag insertion and lab
 ## 2026-11-02 — Saved companion profiles
 
 Implemented profile CRUD/archive/restore, palette previews, selected agent/instructions/voice, transactional draft assignment and immutable task snapshots. Profile edits cannot rewrite established sessions; stale context preparation and agent mismatches fail before enqueue. Native AppModel fixtures cover cross-agent archival fallback and active-task forks. `scripts/check.sh` passed (117 reported tests, three opt-in live skips), Debug build and native host; evidence log `/tmp/mochlet-profile-final-check.log`. Interactive native profile walkthrough remains pending because input ownership was unavailable. [Contract](companion-profiles.md).
+
+## 2026-11-02 — GitHub discussion context
+
+Added selected-issue discussion reader/cache and comment-pinned coding context. Full paging, account checks, atomic cache replacement and content-level dispatch revalidation reject incomplete or changed discussions. Two core regressions cover 101 comments, edited text without issue timestamp changes, account swaps and failure preservation. `scripts/check.sh`: 119 reported tests (three opt-in live skips), Debug build and native host pass; `/tmp/mochlet-discussion-full-check.log`. Live API and interactive reader checks remain pending. [Contract](github-discussions.md).

@@ -85,6 +85,9 @@ public actor Store {
         migrations.registerMigration("slime_profiles") { db in
             try db.execute(sql: "CREATE TABLE slime_profiles(id TEXT PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE task_profiles(taskID TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,payload BLOB NOT NULL)")
         }
+        migrations.registerMigration("github_discussions") { db in
+            try db.execute(sql: "CREATE TABLE github_discussions(projectID TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,issueID INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(projectID,issueID))")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

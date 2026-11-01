@@ -53,8 +53,10 @@ import SlimeCore
         do {
             guard model.draft.isEmpty, model.connectedDraft == nil, !model.preparingSubmission else { throw MochletError.message("Clear or send your existing composer draft before preparing an issue prompt.") }
             try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
-            let fresh = try await GitHubClient(executable: ghPath).issue(issue.number, binding: binding)
+            let fresh = try await GitHubClient(executable: ghPath).issue(issue.number, binding: binding, includeDiscussion: true)
             guard fresh.id == issue.id else { throw MochletError.message("Issue identity changed. Sync again.") }
+            guard try JSONEncoder().encode(fresh).count <= 100_000 else { throw MochletError.message("Issue and comments exceed the 100 KB task context limit. Narrow the request into a separate task with selected references.") }
+            try await store.saveGitHubDiscussion(.init(binding: binding, issue: fresh, fetchedAt: Date()))
             let task = try await store.prepareGitHubTask(fresh, binding: binding)
             guard ![.queued, .running, .waiting].contains(task.state) else { throw MochletError.message("This issue already has queued or active work. Open it in Task history.") }
             let workspace: TaskWorkspace
@@ -77,8 +79,8 @@ import SlimeCore
             throw MochletError.message("Issue task no longer matches its project or source.")
         }
         try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
-        let fresh = try await GitHubClient(executable: ghPath).issue(saved.number, binding: binding)
-        guard fresh.id == saved.id, fresh.updated_at == saved.updated_at, fresh.body == saved.body, fresh.title == saved.title else {
+        let fresh = try await GitHubClient(executable: ghPath).issue(saved.number, binding: binding, includeDiscussion: saved.discussion != nil)
+        guard fresh.matchesReviewedSource(saved) else {
             throw MochletError.message("The GitHub issue changed. Prepare it again to review its latest context before dispatch.")
         }
     }

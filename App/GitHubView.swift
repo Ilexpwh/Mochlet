@@ -6,6 +6,7 @@ struct GitHubView: View {
     @State private var slug = ""
     @State private var showClosed = false
     @State private var showPublication = false
+    @State private var discussionRequest: GitHubDiscussionRequest?
     var body: some View {
         @Bindable var github = model.github
         VStack(alignment: .leading, spacing: 16) {
@@ -36,7 +37,8 @@ struct GitHubView: View {
                         HStack { Text("#\(issue.number)").foregroundStyle(.secondary); Text(issue.title).font(.headline); Spacer(); Text(issue.state).font(.caption) }
                         Text(issue.body ?? "No description").lineLimit(3).foregroundStyle(.secondary)
                         HStack {
-                            if let url = URL(string: issue.html_url), url.host == "github.com", url.scheme == "https" { Link("View issue", destination: url) }
+                              if let url = URL(string: issue.html_url), url.host == "github.com", url.scheme == "https" { Link("View issue", destination: url) }
+                              Button("Read discussion") { discussionRequest = .init(issue: issue, binding: binding) }.disabled(github.busy)
                             Spacer()
                             Button("Prepare task") { Task { await github.prepare(issue, model: model) } }.disabled(github.busy || issue.state != "open")
                         }
@@ -49,7 +51,8 @@ struct GitHubView: View {
             DisclosureGroup("GitHub CLI") { TextField("Executable", text: $github.ghPath).textFieldStyle(.roundedBorder) }
             Text("Preparing an issue does not start coding. Review the destination and prompt in Companion, then Send. No issue comments, commits or pull requests are published by synchronization.").font(.caption).foregroundStyle(.secondary)
         }.padding(28)
-            .sheet(isPresented: $showPublication) { GitHubPublicationView(model: model) }
+              .sheet(isPresented: $showPublication) { GitHubPublicationView(model: model) }
+              .sheet(item: $discussionRequest) { request in GitHubDiscussionView(model: model, request: request) }
             .task(id: model.selectedProjectID) { await github.load(projectID: model.selectedProjectID) }
     }
 }

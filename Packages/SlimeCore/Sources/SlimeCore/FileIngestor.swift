@@ -61,12 +61,16 @@ public actor FileIngestor {
                         if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { warnings.append("Page \(page + 1) has no extractable text; diagrams/scanned content were not analyzed.") }
                         text += "\n[Page \(page + 1)]\n" + content
                     }
-                } else if ["png", "jpg", "jpeg", "heic", "tiff"].contains(ext) {
+                } else if ["png", "jpg", "jpeg", "heic", "tiff", "webp"].contains(ext) {
                     kind = "Image OCR"
+                    _ = try ImageInputValidation.source(data)
                     let request = VNRecognizeTextRequest(); request.recognitionLevel = .accurate; request.automaticallyDetectsLanguage = true
                     try VNImageRequestHandler(data: data).perform([request])
                     text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
                     warnings.append("OCR text only. Visual meaning, layout and handwriting may be incomplete.")
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        text = "[No readable OCR text. Visual content requires explicit image analysis.]"
+                    }
                 } else {
                     guard textExtensions.contains(ext) || ["README", "LICENSE", "Makefile"].contains(file.lastPathComponent) else { throw MochletError.message("Unsupported file format") }
                     guard let decoded = String(data: data, encoding: .utf8), !decoded.contains("\0") else { throw MochletError.message("Not readable UTF-8 text") }

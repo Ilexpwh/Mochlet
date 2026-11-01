@@ -5,6 +5,7 @@ struct FilesView: View {
     @Bindable var model: AppModel
     @State private var preview: FileExtraction?
     @State private var saving = false
+    @State private var includeImages = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { Text("Feed Mochlet").font(.largeTitle.bold()); Spacer(); Button("Choose files or folder", systemImage: "plus") { model.files.choose() }.disabled(model.files.busy) }
@@ -18,13 +19,17 @@ struct FilesView: View {
                 if model.files.busy { ProgressView().controlSize(.small); Button("Cancel import") { model.files.cancel() } }
             }.padding().background(model.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
             HStack {
-                Button(model.files.analyzing ? "Summarizing…" : "Summarize selected") { Task { await model.files.analyze(speech: model.speech) } }
+                Button(model.files.analyzing ? "Summarizing…" : "Summarize selected") { Task { await model.files.analyze(speech: model.speech, includeImages: includeImages) } }
                     .disabled(model.files.selected.isEmpty || model.files.analyzing || !model.speech.hasKey || model.speech.analysisModel.isEmpty)
                 Button(saving ? "Saving…" : "Save selected to memory") {
                     let notes = model.files.notes(scope: model.selectedProjectID.isEmpty ? "personal" : model.selectedProjectID)
                     saving = true; Task { for note in notes { _ = await model.knowledge.save(note) }; saving = false; model.files.message = model.knowledge.message }
                 }.disabled(model.files.selected.isEmpty || saving)
                 Text("Memory scope: \(model.selectedProject?.name ?? "Personal")").font(.caption).foregroundStyle(.secondary)
+            }
+            Toggle("Include image previews in this summary", isOn: $includeImages).disabled(model.files.analyzing)
+            if includeImages {
+                Text("Selected images will be sent to OpenRouter and your selected vision-capable analysis model as metadata-free JPEG previews, up to 2048 pixels. Only the first frame/page is included. OCR-only coding attachments and saved memory remain text.").font(.caption).foregroundStyle(.secondary)
             }
             Text("Summaries send selected excerpts to your configured analysis model. Files remain in their original locations. Attachments are held for this app session; saving to memory retains extracted content.").font(.caption).foregroundStyle(.secondary)
             if let answer = model.files.answer { ScrollView { Text(answer.answer).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(maxHeight: 180).padding().background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 12)) }

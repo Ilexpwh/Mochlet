@@ -232,3 +232,13 @@ Verification: the full check reported 103 tests (100 fixture declarations plus t
 Task details now retain and expose each new attempt’s instructions and bounded assistant output independently. Atomic active-run checkpoints prevent late text from reviving cancelled work; terminal persistence includes the final text. Voice output speaks the current attempt only. Legacy attempts remain explicitly unavailable, and hard-crash recovery retains completed-item checkpoints rather than claiming every token was durable.
 
 Verification: 107 reported tests (104 fixture declarations and three opt-in live skips), Debug build, native Codex/source/Pi fixtures and read-only review passed. A cancellation-race finding was corrected and covered by concurrent and late-write regressions. Native walkthrough inspected two distinct fictional attempts after reopening; accessible disclosure labels distinguish same-minute runs. [Contract and evidence](task-board.md#per-attempt-output--2026-11-01).
+
+### 2026-11-01 — Explicit vision summaries and process timeout reliability
+
+Added an opt-in image-preview path to Files summaries. It refreshes model capabilities, preserves source-ID citation binding, checks original file revisions, strips original metadata and bounds both decoded source dimensions and prepared request bytes. Images without OCR text remain attachable. Text-only summaries, coding attachments and saved memory retain their existing text behavior. [Contract](image-analysis.md).
+
+Image tests exposed cooperative-executor starvation from blocking child-process pipes. Reads now execute on utility dispatch threads; timeout scheduling and terminal completion share an absolute monotonic deadline. The 24-child timeout regression passes in about 0.2 seconds. Invalid timeout values fail before launching a process.
+
+Verification: 112 reported tests (109 fixture declarations plus three opt-in live skips), native Debug build and runtime fixtures pass. Independent review prompted the source-dimension guard; compile isolation and metadata assertions were corrected before the successful check. No live image request or paid model evaluation was performed.
+
+Native image walkthrough accepted the original app icon with no OCR text, showed the explicit no-text preview, and exposed the image transmission disclosure. Summary remained disabled without credentials/model configuration. [Native evidence](evidence/native-image-analysis.png). The follow-up focused command-timeout test passed after the final immutable-deadline cleanup.

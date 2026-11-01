@@ -31,17 +31,22 @@ extension Store {
             return Dictionary(uniqueKeysWithValues: values.map { ($0.taskID, $0) })
         }
     }
-    public func createDraft(projectID: String, title: String, provider: AgentProvider) throws -> WorkTask {
+    public func createDraft(projectID: String, title: String, provider: AgentProvider, profile: SlimeProfile? = nil) throws -> WorkTask {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, title.utf8.count <= 500 else { throw MochletError.message("Use a task title of 1–500 bytes.") }
         return try database.write { db in
             guard try Project.fetchOne(db, key: projectID) != nil else { throw MochletError.message("Choose a registered project.") }
             var task = WorkTask(projectID: projectID, title: title); task.state = .draft; task.provider = provider.rawValue
-            try task.insert(db); return task
+            if let profile {
+                guard !profile.archived, profile.provider == provider, try Self.profile(profile.id, db: db) == profile else { throw MochletError.message("Choose a current profile matching the draft's agent.") }
+            }
+            try task.insert(db)
+            if let profile { try Self.writeTaskProfile(profile, taskID: task.id, db: db) }
+            return task
         }
     }
     /// Optimistic edit: never replace a task changed by runtime activity after the editor opened.
-    public func editTask(expected: WorkTask, updated: WorkTask, details: TaskDetails) throws {
+    public func editTask(expected: WorkTask, updated: WorkTask, details: TaskDetails, profileChange: ProfileAssignmentChange? = nil) throws {
         guard updated.id == expected.id, details.taskID == expected.id,
               !updated.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, updated.title.utf8.count <= 500,
               details.description.utf8.count <= 50_000, details.dependencies.count <= 100,
@@ -76,7 +81,12 @@ extension Store {
             var tasks = try WorkTask.fetchAll(db); tasks.removeAll { $0.id == current.id }; tasks.append(updated)
             try Self.validateTaskGraph(all, tasks: tasks)
             if updated.state == .completed { try Self.requireCompletedDependencies(next.dependencies, db: db) }
+            if let profileChange { try Self.validateProfileAssignment(profileChange, task: updated, db: db) }
+            else if let profile = try Self.taskProfile(current.id, db: db), profile.provider.rawValue != updated.provider {
+                throw MochletError.message("Change or clear this draft's profile when changing its agent.")
+            }
             try updated.save(db)
+            if let profileChange { try Self.writeTaskProfile(profileChange.next, taskID: updated.id, db: db) }
             try db.execute(sql: "INSERT INTO task_details(taskID,payload) VALUES(?,?) ON CONFLICT(taskID) DO UPDATE SET payload=excluded.payload", arguments: [current.id, try JSONEncoder().encode(next)])
         }
     }

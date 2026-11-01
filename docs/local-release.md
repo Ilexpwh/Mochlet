@@ -23,4 +23,6 @@ Meeting capture requires explicit recording and OS permission. No personal audio
 
 The full release still needs the live audio/provider/connector matrix, physical docking/multiple displays, VoiceOver and full-screen checks, macOS 15 execution, warm acknowledgement/stall measurements, two-hour mixed-workload soak and distribution signing/notarization. One recorded quiet-idle sample is below 1% of one core; it does not establish the rest of the performance gate.
 
-Feature expansion remains tracked separately: manual task ordering/multiple profiles, GitHub Projects V2, broader team write-back and external-client liveness/control. Existing checklist IDs and unchecked acceptance items remain intact. No background workflow executes meeting action items or sends external replies just because they were summarized.
+Feature expansion remains tracked separately: GitHub Projects V2, broader team write-back and external-client liveness/control. Existing checklist IDs and unchecked acceptance items remain intact. No background workflow executes meeting action items or sends external replies just because they were summarized.
+
+Appearance now supports multiple named companion profiles, and Task board supports project-local manual ordering. See [profiles](companion-profiles.md) and [task board](task-board.md) for supported behavior and remaining native walkthrough limits.

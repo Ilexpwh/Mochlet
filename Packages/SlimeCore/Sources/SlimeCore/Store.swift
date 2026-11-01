@@ -82,6 +82,9 @@ public actor Store {
         migrations.registerMigration("task_board_order") { db in
             try db.execute(sql: "CREATE TABLE task_board_order(projectID TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,payload BLOB NOT NULL)")
         }
+        migrations.registerMigration("slime_profiles") { db in
+            try db.execute(sql: "CREATE TABLE slime_profiles(id TEXT PRIMARY KEY,payload BLOB NOT NULL); CREATE TABLE task_profiles(taskID TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,payload BLOB NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -126,7 +129,7 @@ public actor Store {
 }
 
 extension Store {
-    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = [], expected: WorkTask? = nil, expectedProject: Project? = nil, sourceEvidence: ConnectedMemoryReference? = nil) throws {
+    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = [], expected: WorkTask? = nil, expectedProject: Project? = nil, sourceEvidence: ConnectedMemoryReference? = nil, profile: SlimeProfile? = nil) throws {
         guard task.state == .queued else { throw MochletError.message("Only queued tasks can be enqueued.") }
         try database.write { db in
             if let expectedProject {
@@ -152,7 +155,16 @@ extension Store {
                       row["accountID"] as String == sourceEvidence.accountID, row["sourceID"] as String == sourceEvidence.sourceID,
                       row["projectID"] as String == task.projectID else { throw MochletError.message("The source draft no longer matches this task's destination.") }
             }
+            let boundProfile = try Self.taskProfile(task.id, db: db)
+            if let boundProfile {
+                guard boundProfile == profile, boundProfile.provider.rawValue == task.provider else { throw MochletError.message("Task profile changed while preparing this request.") }
+            } else if let profile {
+                guard !profile.archived, try Self.profile(profile.id, db: db) == profile,
+                      profile.provider.rawValue == task.provider,
+                      try WorkTask.fetchOne(db, key: task.id) == nil else { throw MochletError.message("Assign a current matching profile before submitting an existing task.") }
+            }
             try task.save(db)
+            if let profile { try Self.writeTaskProfile(profile, taskID: task.id, db: db) }
             try db.execute(sql: "INSERT INTO queued_commands(taskID,prompt,readOnly) VALUES(?,?,?)", arguments: [task.id, prompt, readOnly])
             try db.execute(sql: "INSERT INTO queued_knowledge(taskID,payload) VALUES(?,?)", arguments: [task.id, try JSONEncoder().encode(knowledge)])
             if let sourceEvidence { try db.execute(sql: "INSERT INTO queued_source(taskID,payload) VALUES(?,?)", arguments: [task.id, try JSONEncoder().encode(sourceEvidence)]) }

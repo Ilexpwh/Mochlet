@@ -60,11 +60,7 @@ struct WorkspaceView: View {
     }
     private var appearance: some View {
         Form {
-            Section("Your companion") {
-                SlimeView(tint:model.tint).frame(width:160,height:160).frame(maxWidth:.infinity)
-                TextField("Name",text:$model.slimeName)
-                Picker("Palette",selection:$model.palette) { ForEach(["Mint","Peach","Sky","Lilac"],id:\.self) { Text($0) } }
-            }
+            Section("Your companion") { ProfileSettingsView(model: model) }
             Section("Notch behavior") {
                 Picker("Screen edge", selection: $model.dockEdge) {
                     ForEach(DockEdge.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
@@ -115,11 +111,18 @@ struct CompanionView: View {
                     }.font(.caption).fixedSize()
                 }
                 Spacer()
-                if let task = model.selectedTask, task.projectID == model.selectedProjectID {
+                if model.resumableSelectedTask != nil {
                     Label(model.destinationProvider.title, systemImage: "terminal").font(.caption).foregroundStyle(.secondary)
+                } else if let profile = model.selectedProfile {
+                    Label(profile.provider.title, systemImage: "terminal").font(.caption)
                 } else {
                     Picker("Agent", selection: $model.defaultProvider) { ForEach(AgentProvider.allCases, id: \.self) { Text($0.title).tag($0) } }.labelsHidden().frame(maxWidth: 140)
                 }
+            }
+            if model.resumableSelectedTask == nil {
+                ProfilePicker(model: model).font(.caption).disabled(model.preparingSubmission)
+            } else if let id = model.selectedTaskID, let profile = model.taskProfiles[id] {
+                Text("Companion: \(profile.name) · saved profile").font(.caption).foregroundStyle(.secondary)
             }
             if !compact, model.meetings.active { MeetingStatusView(meetings: model.meetings) }
             if !compact {

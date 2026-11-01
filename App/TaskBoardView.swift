@@ -66,21 +66,26 @@ struct TaskBoardView: View {
             .task(id: projectID) { await loadOrder() }
             .onChange(of: model.tasks.map { $0.id + ":" + $0.projectID }) { _, _ in Task { await loadOrder() } }
             .sheet(item: $editing) { task in
-                TaskDetailView(model: model, original: task, task: task, details: details[task.id] ?? .init(taskID: task.id), openCompanion: openCompanion) { await refresh() }
+                TaskDetailView(model: model, original: task, originalProfile: model.taskProfiles[task.id], task: task, details: details[task.id] ?? .init(taskID: task.id), openCompanion: openCompanion) { await refresh() }
             }
             .sheet(isPresented: $creating) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("New task").font(.title2.bold())
                     TextField("Task title", text: $title)
                     Picker("Project", selection: $model.selectedProjectID) { Text("Choose a project").tag(""); ForEach(model.projects) { Text($0.name).tag($0.id) } }
-                    Picker("Agent", selection: $model.defaultProvider) { ForEach(AgentProvider.allCases, id: \.self) { Text($0.title).tag($0) } }
+                    ProfilePicker(model: model)
+                    if let profile = model.selectedProfile {
+                        LabeledContent("Agent", value: profile.provider.title)
+                    } else {
+                        Picker("Agent", selection: $model.defaultProvider) { ForEach(AgentProvider.allCases, id: \.self) { Text($0.title).tag($0) } }
+                    }
                     Text("Creates a draft. Open it in Companion when you are ready to give instructions.").font(.caption).foregroundStyle(.secondary)
                     HStack {
                         Button("Cancel") { creating = false }.keyboardShortcut(.cancelAction)
                         Spacer()
                         Button("Create draft") { Task {
                             do {
-                                _ = try await model.store.createDraft(projectID: model.selectedProjectID, title: title, provider: model.defaultProvider)
+                                _ = try await model.store.createDraft(projectID: model.selectedProjectID, title: title, provider: model.selectedProfile?.provider ?? model.defaultProvider, profile: model.selectedProfile)
                                 title = ""; creating = false; await refresh()
                             } catch { message = error.localizedDescription; creating = false }
                         } }.disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.selectedProject == nil).keyboardShortcut(.defaultAction)
@@ -167,6 +172,9 @@ struct TaskBoardView: View {
 private struct TaskDetailView: View {
     @Bindable var model: AppModel
     let original: WorkTask
+    let originalProfile: SlimeProfile?
+    @State private var profileChoice = "existing"
+    private var chosenProfile: SlimeProfile? { profileChoice == "existing" ? originalProfile : model.profiles.first { $0.id == profileChoice && !$0.archived } }
     @State var task: WorkTask
     @State var details: TaskDetails
     var openCompanion: () -> Void
@@ -189,6 +197,11 @@ private struct TaskDetailView: View {
                         HStack {
                             Picker("Project", selection: $task.projectID) { ForEach(model.projects) { Text($0.name).tag($0.id) } }
                             Picker("Agent", selection: $task.provider) { ForEach(AgentProvider.allCases, id: \.self) { Text($0.title).tag($0.rawValue) } }
+                        }
+                        Picker("Companion profile", selection: $profileChoice) {
+                            Text(originalProfile.map { $0.name + " (saved profile)" } ?? "No profile (current)").tag("existing")
+                            Text("No profile").tag("none")
+                            ForEach(model.profiles.filter { !$0.archived && $0.provider.rawValue == task.provider }) { Text($0.name).tag($0.id) }
                         }
                         HStack {
                             Picker("Status", selection: $task.state) { ForEach(active ? [original.state] : [.draft, .review, .completed, .cancelled, .failed, .interrupted], id: \.self) { Text($0.rawValue.capitalized).tag($0) } }.disabled(active)
@@ -241,7 +254,7 @@ private struct TaskDetailView: View {
                 }
                 Spacer()
                 Button("Save changes") { busy = true; Task {
-                    do { try await model.store.editTask(expected: original, updated: task, details: details); await saved(); dismiss() }
+                    do { try await model.store.editTask(expected: original, updated: task, details: details, profileChange: .init(expected: originalProfile, next: chosenProfile)); await saved(); dismiss() }
                     catch { message = error.localizedDescription; busy = false }
                 } }.disabled(active || busy).keyboardShortcut(.defaultAction)
             }

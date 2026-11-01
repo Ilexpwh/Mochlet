@@ -2,12 +2,12 @@
 
 A native macOS companion that lives at the notch, runs work through your selected local AI CLI, and keeps projects, tasks and files organized.
 
-**Status:** launchable native development build (2026-11-01), with real Codex and Claude start/resume workflows and an experimental Pi RPC adapter. The complete release plan is still in progress. `slime-app` is the development folder.
+**Status:** launchable native development build (2026-11-02), with real Codex and Claude start/resume workflows and an experimental Pi RPC adapter. The complete release plan is still in progress. `slime-app` is the development folder.
 
 Implemented native workflows include:
 
-- A simple customizable slime, Coucou-derived island motion, top/left/right docking, menu-bar fallback and workspace.
-- Native project task board with priorities, due dates, dependencies, comments, review states and separately saved per-attempt replies.
+- Saved companion profiles with character palette, instructions, agent and voice; task sessions retain their assigned profile snapshot. A simple customizable slime, Coucou-derived island motion, top/left/right docking, menu-bar fallback and workspace.
+- Native project task board with persistent manual ordering, priorities, due dates, dependencies, comments, review states and separately saved per-attempt replies.
 - Durable project/task history, a recoverable queue, exact agent sessions, project-scoped stored Codex history browsing, approvals/questions and available Codex allowance windows.
 - Personal/project memory, source-linked answers, reviewed OKF folder import/export with lifecycle controls, file feeding, opt-in visual image summaries, local/AI organization proposals and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
@@ -56,7 +56,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer task profiles/manual ordering, GitHub Projects V2 and additional PR actions, external-client liveness/control, richer team write-back and broader connector workflows. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include GitHub Projects V2 and additional PR actions, external-client liveness/control, richer team write-back and broader connector workflows. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 

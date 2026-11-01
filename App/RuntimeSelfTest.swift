@@ -94,6 +94,7 @@ import SlimeCore
         try await taskEditDuringSubmission(root: root)
         try await taskEditDuringSubmission(root: root, projectEdit: true)
         try await projectInstructions(root: root)
+        try await companionProfiles(root: root)
         try await queuedSourceChanges(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)

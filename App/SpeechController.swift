@@ -118,12 +118,13 @@ import SlimeCore
         if let recordingURL { try? FileManager.default.removeItem(at: recordingURL) }
         recordingURL = nil; phase = .idle; level = 0
     }
-    func speak(_ text: String) {
+    func speak(_ text: String, voiceOverride: String? = nil) {
         guard !meetingActive, phase == .idle, !text.isEmpty else { return }
         stopSpeaking()
         let utterance = AVSpeechUtterance(string: String(text.prefix(4000)))
-        if !voiceID.isEmpty {
-            guard let voice = AVSpeechSynthesisVoice(identifier: voiceID) else { message = "The selected voice is no longer installed."; return }
+        let chosenVoice = voiceOverride ?? voiceID
+        if !chosenVoice.isEmpty {
+            guard let voice = AVSpeechSynthesisVoice(identifier: chosenVoice) else { message = "The selected voice is no longer installed."; return }
             utterance.voice = voice
         }
         synthesizer.speak(utterance)

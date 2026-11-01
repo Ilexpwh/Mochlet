@@ -66,16 +66,46 @@ import SlimeCore
     var defaultProvider = AgentProvider(rawValue: UserDefaults.standard.string(forKey: "agentProvider") ?? "codex") ?? .codex {
         didSet { UserDefaults.standard.set(defaultProvider.rawValue, forKey: "agentProvider") }
     }
-    var destinationProvider: AgentProvider { selectedTask.flatMap { $0.projectID == selectedProjectID ? AgentProvider(rawValue: $0.provider) : nil } ?? defaultProvider }
+    var resumableSelectedTask: WorkTask? {
+        guard let task = selectedTask, task.projectID == selectedProjectID,
+              task.id != activeTaskID, task.state != .queued else { return nil }
+        return task
+    }
+    var destinationProvider: AgentProvider {
+        if let task = resumableSelectedTask { return AgentProvider(rawValue: task.provider) ?? defaultProvider }
+        return selectedProfile?.provider ?? defaultProvider
+    }
     var queue: [(WorkTask,String,Bool)] = []
     var cancellingQueue = false
     private var queuePaused = false
     private var queueGeneration = 0
-    var slimeName: String { didSet { UserDefaults.standard.set(slimeName, forKey: "slimeName") } }
-    var palette: String { didSet { UserDefaults.standard.set(palette, forKey: "palette") } }
+    private var legacySlimeName: String
+    private var legacyPalette: String
+    var profiles: [SlimeProfile] = []
+    var taskProfiles: [String: SlimeProfile] = [:]
+    var selectedProfileID = UserDefaults.standard.string(forKey: "selectedProfileID") ?? "" {
+        didSet { UserDefaults.standard.set(selectedProfileID, forKey: "selectedProfileID") }
+    }
+    var selectedProfile: SlimeProfile? { profiles.first { $0.id == selectedProfileID && !$0.archived } }
+    var displayedProfile: SlimeProfile? {
+        if let activeTaskID, let profile = taskProfiles[activeTaskID] { return profile }
+        if let selectedTaskID, let profile = taskProfiles[selectedTaskID] { return profile }
+        return selectedProfile
+    }
+    var slimeName: String { displayedProfile?.name ?? legacySlimeName }
+    var palette: String { displayedProfile?.palette ?? legacyPalette }
+    func selectProfile(_ id: String) {
+        selectedProfileID = id
+        if let selectedProfile { defaultProvider = selectedProfile.provider }
+    }
+    func refreshProfiles() async throws {
+        profiles = try await store.profiles(); taskProfiles = try await store.taskProfiles()
+        if selectedProfile == nil, selectedProfileID != "none" { selectedProfileID = profiles.first(where: { !$0.archived })?.id ?? "" }
+    }
     var selectedProject: Project? { projects.first { $0.id == selectedProjectID } }
     var selectedTask: WorkTask? { tasks.first { $0.id == selectedTaskID } }
-    var tint: Color {
+    var tint: Color { Self.color(for: palette) }
+    static func color(for palette: String) -> Color {
         switch palette {
         case "Peach": Color(red: 0.97, green: 0.74, blue: 0.62)
         case "Sky": Color(red: 0.65, green: 0.80, blue: 0.96)
@@ -115,8 +145,8 @@ import SlimeCore
         self.github = GitHubController(store: store)
         self.google = GoogleController(store: store)
         self.connections = ConnectionsController(store: store)
-        slimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
-        palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
+        legacySlimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
+        legacyPalette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
         knowledge.validateConnected = { [weak self] note in
             guard let self else { throw CancellationError() }; try await self.validateConnectedMemory(note)
         }
@@ -131,6 +161,9 @@ import SlimeCore
         await google.load()
         await connections.load()
         do {
+            if try await store.profiles().isEmpty {
+                _ = try await store.saveProfile(SlimeProfile(name: legacySlimeName, palette: SlimeProfile.palettes.contains(legacyPalette) ? legacyPalette : "Mint", provider: defaultProvider, voiceID: speech.voiceID), expected: nil)
+            }
             try await store.recover()
             try await refresh()
             queue = try await store.queuedCommands(); queuePaused = !queue.isEmpty
@@ -139,7 +172,7 @@ import SlimeCore
         } catch { report(error) }
     }
     func refresh() async throws {
-        projects = try await store.projects(); tasks = try await store.tasks()
+        projects = try await store.projects(); tasks = try await store.tasks(); try await refreshProfiles()
         var workspaces: [String: TaskWorkspace] = [:]
         for task in tasks { if let workspace = try await store.workspace(taskID: task.id) { workspaces[task.id] = workspace } }
         taskWorkspaces = workspaces
@@ -193,9 +226,9 @@ import SlimeCore
         let attachmentContext: String
         do { attachmentContext = try files.context() } catch { draft = prompt; report(error); return }
         let task: WorkTask
-        if let existing=selectedTask,existing.projectID == project.id, existing.id != activeTaskID,
-           existing.state != .queued {task=existing}
+        if let existing = resumableSelectedTask { task = existing }
         else {var fresh=WorkTask(projectID:project.id,title:prompt);fresh.provider=destinationProvider.rawValue;task=fresh}
+        let taskProfile = taskProfiles[task.id] ?? (tasks.contains(where: { $0.id == task.id }) ? nil : selectedProfile)
         preparingSubmission = true
         Task {
             defer { preparingSubmission = false }
@@ -203,6 +236,7 @@ import SlimeCore
                 try ProjectResolver.validateRoot(project)
                 var queued=task;queued.state = .queued
                 var contextPrompt = try project.contextPrompt(request: prompt) + attachmentContext
+                if let taskProfile { contextPrompt = taskProfile.contextPrompt(request: contextPrompt) }
                 var evidence: [KnowledgeEvidence] = []
                 if let sourceDraft {
                     guard task.id == sourceDraft.taskID else { throw MochletError.message("The source task changed before submission.") }
@@ -219,7 +253,7 @@ import SlimeCore
                     }
                 }
                 guard submissionGeneration == queueGeneration else { throw MochletError.message("This submission was cancelled while preparing its context.") }
-                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task, expectedProject: project, sourceEvidence: sourceDraft?.sourceEvidence())
+                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task, expectedProject: project, sourceEvidence: sourceDraft?.sourceEvidence(), profile: taskProfile)
                 try await refresh()
                 guard submissionGeneration == queueGeneration else {
                     try await store.cancelQueuedCommand(taskID: queued.id)
@@ -417,6 +451,7 @@ import SlimeCore
     func finish(_ state:WorkState,continueQueue:Bool = true) async {
         guard let taskID=activeTaskID else{return}
         let spokenOutput = activeRunOutput.text
+        let spokenVoiceID = taskProfiles[taskID]?.voiceID
         if !continueQueue { queuePaused = true }
         if var task=tasks.first(where:{$0.id == taskID}),let runID=activeRunID {
             task.state=state
@@ -428,7 +463,7 @@ import SlimeCore
             await old.stop()
         }
         status=state == .review ? "Work is ready to review" : state.rawValue.capitalized;activity=status
-        if state == .review, speech.spokenReplies, !spokenOutput.isEmpty { speech.speak(spokenOutput) }
+        if state == .review, speech.spokenReplies, !spokenOutput.isEmpty { speech.speak(spokenOutput, voiceOverride: spokenVoiceID) }
         if continueQueue {await runNext()}
     }
     func answer(_ input:AgentInput,result:JSONValue) {

@@ -246,3 +246,7 @@ Native image walkthrough accepted the original app icon with no OCR text, showed
 ### 2026-11-02 — Per-project manual board order
 
 Added persisted presentation-only task order, same-column drag insertion and labelled Move up/down controls. Complete-order snapshot checks reject stale writes and project/column changes; runtime state and execution order are untouched. Two added regressions and the full 114-test reported run pass, together with the native build/runtime host and final UI rebuild. Read-only review found no Required issues. Native end-to-end reorder validation remains pending after UI capture/control became unavailable. [Contract](task-board.md#manual-ordering--2026-11-02).
+
+## 2026-11-02 — Saved companion profiles
+
+Implemented profile CRUD/archive/restore, palette previews, selected agent/instructions/voice, transactional draft assignment and immutable task snapshots. Profile edits cannot rewrite established sessions; stale context preparation and agent mismatches fail before enqueue. Native AppModel fixtures cover cross-agent archival fallback and active-task forks. `scripts/check.sh` passed (117 reported tests, three opt-in live skips), Debug build and native host; evidence log `/tmp/mochlet-profile-final-check.log`. Interactive native profile walkthrough remains pending because input ownership was unavailable. [Contract](companion-profiles.md).

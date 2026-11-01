@@ -28,11 +28,16 @@ import SlimeCore
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model, model.isBusy else { return .terminateNow }
-        let alert = NSAlert(); alert.messageText = "Work is still active"
-        alert.informativeText = "Quitting interrupts active work. Its history remains available when you return."
-        alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
-        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        if let model, model.isBusy {
+            let alert = NSAlert(); alert.messageText = "Work is still active"
+            alert.informativeText = "Quitting interrupts active work. Its history remains available when you return."
+            alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
+            if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
+        }
+        Task { [model] in
+            if let runtime=model?.runtime {await runtime.client.stop()}
+            NSApp.reply(toApplicationShouldTerminate:true)
+        }
+        return .terminateLater
     }
-    func applicationWillTerminate(_ notification: Notification) { model?.shutdown() }
 }

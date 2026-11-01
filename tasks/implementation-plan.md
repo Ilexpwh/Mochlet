@@ -32,3 +32,7 @@ Dependencies: V01 precedes V02; V02 precedes V04. M01 precedes M02/M03; V01 and 
 ## Working discipline
 
 Implement a usable slice, run focused checks and native build, then commit. Keep incomplete integrations out of normal user flows. Document unavailable external credentials or hardware separately from implementation defects. Do not mark performance or language quality passed from mocks.
+
+## Native reference decision — 2026-11-01
+
+The user requested close Coucou UI/UX and motion parity and authorized reuse of its design code. Adapt its MIT-licensed island geometry, fixed panel hosting and motion timings; retain attribution. Keep Mochlet's simple pastel character original. Track remaining detach/corner/drop/greeting/global-shortcut parity in [coucou-adaptation.md](../docs/coucou-adaptation.md); this does not mark the complete B/F release gates passed.

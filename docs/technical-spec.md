@@ -22,9 +22,9 @@ Keychain stores provider keys and the audio encryption key. Knowledge uses Markd
 
 ## Native surfaces and state
 
-A borderless floating NSPanel presents a compact companion and expandable composer below the menu-bar/camera area. Camera geometry comes from NSScreen, never a fixed notch width. A status item and normal resizable workspace remain usable on displays without a notch. Background events do not steal focus. Escape closes the panel, and explicitly cancels any active command recording. Context menus expose workspace, preferences and quit.
+A fixed transparent NSPanel hosts a compact companion and animated black island attached to the screen edge, adapting Coucou’s licensed island shape and transition timings. Pointer events update click-through outside the visible island. Expanded controls clear the camera area. Camera geometry comes from NSScreen, never a fixed notch width. A status item and normal resizable workspace remain usable on displays without a notch. Background events do not steal focus. Escape closes the panel, and explicitly cancels any active command recording. Context menus expose workspace, preferences and quit.
 
-SwiftUI vector paths form the original jelly body; eyes/mouth/accessories share its transform. Motion responds to actual recording, intake, attention and execution state. Reduced motion uses static poses. Text labels accompany state. Hide unnecessary animation when occluded. Existing native-quality.md defines measurement targets; these are not assumed results.
+SwiftUI vector paths form the original flat pastel pebble body with two capsule eyes; expressive elements share its transform. See coucou-adaptation.md for exact reused code, timings and pending parity work. Motion responds to actual recording, intake, attention and execution state. Reduced motion uses static poses. Text labels accompany state. Hide unnecessary animation when occluded. Existing native-quality.md defines measurement targets; these are not assumed results.
 
 ## Speech and meeting pipeline
 

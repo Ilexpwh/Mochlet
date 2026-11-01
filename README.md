@@ -2,11 +2,22 @@
 
 A native macOS companion that lives at the notch, runs work through your selected local AI CLI, and keeps projects, tasks and files organized.
 
-**Status:** planning workspace created on 2026-11-01. No native application or real integration has been implemented here yet. **Mochlet** is the proposed working product name; `slime-app` remains the development folder.
+**Status:** native development build available (2026-11-01). Mochlet now has a Coucou-style notch island, original minimal slime, workspace, persistent projects/tasks and a real Codex app-server adapter. Voice, meetings and external connectors remain in the implementation sequence. `slime-app` is the development folder.
 
 ## Implementation
 
 The approved [technical specification](docs/technical-spec.md), [visual design system](docs/design-system.html) and [implementation sequence](tasks/implementation-plan.md) guide the build. [Build status](docs/build-status.md) distinguishes implemented behavior from pending live and release checks.
+
+## Run locally
+
+```sh
+./scripts/check.sh
+open build/Build/Products/Debug/Mochlet.app
+```
+
+Builds use `/Applications/Xcode.app/Contents/Developer` without changing global Xcode selection. The personal development build is ad-hoc signed for Apple Silicon; macOS 15 is the deployment target, not yet a tested OS configuration. Add a project folder, select Codex settings, then send a task. Command–Return sends; Escape folds the island; Command–Shift–Space toggles it while Mochlet receives keyboard events. No global shortcut registration yet.
+
+Coucou's island geometry and motion code are adapted under MIT; see [attribution and parity notes](docs/coucou-adaptation.md). No Coucou character or audio assets are bundled.
 
 ## Start here
 
@@ -34,11 +45,11 @@ Project boards, file feeding, source-linked summaries and reviewed file operatio
 
 ## Working assumptions
 
-- New native implementation; Coucou and Multica are references, not code dependencies.
+- Native implementation with selected MIT-licensed Coucou island code adapted locally. Multica remains an architecture reference.
 - One person on their own Mac first. Team/cloud functionality remains a future extension.
 - Apple Silicon development first; provisional minimum macOS 15. Confirm support before implementation.
 - Codex is the first adapter. Capability and authentication checks determine what each later adapter can offer.
 - Local orchestration and storage do not imply offline AI inference.
-- Application code will be introduced only when implementation begins. The proposed directory tree in the architecture document is not an existing codebase.
+- `App/` and `Packages/SlimeCore/` are implemented source directories. Architecture documents also describe later modules that do not exist yet.
 
-These are planning defaults, not confirmed product or branding decisions. The initial repository contains planning documents and reference reports. No application runtime, connected account, external tracker or cloud service is provisioned by these files.
+The roadmap remains broader than the development build. Consult the evidence ledger before treating a planned capability as complete.

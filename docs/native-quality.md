@@ -8,7 +8,7 @@ Pronunciation: **MOCH-let**. The name suggests a small, soft companion and leave
 
 Keep the development directory `slime-app` and current internal module names stable. This is a naming proposal, not a registered name or a claim of domain/trademark availability. A preliminary check found existing [Mossling apps](https://apps.apple.com/ca/app/mossling/id6808949867), so that earlier candidate was dropped. Recheck the selected name before public distribution.
 
-Visual direction: a distinctive rounded silhouette with controlled volume, expressive eyes, a restrained highlight and contact shadow, readable at notch size. Use an original small pose vocabulary and accessories anchored to the body rig. Keep workspace typography and controls calm and recognizably native. Color is customizable; shape, timing and expression make the character recognizable across palettes.
+Visual direction (revised by the user): a simple flat pastel pebble with two capsule eyes, inspired by the minimal Grok Bot direction. No glossy shading or permanent mouth; readable at notch size. Use Coucou’s notch UI, interaction model and licensed animation code as the primary reference. Use an original small pose vocabulary and accessories anchored to the body rig. Keep workspace typography and controls calm and recognizably native. Color is customizable; shape, timing and expression make the character recognizable across palettes.
 
 ## What “high quality” means
 

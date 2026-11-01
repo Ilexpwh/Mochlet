@@ -13,6 +13,7 @@ struct WorkspaceView: View {
                     Label("Projects",systemImage:"folder").tag("Projects")
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
+                    Label("Agent settings",systemImage:"slider.horizontal.3").tag("Agent")
                 }.listStyle(.sidebar)
                 Text("Your little companion\nfor big work.").font(.caption).foregroundStyle(.secondary).padding(18)
             }.padding(.top,16).navigationSplitViewColumnWidth(min:180,ideal:210)
@@ -22,6 +23,7 @@ struct WorkspaceView: View {
                 case "Projects": projectList
                 case "History": history
                 case "Appearance": appearance
+                case "Agent": RuntimeSettings(model:model)
                 default: CompanionView(model:model)
                 }
             }.frame(maxWidth:.infinity,maxHeight:.infinity)
@@ -56,6 +58,11 @@ struct WorkspaceView: View {
                 TextField("Name",text:$model.slimeName)
                 Picker("Palette",selection:$model.palette) { ForEach(["Mint","Peach","Sky","Lilac"],id:\.self) { Text($0) } }
             }
+            Section("Notch behavior") {
+                Toggle("Open on hover", isOn: $model.openOnHover)
+                Toggle("Hide when idle", isOn: $model.hideWhenIdle)
+                Text("Hover to peek. Click to open. Escape to fold. Drafts, pending requests and pinned panels stay open.").font(.caption).foregroundStyle(.secondary)
+            }
             Section { Text("Motion follows the macOS Reduce Motion setting. Your choice of character is independent of the agent and model.").foregroundStyle(.secondary) }
         }.formStyle(.grouped)
     }
@@ -66,24 +73,26 @@ struct CompanionView: View {
     var compact = false
     @FocusState private var composerFocused: Bool
     var body: some View {
-        VStack(spacing:16) {
+        VStack(spacing: compact ? 8 : 16) {
             HStack {
                 if model.projects.isEmpty { Button("Add project",systemImage:"folder.badge.plus",action:model.addProject) }
                 else { Picker("Project",selection:$model.selectedProjectID) { ForEach(model.projects) { Text($0.name).tag($0.id) } }.labelsHidden().frame(maxWidth:220) }
                 Spacer();Label("Codex",systemImage:"terminal").font(.caption).foregroundStyle(.secondary)
             }
+            if !compact, let pending=model.pendingInputs.first { AttentionView(input:pending,model:model).id(pending.id) }
+            if model.isBusy { HStack {ProgressView().controlSize(.small);Text(model.activity).font(.caption);Spacer();Button("Stop",action:model.cancelRun)} }
             if let task = model.selectedTask {
                 HStack { Text(task.state.rawValue.capitalized).font(.caption.weight(.semibold));Spacer();Button("New conversation") { model.selectedTaskID=nil } }
                 ScrollView { Text(task.output.isEmpty ? task.title : task.output).frame(maxWidth:.infinity,alignment:.leading).textSelection(.enabled).padding(8) }.background(.quaternary.opacity(0.4),in:RoundedRectangle(cornerRadius:12))
             } else {
                 Spacer(minLength:0)
-                SlimeView(mood:model.isBusy ? .working:.idle,tint:model.tint).frame(width:compact ? 110:170,height:compact ? 110:170)
+                SlimeView(mood:model.slimeMood,tint:model.tint).frame(width:compact ? 72:170,height:compact ? 72:170)
                 Text("Hello, I’m \(model.slimeName).").font(compact ? .title3:.title).fontWeight(.semibold)
                 Text(model.status).foregroundStyle(.secondary)
                 Spacer(minLength:0)
             }
             VStack(spacing:10) {
-                TextField("What shall we work on?",text:$model.draft,axis:.vertical).lineLimit(3...6).textFieldStyle(.plain).focused($composerFocused)
+                TextField("What shall we work on?",text:$model.draft,axis:.vertical).lineLimit(compact ? 1...3 : 3...6).textFieldStyle(.plain).focused($composerFocused)
                 HStack {
                     Text(model.selectedProject?.name ?? "Choose a project to begin").font(.caption).foregroundStyle(.secondary)
                     Spacer()
@@ -94,7 +103,7 @@ struct CompanionView: View {
                 }
             }.padding(14).background(.background,in:RoundedRectangle(cornerRadius:14)).overlay(RoundedRectangle(cornerRadius:14).stroke(.quaternary))
             if compact, let error=model.errorMessage { Text(error).font(.caption).foregroundStyle(.red).lineLimit(3) }
-        }.padding(compact ? 18:30).frame(minWidth:compact ? 360:420)
-        .onAppear { composerFocused=true }
+        }.padding(compact ? 16:30).frame(minWidth:compact ? 360:420)
+        .onAppear { composerFocused = !compact }
     }
 }

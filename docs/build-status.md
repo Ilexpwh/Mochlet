@@ -242,3 +242,7 @@ Image tests exposed cooperative-executor starvation from blocking child-process 
 Verification: 112 reported tests (109 fixture declarations plus three opt-in live skips), native Debug build and runtime fixtures pass. Independent review prompted the source-dimension guard; compile isolation and metadata assertions were corrected before the successful check. No live image request or paid model evaluation was performed.
 
 Native image walkthrough accepted the original app icon with no OCR text, showed the explicit no-text preview, and exposed the image transmission disclosure. Summary remained disabled without credentials/model configuration. [Native evidence](evidence/native-image-analysis.png). The follow-up focused command-timeout test passed after the final immutable-deadline cleanup.
+
+### 2026-11-02 — Per-project manual board order
+
+Added persisted presentation-only task order, same-column drag insertion and labelled Move up/down controls. Complete-order snapshot checks reject stale writes and project/column changes; runtime state and execution order are untouched. Two added regressions and the full 114-test reported run pass, together with the native build/runtime host and final UI rebuild. Read-only review found no Required issues. Native end-to-end reorder validation remains pending after UI capture/control became unavailable. [Contract](task-board.md#manual-ordering--2026-11-02).

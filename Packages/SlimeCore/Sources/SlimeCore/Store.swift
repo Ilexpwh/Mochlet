@@ -79,6 +79,9 @@ public actor Store {
         migrations.registerMigration("run_outputs") { db in
             try db.execute(sql: "CREATE TABLE run_outputs(runID TEXT PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE, text TEXT NOT NULL, truncated BOOLEAN NOT NULL, updatedAt DOUBLE NOT NULL)")
         }
+        migrations.registerMigration("task_board_order") { db in
+            try db.execute(sql: "CREATE TABLE task_board_order(projectID TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,payload BLOB NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

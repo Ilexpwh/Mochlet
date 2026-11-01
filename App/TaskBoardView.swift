@@ -7,17 +7,28 @@ struct TaskBoardView: View {
     @State private var projectID = ""
     @State private var query = ""
     @State private var priority = -1
+    @AppStorage("manualTaskBoardOrder") private var manualOrder = false
+    @State private var boardOrder: TaskBoardOrder?
+    @State private var moving = false
+    @State private var orderRequest = UUID()
+    private var canOrder: Bool { manualOrder && !projectID.isEmpty && boardOrder?.projectID == projectID }
+    private var orderPositions: [String: Int] { Dictionary(uniqueKeysWithValues: (boardOrder?.taskIDs ?? []).enumerated().map { ($0.element, $0.offset) }) }
     @State private var details: [String: TaskDetails] = [:]
     @State private var editing: WorkTask?
     @State private var creating = false
     @State private var title = ""
     @State private var message: String?
     private var visible: [WorkTask] {
-        model.tasks.filter { task in
+        let positions = orderPositions
+        return model.tasks.filter { task in
             (projectID.isEmpty || task.projectID == projectID) &&
             (query.isEmpty || task.title.localizedCaseInsensitiveContains(query)) &&
             (priority < 0 || (details[task.id]?.priority.rawValue ?? TaskPriority.normal.rawValue) == priority)
         }.sorted { a, b in
+            if canOrder {
+                let ai = positions[a.id] ?? Int.max, bi = positions[b.id] ?? Int.max
+                if ai != bi { return ai < bi }
+            }
             let ap = details[a.id]?.priority.rawValue ?? 1, bp = details[b.id]?.priority.rawValue ?? 1
             if ap != bp { return ap > bp }
             let ad = details[a.id]?.dueAt ?? .infinity, bd = details[b.id]?.dueAt ?? .infinity
@@ -32,6 +43,10 @@ struct TaskBoardView: View {
                 Picker("Project", selection: $projectID) { Text("All projects").tag(""); ForEach(model.projects) { Text($0.name).tag($0.id) } }
                 TextField("Filter tasks", text: $query).textFieldStyle(.roundedBorder)
                 Picker("Priority", selection: $priority) { Text("Any priority").tag(-1); ForEach(TaskPriority.allCases, id: \.self) { Text($0.title).tag($0.rawValue) } }
+            }
+            HStack {
+                Toggle("Manual order", isOn: $manualOrder).disabled(projectID.isEmpty)
+                Text(canOrder ? "Drag within a column to insert before another card, or use its arrow controls. Execution queue is unchanged." : "Select a project and enable Manual order to arrange cards. Otherwise cards sort by priority and due date.").font(.caption).foregroundStyle(.secondary)
             }
             Text("Review successful runs before marking work complete. Saving or moving a task never starts an agent.").font(.caption).foregroundStyle(.secondary)
             if let message { Text(message).font(.callout).foregroundStyle(.secondary) }
@@ -48,6 +63,8 @@ struct TaskBoardView: View {
             }
         }.padding(24)
             .task { projectID = model.selectedProjectID; await refresh() }
+            .task(id: projectID) { await loadOrder() }
+            .onChange(of: model.tasks.map { $0.id + ":" + $0.projectID }) { _, _ in Task { await loadOrder() } }
             .sheet(item: $editing) { task in
                 TaskDetailView(model: model, original: task, task: task, details: details[task.id] ?? .init(taskID: task.id), openCompanion: openCompanion) { await refresh() }
             }
@@ -77,29 +94,72 @@ struct TaskBoardView: View {
             HStack { Label(title, systemImage: icon).font(.headline); Spacer(); Text("\(tasks.count)").foregroundStyle(.secondary) }
             ScrollView { LazyVStack(spacing: 10) {
                 ForEach(tasks) { task in
-                    Button { editing = task } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(task.title).font(.headline).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
-                            Text(model.projects.first { $0.id == task.projectID }?.name ?? "Unavailable project").font(.caption).foregroundStyle(.secondary)
-                            HStack {
-                                Text(task.state.rawValue.capitalized)
-                                Spacer()
-                                Text(details[task.id]?.priority.title ?? "Normal")
-                            }.font(.caption)
-                            if let due = details[task.id]?.dueAt { Label(Date(timeIntervalSince1970: due).formatted(date: .abbreviated, time: .omitted), systemImage: "calendar").font(.caption).foregroundStyle(.secondary) }
-                            if let dependencies = details[task.id]?.dependencies, !dependencies.isEmpty {
-                                Text("\(dependencies.count) dependencies").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }.padding(14).background(.background, in: RoundedRectangle(cornerRadius: 14))
-                    }.buttonStyle(.plain).accessibilityLabel("Open task: \(task.title), \(task.state.rawValue)")
-                        .accessibilityValue("Priority \(details[task.id]?.priority.title ?? "Normal"). " + (details[task.id]?.dueAt.map { "Due " + Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .omitted) } ?? "No due date."))
+                    boardCard(task, peers: tasks)
                 }
                 if tasks.isEmpty { Text("Nothing here yet").font(.caption).foregroundStyle(.secondary).padding(.vertical, 24) }
             } }
         }.padding(12).frame(width: width).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 18))
     }
+    @ViewBuilder private func boardCard(_ task: WorkTask, peers: [WorkTask]) -> some View {
+        let card = Button { editing = task } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(task.title).font(.headline).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+                Text(model.projects.first { $0.id == task.projectID }?.name ?? "Unavailable project").font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(task.state.rawValue.capitalized)
+                    Spacer()
+                    Text(details[task.id]?.priority.title ?? "Normal")
+                }.font(.caption)
+                if let due = details[task.id]?.dueAt { Label(Date(timeIntervalSince1970: due).formatted(date: .abbreviated, time: .omitted), systemImage: "calendar").font(.caption).foregroundStyle(.secondary) }
+                if let dependencies = details[task.id]?.dependencies, !dependencies.isEmpty {
+                    Text("\(dependencies.count) dependencies").font(.caption).foregroundStyle(.secondary)
+                }
+            }.padding(14).background(.background, in: RoundedRectangle(cornerRadius: 14))
+        }.buttonStyle(.plain).accessibilityLabel("Open task: \(task.title), \(task.state.rawValue)")
+            .accessibilityValue("Priority \(details[task.id]?.priority.title ?? "Normal"). " + (details[task.id]?.dueAt.map { "Due " + Date(timeIntervalSince1970: $0).formatted(date: .abbreviated, time: .omitted) } ?? "No due date."))
+        if canOrder {
+            VStack(spacing: 4) {
+                card
+                HStack {
+                    Button { moveAdjacent(task, peers: peers, offset: -1) } label: { Image(systemName: "arrow.up") }
+                        .accessibilityLabel("Move up: " + task.title).disabled(moving || peers.first?.id == task.id)
+                    Button { moveAdjacent(task, peers: peers, offset: 1) } label: { Image(systemName: "arrow.down") }
+                        .accessibilityLabel("Move down: " + task.title).disabled(moving || peers.last?.id == task.id)
+                    Spacer()
+                }.buttonStyle(.borderless).padding(.horizontal, 12)
+            }.draggable("mochlet-board-task:" + task.id)
+                .dropDestination(for: String.self) { values, _ in
+                    guard values.count == 1, let value = values.first, value.hasPrefix("mochlet-board-task:") else { return false }
+                    return move(String(value.dropFirst("mochlet-board-task:".count)), relativeTo: task.id, after: false)
+                }
+        } else { card }
+    }
+    private func moveAdjacent(_ task: WorkTask, peers: [WorkTask], offset: Int) {
+        guard let index = peers.firstIndex(where: { $0.id == task.id }), peers.indices.contains(index + offset) else { return }
+        _ = move(task.id, relativeTo: peers[index + offset].id, after: offset > 0)
+    }
+    private func move(_ id: String, relativeTo target: String, after: Bool) -> Bool {
+        guard canOrder, !moving, id != target, let expected = boardOrder, expected.taskIDs.contains(id) else { return false }
+        moving = true; message = nil
+        Task {
+            defer { moving = false }
+            do {
+                let next = try await model.store.moveTaskOnBoard(id, relativeTo: target, after: after, expected: expected)
+                if projectID == next.projectID { orderRequest = UUID(); boardOrder = next }
+            } catch { message = error.localizedDescription; await loadOrder() }
+        }
+        return true
+    }
+    private func loadOrder() async {
+        let requested = projectID, request = UUID(); orderRequest = request
+        guard !requested.isEmpty else { boardOrder = nil; return }
+        do {
+            let next = try await model.store.taskBoardOrder(projectID: requested)
+            if projectID == requested, orderRequest == request { boardOrder = next }
+        } catch { if projectID == requested, orderRequest == request { message = error.localizedDescription; boardOrder = nil } }
+    }
     private func refresh() async {
-        do { try await model.refresh(); details = try await model.store.taskDetails() }
+        do { try await model.refresh(); details = try await model.store.taskDetails(); await loadOrder() }
         catch { message = error.localizedDescription }
     }
 }

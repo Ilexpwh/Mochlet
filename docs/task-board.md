@@ -15,7 +15,7 @@ Edits compare the exact task and details revision transactionally. Queued/runnin
 - Full check passes 71 fixture declarations (two parameterized across six cases), three opt-in live tests skipped, native build and AppModel host.
 - Native isolated-data walkthrough creates a draft, edits priority/description/due date, adds a comment, reopens persisted fields and filters the board. [Details evidence](evidence/native-task-details.png), [responsive board after relaunch](evidence/native-task-board.png). No agent or external service was invoked.
 
-Manual card dragging/order, multiple character/profile assignments remain open. Agent assignment is available on unbound drafts. Large-board and VoiceOver evaluation remain release checks; this slice does not mark the entire T14 milestone complete.
+Manual card ordering is implemented below; multiple character/profile assignments remain open. Agent assignment is available on unbound drafts. Large-board and VoiceOver evaluation remain release checks; this slice does not mark the entire T14 milestone complete.
 
 ## Per-attempt output — 2026-11-01
 
@@ -24,3 +24,11 @@ New attempts save their own assistant text separately from the combined task con
 Output checkpoints occur at completed provider items and terminal transitions. A hard crash can lose the unfinished fragment since the last item checkpoint. Active-run checks, output and combined task text commit together; cancellation wins over a late checkpoint. Optional spoken replies now speak only the current attempt.
 
 Four core fixtures cover separate follow-ups, snapshots, Unicode truncation, reopening, wrong-task guards and concurrent cancellation. Native Codex/Pi orchestration fixtures verify recorded output. The full check passes 107 reported tests (104 fixture declarations plus three opt-in live skips), Debug build and native runtime host. A final accessibility-label rebuild passes. The native walkthrough reopened two fictional attempts and verified distinct prompts/replies through uniquely named disclosure controls. [Native evidence](evidence/native-attempt-output.png).
+
+## Manual ordering — 2026-11-02
+
+Select a project and enable Manual order. Drag a card onto another card in the same column to insert before it, or use the labelled Move up/Move down controls. Filters keep the relative order of visible cards. All-project viewing retains priority/due-date sorting. New tasks append to the project's stored order; moved-out tasks disappear from it.
+
+Ordering is presentation only. It does not modify task states, priorities, dependencies, agent sessions or the execution queue. Each write compares a complete project-order snapshot and checks current project/column membership. Concurrent edits or moved cards fail visibly rather than silently overwriting another arrangement. Reloads ignore obsolete project requests.
+
+Two new core tests cover persistence/reopening, queue isolation, stale snapshots, new membership, moved projects and cross-column rejection. Full checks pass 114 reported tests (111 fixture declarations and three opt-in live skips), native Debug build and runtime fixtures; the final native reload-guard rebuild passes. Read-only review found no Required findings. A native walkthrough launched the isolated build but screen-capture/control availability interrupted the UI path; physical card dragging and the arrow-control walkthrough remain unverified.

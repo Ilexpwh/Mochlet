@@ -86,3 +86,7 @@ Optional project instructions are persisted with the registered root and aliases
 ### Queued source evidence
 
 Copied Google/team context retains account/provider/remote-user identity, source ID, revision and content hash in `queued_source`, separate from the mutable retrieval cache. Enqueue binds evidence to the exact task/project/source. Dispatch validates it before starting and after preparing the agent session. A final local check follows other context refreshes. Interrupted legacy queues require a new reviewed source draft; they are not replayed with unverifiable copied text.
+
+### Bounded OKF folder interchange
+
+The knowledge implementation now parses frontmatter with pinned Yams 6.1.0. Directory previews capture immutable concept bytes and selected scope; import journals fresh note IDs for rollback after interruption. Each original bundle has a distinct export root and retained relative concept paths. Lifecycle exclusion participates in retrieval before result limits and in final evidence checks. Native lifecycle review is revision-guarded. [Detailed bounds and omissions](okf-bundles.md) are part of the supported contract; arbitrary YAML aliases, copied resources, original bundle logs and attester execution are not supported.

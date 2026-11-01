@@ -1,5 +1,5 @@
 {
-  "originHash" : "e0bf80412b7310c7da718ab2c5f5979301cc932122f0820c88df399f755b5e44",
+  "originHash" : "f20885ae620d36027a20b317cfb87b6be6892a0237009ba0ce7ccd49b76d59e3",
   "pins" : [
     {
       "identity" : "appauth-ios",
@@ -17,6 +17,15 @@
       "state" : {
         "revision" : "b83108d10f42680d78f23fe4d4d80fc88dab3212",
         "version" : "7.11.1"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams.git",
+      "state" : {
+        "revision" : "d41ba4e7164c0838c6d48351f7575f7f762151fe",
+        "version" : "6.1.0"
       }
     }
   ],

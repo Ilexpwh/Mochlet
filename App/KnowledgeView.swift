@@ -86,12 +86,19 @@ struct KnowledgeView: View {
     @State private var editing: KnowledgeNote?
     @State private var forgetting: KnowledgeNote?
     @State private var retaining: KnowledgeNote?
+    @State private var reviewing: KnowledgeNote?
+    @State private var bundle: KnowledgeBundlePreview?
+    @State private var transferring = false
     private var knowledge: KnowledgeController { model.knowledge }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Knowledge & Memory").font(.largeTitle.bold()); Spacer()
-                Button("Import OKF…") { importDocuments() }
+                Menu("Import OKF…") {
+                    Button("Notes…") { importDocuments() }
+                    Button("Bundle folder…") { previewBundle() }
+                }.disabled(transferring)
+                Button("Export scope…") { exportScope() }.disabled(transferring)
                 Button("Add memory", systemImage: "plus") { editing = KnowledgeNote(scope: scope, title: "", body: "") }
             }
             HStack {
@@ -127,6 +134,8 @@ struct KnowledgeView: View {
                         Button("Export…") { exportDocument(note) }.accessibilityLabel("Export " + note.title)
                         Button("Forget", role: .destructive) { forgetting = note }.accessibilityLabel("Forget " + note.title)
                     }
+                    if let reason = note.eligibilityReason { Text(reason).font(.caption).foregroundStyle(.orange) }
+                    Button("Review lifecycle…") { reviewing = note }.accessibilityLabel("Review lifecycle of " + note.title)
                     if note.connectionJSON != nil {
                         Text(knowledge.unavailableIDs.contains(note.id) ? "Excluded from AI context · connection, permission or source changed" : "Connected source · access is checked again before AI use")
                             .font(.caption).foregroundStyle(knowledge.unavailableIDs.contains(note.id) ? .orange : .secondary)
@@ -142,6 +151,18 @@ struct KnowledgeView: View {
             .task(id: "\(scope)|\(includePersonal)|\(query)") { await refresh() }
             .onChange(of: scope) { _, _ in knowledge.clearAnswer() }
             .onChange(of: includePersonal) { _, _ in knowledge.clearAnswer() }
+            .sheet(item: $bundle) { preview in BundleImportReview(preview: preview, scopeName: preview.scope == "personal" ? "Personal" : model.projects.first(where: { $0.id == preview.scope })?.name ?? "Unavailable project") {
+                guard let vault = knowledge.vault else { return "Knowledge storage is unavailable." }
+                do {
+                    let count = try await vault.importBundle(preview); bundle = nil
+                    knowledge.clearAnswer(); knowledge.message = "Imported \(count) concepts into the selected scope."; await refresh(); return nil
+                } catch { return error.localizedDescription }
+            } }
+            .sheet(item: $reviewing) { note in LifecycleReview(note: note) { status, expiry in
+                guard let vault = knowledge.vault else { return "Knowledge storage is unavailable." }
+                do { try await vault.reviewLifecycle(note, status: status, staleAfter: expiry); reviewing = nil; knowledge.clearAnswer(); await refresh(); return nil }
+                catch { return error.localizedDescription }
+            } }
             .sheet(item: $editing) { note in MemoryEditor(note: note) { updated in if await knowledge.save(updated) { editing = nil; await refresh(); return nil }; return knowledge.message } }
             .confirmationDialog("Keep an independent local copy?", isPresented: Binding(get: { retaining != nil }, set: { if !$0 { retaining = nil } })) {
                 Button("Keep independent copy") { if let note = retaining { Task {
@@ -155,10 +176,32 @@ struct KnowledgeView: View {
             } message: { Text("The local note and its search entry will be deleted. Existing agent conversations may still contain previously submitted context.") }
     }
     private func refresh() async { await knowledge.refresh(query: query, scope: scope, includePersonal: includePersonal) }
+    private func previewBundle() {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.message = "Choose one OKF bundle root. Review concepts before importing into this scope."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        let selectedScope = scope; transferring = true
+        Task {
+            defer { transferring = false }
+            do { bundle = try await Task.detached(priority: .userInitiated) { try KnowledgeBundle.preview(directory: folder, scope: selectedScope) }.value }
+            catch { knowledge.message = error.localizedDescription }
+        }
+    }
+    private func exportScope() {
+        let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false
+        panel.message = "Export the selected scope into a new folder. Includes retained connected and excluded notes; excludes forgotten notes and revision history."
+        guard panel.runModal() == .OK, let folder = panel.url, let vault = knowledge.vault else { return }
+        let selectedScope = scope; transferring = true
+        Task {
+            defer { transferring = false }
+            do { let output = try await vault.exportScope(selectedScope, to: folder); knowledge.message = "Exported scope to " + output.lastPathComponent; NSWorkspace.shared.activateFileViewerSelecting([output]) }
+            catch { knowledge.message = error.localizedDescription }
+        }
+    }
     private func importDocuments() {
         let window = NSApp.keyWindow; defer { window?.makeKeyAndOrderFront(nil) }
         let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = true
-        panel.message = "Import Markdown notes with scalar OKF type frontmatter into the selected scope. Unknown metadata is retained. Bundle relationships are not imported."
+        panel.message = "Import individual Markdown concepts with YAML type frontmatter. For path relationships choose Bundle folder instead. Unknown metadata values are retained; YAML formatting may normalize."
         guard panel.runModal() == .OK, let vault = knowledge.vault else { return }
         let urls = Array(panel.urls.prefix(100)); let selectedScope = scope
         Task {

@@ -18,7 +18,11 @@ import Testing
     note.body += "\nCorrected by the user."
     try await vault.save(note, expectedRevision: note.revision)
     let markdown = try String(contentsOf: await vault.url(id), encoding: .utf8)
-    #expect(markdown.contains(metadata) && markdown.contains("type: Concept"))
+    let roundTrip = try PortableKnowledge(markdown)
+    #expect(roundTrip.scalar("type") == "Concept")
+    // YAML formatting may normalize; nested unknown metadata remains present.
+    #expect(roundTrip.header.contains("source: https://example.invalid/spec") && roundTrip.header.contains("verified: false"))
+    #expect(roundTrip.header.contains("x-custom:") && roundTrip.header.contains("- alpha") && roundTrip.header.contains("- beta"))
     #expect(try await !vault.isCurrent(note))
     let exported = try await vault.exportDocument(id, directory: root)
     #expect(try String(contentsOf: exported, encoding: .utf8) == markdown)

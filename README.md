@@ -9,13 +9,13 @@ Implemented native workflows include:
 - A simple customizable slime, Coucou-derived island motion, top/left/right docking, menu-bar fallback and workspace.
 - Native project task board with priorities, due dates, dependencies, comments and review states.
 - Durable project/task history, a recoverable queue, exact agent sessions, project-scoped stored Codex history browsing, approvals/questions and available Codex allowance windows.
-- Personal/project memory, source-linked answers, portable Markdown import/export, file feeding and reviewed moves with undo.
+- Personal/project memory, source-linked answers, reviewed OKF folder import/export with lifecycle controls, file feeding and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
 - GitHub account/repository binding, issue synchronization, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
 - Slack/Lark/Feishu/Linear verified token connections, selected source capture, project-bound task drafts, explicit memory copies and reviewed replies with durable delivery records.
 - Google Desktop OAuth configuration, account/project bindings, Gmail threads, calendar agenda/availability and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 
-Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Google incremental sync/live validation, live PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Google incremental sync/live validation, live PR publishing, complete OKF conformance and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 
@@ -78,3 +78,5 @@ The roadmap remains broader than the development build. Consult the evidence led
 Project names, exact aliases and per-project coding instructions are editable in Projects. See [project settings](docs/project-settings.md) for routing and relocation limits.
 
 Build a local Release ZIP with `./scripts/package-local.sh`. See [packaging and measured idle performance](docs/local-package.md) for artifact contents, reproduction and distribution limits.
+
+[Knowledge bundle interchange](docs/okf-bundles.md) covers reviewed folder imports, scoped exports, freshness and deprecated-memory handling.

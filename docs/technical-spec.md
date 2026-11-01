@@ -70,3 +70,7 @@ AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores p
 ### Connected memory and queued evidence
 
 `ConnectedMemoryReference` stores source/account identity and revision/hash in portable frontmatter. Access is derived from current connection grants, never from document metadata alone. Connected notes survive disconnect for review but are excluded from retrieval. Remote reads precede AI use; final local checks cover all evidence after remote awaits. Queue entries persist revision identities and revalidate before agent send. Independent retention is an explicit new-copy action. See [lifecycle and evidence](connected-memory.md).
+
+### Task organization
+
+`TaskDetails` stores local planning metadata separately from runtime task state; `TaskComment` is local and never syncs automatically. The board preserves exact session/source destinations. Dependency graphs must stay within one project and acyclic; both enqueue and run claim require completed dependencies. Task edits and submission use optimistic transaction checks. See [task board](task-board.md).

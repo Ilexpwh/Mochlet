@@ -1,6 +1,6 @@
 # Implementation plan: Mochlet
 
-Status: proposed plan, created 2026-11-01. Planning is complete; application implementation has not started. Revised 2026-11-01 for required knowledge/memory, project-aware Codex sessions, GitHub synchronization, native quality and Google integrations. Task completion is tracked only in [todo.md](todo.md). Existing task IDs are preserved; execution follows dependencies and the release order below.
+Status: implementation in progress, created 2026-11-01. Implemented slices and verification limits are recorded in docs/build-status.md. Revised 2026-11-01 for required knowledge/memory, project-aware Codex sessions, GitHub synchronization, native quality and Google integrations. Task completion is tracked only in [todo.md](todo.md). Existing task IDs are preserved; execution follows dependencies and the release order below.
 
 ## Outcome
 

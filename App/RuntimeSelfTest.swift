@@ -86,10 +86,38 @@ import SlimeCore
         try await githubQueuedRevision(root: root)
         try await queuedMemory(root: root)
         try await multipleMemorySources(root: root)
+        try await taskEditDuringSubmission(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
+    }
+    static func taskEditDuringSubmission(root: URL) async throws {
+        let folder = root.appendingPathComponent("board-race")
+        let store = try Store(path: ":memory:")
+        let a = Project(name: "Original", root: root.path), b = Project(name: "Destination", root: folder.path)
+        try await store.save(a); try await store.save(b)
+        let original = try await store.createDraft(projectID: a.id, title: "Mint task", provider: .codex)
+        var account = ConnectedAccount(provider: "google", remoteID: "fixture", label: "Fixture", scopes: [GoogleScope.drive])
+        account.projectIDs = [a.id]; try await store.saveConnection(account)
+        let source = ConnectedSource(accountID: account.id, service: "drive", collection: "files", remoteID: "fixture", title: "Mint", body: "Mint", url: "https://drive.google.com/", revision: "1")
+        try await store.saveSources([source], account: account)
+        let model = AppModel(store: store, folder: folder)
+        var note = KnowledgeNote(scope: a.id, title: "Mint", body: "Mint"); try note.bind(source: source, account: account)
+        try await model.knowledge.vault?.save(note)
+        var edited = original; edited.projectID = b.id; edited.provider = AgentProvider.pi.rawValue; edited.title = "Saved destination"
+        let changed = edited
+        model.knowledge.validateConnected = { _ in
+            try await Task.sleep(for: .milliseconds(10))
+            try await store.editTask(expected: original, updated: changed, details: .init(taskID: original.id))
+        }
+        try await model.refresh(); model.selectedProjectID = a.id; model.selectedTaskID = original.id
+        model.includeKnowledge = true; model.draft = "Mint"; model.submit()
+        try await wait { !model.preparingSubmission }
+        try require(try await store.tasks().first { $0.id == original.id } == changed, "Submission overwrote a concurrently edited task destination")
+        try require(try await store.queuedCommands().isEmpty && model.runtime == nil, "Stale task preparation reached queue/runtime")
+        try require(model.errorMessage?.contains("changed") == true, "Concurrent edit was not reported")
+        model.shutdown()
     }
     static func multipleMemorySources(root: URL) async throws {
         let folder = root.appendingPathComponent("multiple-memory")

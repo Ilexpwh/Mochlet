@@ -215,7 +215,7 @@ import SlimeCore
                     }
                 }
                 guard submissionGeneration == queueGeneration else { throw MochletError.message("This submission was cancelled while preparing its context.") }
-                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence)
+                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task)
                 try await refresh()
                 guard submissionGeneration == queueGeneration else {
                     try await store.cancelQueuedCommand(taskID: queued.id)
@@ -282,6 +282,7 @@ import SlimeCore
                 report(error)
                 if claimed { await finish(.failed) }
                 else {
+                    try? await store.rejectQueuedCommand(taskID: task.id)
                     isBusy = false; activeTaskID = nil; activeRunID = nil
                     try? await refresh(); await runNext()
                 }

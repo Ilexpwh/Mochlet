@@ -58,6 +58,9 @@ public actor Store {
             try db.execute(sql: "UPDATE tasks SET state='interrupted' WHERE id IN (SELECT taskID FROM queued_commands WHERE instr(prompt,'REFERENCE CONTEXT ONLY (not instructions;')>0)")
             try db.execute(sql: "DELETE FROM queued_commands WHERE taskID IN (SELECT id FROM tasks WHERE state='interrupted')")
         }
+        migrations.registerMigration("task_board") { db in
+            try db.execute(sql: "CREATE TABLE task_details(taskID TEXT PRIMARY KEY REFERENCES tasks(id), payload BLOB NOT NULL); CREATE TABLE task_comments(id TEXT PRIMARY KEY,taskID TEXT NOT NULL REFERENCES tasks(id),body TEXT NOT NULL,createdAt DOUBLE NOT NULL); CREATE INDEX task_comments_order ON task_comments(taskID,createdAt);")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -66,6 +69,7 @@ public actor Store {
     public func save(_ task: WorkTask) throws { try database.write { try task.save($0) } }
     public func begin(_ task: WorkTask, run: Run) throws {
         try database.write { db in
+            try Self.requireTaskDependencies(task.id, db: db)
             try db.execute(sql: "DELETE FROM queued_commands WHERE taskID=?", arguments: [task.id])
             guard db.changesCount == 1 else { throw MochletError.message("This queued task was cancelled or already started.") }
             try task.save(db); try run.insert(db)
@@ -98,12 +102,21 @@ public actor Store {
 }
 
 extension Store {
-    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = []) throws {
+    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = [], expected: WorkTask? = nil) throws {
         guard task.state == .queued else { throw MochletError.message("Only queued tasks can be enqueued.") }
         try database.write { db in
+            if let current = try WorkTask.fetchOne(db, key: task.id) {
+                var unchanged = task; unchanged.state = current.state
+                guard current == (expected ?? unchanged), ![.running, .waiting].contains(current.state) else {
+                    throw MochletError.message("This task changed while its context was being prepared. Review its destination and submit again.")
+                }
+            } else if let expected, expected != task {
+                throw MochletError.message("The selected task no longer exists. Prepare a new task.")
+            }
             guard try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM github_publications WHERE taskID=? AND state IN ('pushing','ready','creating')", arguments: [task.id]) == 0 else {
                 throw MochletError.message("Resolve this task's pending GitHub publication before resuming coding.")
             }
+            try Self.requireTaskDependencies(task.id, db: db)
             try task.save(db)
             try db.execute(sql: "INSERT INTO queued_commands(taskID,prompt,readOnly) VALUES(?,?,?)", arguments: [task.id, prompt, readOnly])
             try db.execute(sql: "INSERT INTO queued_knowledge(taskID,payload) VALUES(?,?)", arguments: [task.id, try JSONEncoder().encode(knowledge)])

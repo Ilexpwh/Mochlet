@@ -165,3 +165,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Added portable account/source bindings, exclusion after disconnect or changed grants/content, and remote checks before AI use. Retained notes stay reviewable; independent retention creates a separate explicit copy. Queue evidence survives restart and rejects edited/deleted/unavailable notes before dispatch, including changes during runtime preparation.
 - Review caught a two-source validation race; remote checks now finish before final packet validation. Native regression deletes the first source while the second is loading and rejects dispatch.
 - 68 fixture declarations pass, three live tests skipped; native build and AppModel host pass. Isolated native walkthrough verified unavailable status and separate independent retention. [Evidence and limitations](connected-memory.md).
+
+## Native task board — 2026-11-01
+
+- Added project/priority/title filters, four workflow columns, draft creation and task details with priority, due date, description, parent/dependencies, local comments and attempt/output inspection. Dependencies gate enqueue and run claim; graph cycles and cross-project links are rejected. Existing source/session routes stay fixed.
+- Independent review found an enqueue race with a concurrent task destination edit. Transactional snapshot validation now rejects the stale submission; a native regression confirms the edited project/provider/title remain and no runtime starts.
+- Full checks pass 71 fixture declarations, three live tests skipped, native build and AppModel host. Native walkthrough confirms draft creation, metadata persistence, comments and filtering. [Contract and limitations](task-board.md).

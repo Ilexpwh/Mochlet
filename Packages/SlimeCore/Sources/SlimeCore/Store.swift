@@ -46,6 +46,9 @@ public actor Store {
             try db.execute(sql: "ALTER TABLE tasks ADD COLUMN provider TEXT NOT NULL DEFAULT 'codex'; ALTER TABLE tasks ADD COLUMN sessionCWD TEXT; ALTER TABLE tasks ADD COLUMN sessionConfirmed BOOLEAN NOT NULL DEFAULT 0;")
         }
         migrations.registerMigration("connected_sources") { try ConnectionSchema.create($0) }
+        migrations.registerMigration("deliveries") { db in
+            try db.execute(sql: "CREATE TABLE deliveries(id TEXT PRIMARY KEY,accountID TEXT NOT NULL,payload BLOB NOT NULL,state TEXT NOT NULL,receipt BLOB NOT NULL)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

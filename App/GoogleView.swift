@@ -19,14 +19,19 @@ struct GoogleView: View {
                         Toggle("Read Gmail (all mail, searched only when requested)", isOn: $google.mailPermission)
                         Toggle("Read calendars", isOn: $google.calendarPermission)
                         Toggle("Read Drive (account-wide permission; only selected content is read)", isOn: $google.drivePermission)
+                        Toggle("Send Gmail replies (requires an explicit delivery action)", isOn: $google.sendPermission)
+                        Toggle("Save Gmail drafts", isOn: $google.composePermission)
+                        Toggle("Create, reschedule and cancel calendar events", isOn: $google.eventWritePermission)
                         Button("Sign in with Google", action: google.connect).buttonStyle(.borderedProminent).disabled(google.clientID.isEmpty)
-                        Text("Credentials stay in Keychain. No mail is sent and no calendar event is changed by these read permissions.").font(.caption).foregroundStyle(.secondary)
+                        Text("Credentials stay in Keychain. Connecting never sends mail or changes an event. Each write requires a concrete preview and your delivery action.").font(.caption).foregroundStyle(.secondary)
                     }.padding(.top, 12).disabled(google.busy)
                 }
                 if !google.accounts.isEmpty {
                     accountSection(google)
                     Divider()
                     sourceSection(google)
+                    Divider()
+                    GoogleActionsView(model: model)
                 }
                 if let message = google.message { Text(message).font(.callout).textSelection(.enabled).accessibilityLabel("Google status: " + message) }
             }.padding(28).frame(maxWidth: 1000, alignment: .leading)
@@ -40,7 +45,7 @@ struct GoogleView: View {
                 Button("Disconnect locally", action: google.disconnect)
             }
             if let account = google.account {
-                Text("Granted: " + [(GoogleScope.mail, "Gmail read"), (GoogleScope.calendar, "Calendar read"), (GoogleScope.drive, "Drive read")].filter { account.scopes.contains($0.0) }.map(\.1).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
+                Text("Granted: " + [(GoogleScope.mail, "Gmail read"), (GoogleScope.calendar, "Calendar read"), (GoogleScope.drive, "Drive read"), (GoogleScope.send, "Gmail send"), (GoogleScope.compose, "Gmail drafts"), (GoogleScope.calendarWrite, "Calendar write")].filter { account.scopes.contains($0.0) }.map(\.1).joined(separator: ", ")).font(.caption).foregroundStyle(.secondary)
                 DisclosureGroup("Projects this account can supply context to") {
                     if model.projects.isEmpty { Text("Add a project first in Projects.") }
                     ForEach(model.projects) { project in

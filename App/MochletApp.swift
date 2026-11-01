@@ -64,12 +64,13 @@ import SlimeCore
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let model, model.isBusy || model.speech.active || model.meetings.active {
+        if let model, model.isBusy || model.speech.active || model.meetings.active || model.google.busy {
             let alert = NSAlert(); alert.messageText = "Work is still active"
-            alert.informativeText = "Quitting interrupts active work, saves meeting segments and discards any voice command in progress. Its history remains available when you return."
+            alert.informativeText = "Quitting interrupts active work, saves meeting segments and discards any voice command in progress. An in-flight Google write may remain uncertain; inspect delivery history before trying again."
             alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
         }
+        model?.google.cancel()
         model?.speech.cancel(); model?.speech.stopSpeaking()
         model?.shortcuts.stop()
         Task { [model] in

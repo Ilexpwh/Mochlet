@@ -23,6 +23,9 @@ import SlimeCore
     var mailPermission = true
     var calendarPermission = true
     var drivePermission = false
+    var sendPermission = false
+    var composePermission = false
+    var eventWritePermission = false
     var busy = false
     var message: String?
     var answer: KnowledgeAnswer?
@@ -52,6 +55,9 @@ import SlimeCore
         if mailPermission { scopes.insert(GoogleScope.mail) }
         if calendarPermission { scopes.insert(GoogleScope.calendar) }
         if drivePermission { scopes.insert(GoogleScope.drive) }
+        if sendPermission { scopes.insert(GoogleScope.send); scopes.insert(GoogleScope.mail) }
+        if composePermission { scopes.insert(GoogleScope.compose); scopes.insert(GoogleScope.mail) }
+        if eventWritePermission { scopes.insert(GoogleScope.calendarWrite); scopes.insert(GoogleScope.calendar) }
         run {
             let account = try await self.oauth.connect(clientID: id, secret: secret.isEmpty ? nil : secret, scopes: scopes)
             self.clientSecret = ""; self.accountID = account.id

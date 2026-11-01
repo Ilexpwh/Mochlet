@@ -13,6 +13,7 @@ struct WorkspaceView: View {
                     Label("Projects",systemImage:"folder").tag("Projects")
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
+                    Label("Speech & Models",systemImage:"waveform").tag("Speech")
                     Label("Agent settings",systemImage:"slider.horizontal.3").tag("Agent")
                 }.listStyle(.sidebar)
                 Text("Your little companion\nfor big work.").font(.caption).foregroundStyle(.secondary).padding(18)
@@ -23,6 +24,7 @@ struct WorkspaceView: View {
                 case "Projects": projectList
                 case "History": history
                 case "Appearance": appearance
+                case "Speech": SpeechSettingsView(speech: model.speech)
                 case "Agent": RuntimeSettings(model:model)
                 default: CompanionView(model:model)
                 }
@@ -101,12 +103,14 @@ struct CompanionView: View {
                 HStack {
                     Text(model.selectedProject?.name ?? "Choose a project to begin").font(.caption).foregroundStyle(.secondary)
                     Spacer()
+                    VoiceControls(speech: model.speech)
                     Button(action:model.submit) { Image(systemName:"arrow.up").font(.headline).frame(width:24,height:24) }
                         .buttonStyle(.borderedProminent).tint(model.tint.mix(with:.black,by:0.25))
-                        .disabled(model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+                        .disabled(model.speech.active || model.selectedProject == nil || model.draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.return,modifiers:.command).help("Send · Command Return").accessibilityLabel("Send task")
                 }
             }.padding(14).background(.background,in:RoundedRectangle(cornerRadius:14)).overlay(RoundedRectangle(cornerRadius:14).stroke(.quaternary))
+            if let message = model.speech.message { Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
             if compact, let error=model.errorMessage { Text(error).font(.caption).foregroundStyle(.red).lineLimit(3) }
         }.padding(compact ? 16:30).frame(minWidth:compact ? 360:420)
         .onAppear { composerFocused = !compact }

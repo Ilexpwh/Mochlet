@@ -87,7 +87,7 @@ final class CompanionPanel: NSPanel {
         scheduleDismissal()
     }
 
-    private var heldOpen: Bool { island.dragging || !model.draft.isEmpty || !model.pendingInputs.isEmpty }
+    private var heldOpen: Bool { island.dragging || model.speech.active || !model.draft.isEmpty || !model.pendingInputs.isEmpty }
     private var heldVisible: Bool { heldOpen || model.isBusy }
 
     private func hover(_ inside: Bool) {

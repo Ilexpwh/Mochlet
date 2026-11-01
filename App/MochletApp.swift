@@ -17,6 +17,8 @@ import SlimeCore
             let store = try Store(path: folder.appendingPathComponent("mochlet.sqlite").path)
             let model = AppModel(store: store, folder: folder)
             self.model = model
+            NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(captureInterrupted), name: NSWorkspace.willSleepNotification, object: nil)
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(captureInterrupted), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
             surfaces = SurfaceController(model: model)
             Task { await model.load() }
             surfaces?.showWorkspace()
@@ -26,14 +28,19 @@ import SlimeCore
             NSApp.terminate(nil)
         }
     }
+    @objc private func captureInterrupted() {
+        if model?.speech.active == true { model?.speech.cancel(); model?.speech.message = "Voice command cancelled on lock or sleep. Start a new recording when ready." }
+        model?.speech.stopSpeaking()
+    }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let model, model.isBusy {
+        if let model, model.isBusy || model.speech.active {
             let alert = NSAlert(); alert.messageText = "Work is still active"
-            alert.informativeText = "Quitting interrupts active work. Its history remains available when you return."
+            alert.informativeText = "Quitting interrupts active work and discards any voice command in progress. Its history remains available when you return."
             alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
         }
+        model?.speech.cancel(); model?.speech.stopSpeaking()
         Task { [model] in
             if let runtime=model?.runtime {await runtime.client.stop()}
             NSApp.reply(toApplicationShouldTerminate:true)

@@ -1,0 +1,69 @@
+# Coucou source porting guide for Mochlet
+
+Research date: **1 November 2026**. Scope: native file feeding, voice input, keyboard interaction, attachments, usage presentation and panel reliability. This is port guidance, not an implementation claim or a complete audit of Coucou.
+
+## Evidence and attribution
+
+The local checkout `/Users/ilexpoon/Mac-notch-ai-project/coucou` is clean at **`b6a85f29719b5291651c092e33b3f9d4004d091e`**. The same revision and its license were verified against [upstream](https://github.com/Louis-CFM/coucou/tree/b6a85f29719b5291651c092e33b3f9d4004d091e). Its [MIT license](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/LICENSE) credits **Copyright (c) 2026 Louis Raillé**. Retain that copyright and the complete permission/disclaimer text for copied or substantially adapted code. Record source commit, file, symbols and local modifications in Mochlet's third-party notices; keep short attribution headers on adapted source files.
+
+Tier 2 graph verification used project `Users-ilexpoon-Mac-notch-ai-project-coucou`, generation **2026-11-01T07:48:16Z**. Every evidence path below was checked for coverage/freshness. All reported metadata matched. Partial parser ranges in `IslandWindowController.swift`, `IslandViewContent.swift`, `HotKeyCenter.swift`, `ClaudePlanCardView.swift` and `AppState.swift` were read directly; the excluded `LICENSE` was also read directly. Graph traces produced some improbable cross-language/self-call edges, so concrete call-chain claims below were checked in source rather than inferred from graph degree. No graph mutation or source modification was performed.
+
+## Ports with the highest value
+
+| Priority | Source and exact symbols | Coupling and cost | Mochlet adaptation |
+|---|---|---|---|
+| 1 | [`FileDropView.swift:8`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/FileDropView.swift#L8): `FileDropNSView`, drag callbacks | Small AppKit view; no third-party package. Its `hitTest` returns nil while AppKit handles dragging. | Port the drag destination separately from the ingestion handler. Connect callbacks to Mochlet's attachment queue. Accept/reject based on supported URLs before showing success. |
+| 1 | [`FlowKeyLogic.swift:11`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/FlowKeyLogic.swift#L11): `FlowKeyLogic`, `Phase`, `Action`, `keyDown`, `keyUp`, `otherKey`, `escape`, `tick` | Foundation-only input state machine. No audio, authorization, UI or external package dependency. | Good isolated port for hold-to-talk, double-tap lock and cancellation. Change `finish` to produce editable text in Mochlet's composer; never inherit automatic paste or send behavior. |
+| 1 | [`IslandStateMachine.swift:5`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandStateMachine.swift#L5): `IslandStateMachine`, `openedExternally`, `collapse`, `userInteracted`, `isHeldOpen` | Foundation/main-actor state machine with callback and timers; no AppKit dependency. | Use the separation of presentation state from work state. Pin the panel while approvals, a draft, recording or a drag require it. Make recording lifecycle independent of panel collapse. |
+| 1 | [`ClaudePlanCardView.swift:100`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/ClaudePlanCardView.swift#L100): `GaugeRowView`, plus card timestamp styling | SwiftUI, `PlanWindow`, palette/localization helpers. Small presentation extraction. | Port compact percentage bars, monospaced digits and reset labels into a provider-neutral usage card. Feed it Mochlet's supported telemetry and explicit stale/unknown states. |
+| 2 | [`IslandViewContent.swift:5043`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandViewContent.swift#L5043): `ContextChip` | SwiftUI plus `PromptContext` and color helper. One context at a time upstream. | Adapt to identifiable attachment chips with filename, source, extraction state, remove action and accessible label. Use a short arrival pulse with a reduced-motion alternative. |
+| 2 | [`IslandDisplayChoice.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandDisplayChoice.swift): `IslandDisplayChoice`, `IslandDisplayCandidate`, `IslandDisplayResolver.index` | Foundation-only choice serialization and resolver. | Add explicit notch/menu-bar/chosen-display settings. Persist display UUID, fall back when disconnected, and avoid moving an open editor just because the pointer crossed screens. |
+
+## File feeding and chewing: reuse choreography, replace completion logic
+
+The verified native wiring is `IslandWindowController.setupPanel` → `FileDropNSView` callbacks → `UploadSequenceEngine.enterZone/updateCursor/exitZone`, then `FileDropHandler.handle` → `performDrop`. The controller places the SwiftUI hosting view and drag destination as siblings in a common container. This is a useful pattern for avoiding a transparent SwiftUI drag layer blocking buttons. [Controller wiring, lines 118–186](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandWindowController.swift#L118)
+
+[`UploadSequenceEngine.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/UploadSequenceEngine.swift) supplies `USC`, easing functions, a spring simulation and `UploadSequenceEngine.frame(at:)`. `performDrop(uploadDuration:)` resets phase time while retaining spring position/velocity. This preserves continuity after any amount of hovering. Dependencies are Foundation/CoreGraphics and the types within the file; its coordinate system is fixed to 640×176.
+
+[`UploadCanvasView.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/UploadCanvasView.swift) supplies `drawScene`, `drawMochi`, `drawFile` and `drawProgressBar`. It uses SwiftUI `Canvas`/`TimelineView`, AppKit file icons, `AppState` and the sequence engine. Port the timeline and squash/chew ideas into Mochlet's simpler slime renderer. Replace fixed-position invisible action overlays with normal accessible controls, and stop animation scheduling when no animation is active.
+
+**Do not transplant `FileDropHandler.handle` unchanged.** It takes only `urls.first`, runs file copying in a detached task, and animates a fixed 2.4-second progress interval independently of copy completion. A failed copy leaves the original URL and can still reach the visual success sequence. Its delayed copy completion can replace the current global attachment state. [Handler, lines 65–162](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/FileDropView.swift#L65)
+
+For Mochlet, assign each import an ID and explicit accepted/copying/extracting/indexing/ready/failed state. Chewing can loop while work runs; the checkmark must wait for real completion. Queue multiple files, reject unsupported folders visibly, and keep cancellation and retry scoped to the import ID. Prefer an indeterminate indicator when extraction cannot report meaningful progress. These changes are Mochlet recommendations.
+
+## Voice and push-to-talk
+
+[`MacDictation.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/MacDictation.swift) offers useful lifecycle examples: `start(from:)` preserves the typed prefix, `finish()` stops audio and waits up to 1.5 seconds for final recognition, and `stop/tearDown` clean up requests/taps. It uses AVFoundation, Speech and Carbon, plus `DictationTranscript` and optional `FlowAudioBands`. Its Apple-recognizer implementation should remain an optional provider, not replace the approved OpenRouter selection.
+
+[`DictationTranscript.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/DictationTranscript.swift) is a small Foundation helper with `Piece`, `absorb`, `isRestart` and temporal merging. It is useful for Apple recognizer restart behavior. Its whitespace-based restart heuristic is not evidence of Chinese-language correctness, and it should not merge separate meeting chunks or global speaker identities. Evaluate with actual Cantonese/Mandarin fixtures before porting its heuristics.
+
+[`PromptView`, lines 1434–1618](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandViewContent.swift#L1434) demonstrates the microphone stop/start affordance, language menu, final-word wait and destination/model chip. Extract layout ideas; the full view couples to `AppState`, `ClaudeService`, chat history and its own transient draft. Mochlet should retain its durable composer and explicit project destination.
+
+Do not import all of [`FlowDictation.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/FlowDictation.swift) for in-app PTT: it includes Accessibility checks, global key monitoring, clipboard/paste injection, Flow history/pill state and Apple/Parakeet selection. That is a much larger product feature than dictating to the slime. `FlowKeyLogic` is the useful low-cost seam. Coucou's [project configuration](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/project.yml#L16) pins FluidAudio **0.17.7** for its broader dictation/notetaker features; copying those subsystems adds that dependency and model lifecycle work.
+
+## Shortcuts and usage: preserve semantics
+
+[`HotKeyCenter.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/HotKeyCenter.swift) implements `start`, `registerAll`, `reregister`, `unregisterAll` and `registerOne` using Carbon `RegisterEventHotKey`. [`ShortcutLogic.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/ShortcutLogic.swift) holds `ShortcutSpec`, persistence, duplicate detection and modifier conversion separately. This is a small zero-package alternative to KeyboardShortcuts for show/hide and navigation. Rename the event signature, action IDs and preference keys; surface registration conflicts. The inspected handler registers **key-pressed events**, so it is not a complete hold/release PTT implementation by itself.
+
+Reuse usage-card presentation but not all policy from [`ClaudePlanGauge.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/ClaudePlanGauge.swift). Its `effectivePct` returns zero when a stored reset time passes. Mochlet must mark that snapshot stale and refresh; it cannot assert zero usage without telemetry. The card's visible-only 30-second countdown is a useful efficient rendering pattern.
+
+[`CodexPlanGauge.swift`](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/CodexPlanGauge.swift) has a compact `account/rateLimits/read` example and `CodexPlanCardView`. Prefer Mochlet's existing correlated runtime transport over its separate short-lived subprocess. Its parser groups windows into five-hour/seven-day buckets using a duration threshold and reads `rateLimits`; Mochlet should preserve actual window durations and supported limit IDs, and distinguish missing data from exhausted quota or API spending.
+
+## Panel reliability: targeted behaviors, not the entire controller
+
+`IslandWindowController.swift` exceeds 2,200 lines and combines voice actions, desktop dragging and integrations. Extract only the following seams, all verified in the [pinned controller](https://github.com/Louis-CFM/coucou/blob/b6a85f29719b5291651c092e33b3f9d4004d091e/NotchBuddy/Sources/App/IslandWindowController.swift):
+
+- `setupPanel` (104): transparent panel, all-Spaces/full-screen behavior, sibling drag destination, and becoming key only for text input.
+- `relocate` (244) and the screen-change observer (226): recompute geometry when a display disconnects, resolution changes or the lid closes.
+- `adjustPollRate` (449), `observeScreenForPolling` (556), `pausePollingForScreenOff` (573): reduce pointer polling away from the island and stop it when asleep/locked. Adopt the behavior after measuring; upstream constants are not proof of Mochlet's idle CPU target.
+- `IslandPanel` (1587): key-capable but not main-window behavior and notch-position constraints. Validate focus restoration and settings dialogs on macOS 15 separately.
+
+## Acceptance sequence for the ports
+
+1. File drag: enter/exit rapidly, drop several files, cancel a large import, fail a copy and preserve an existing draft. No success pose before ingestion succeeds.
+2. PTT: repeat key-down, quick tap, hold/release, double tap, Escape, microphone permission failure and cancellation during audio startup. Text stays editable before submission.
+3. Usage: missing field, stale snapshot, elapsed reset, multiple limit buckets and provider disconnection. Never show invented remaining capacity.
+4. Panel: switch Spaces, attach/detach displays, lock/sleep, full-screen app, keyboard navigation and interrupted open/close animation. Work and recording state survive presentation changes.
+5. Accessibility/performance: VoiceOver labels for attachments and controls, reduced motion, native focus order, idle CPU and frame/stall measurements.
+
+No Coucou component was copied or integrated by this research task. The source locations above are narrow candidates for implementation and validation within Mochlet's existing architecture.

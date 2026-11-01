@@ -3,6 +3,7 @@ import AppKit
 import SlimeCore
 
 @MainActor @Observable final class AppModel {
+    let speech = SpeechController()
     let store: Store
     let folder: URL
     var projects: [Project] = []
@@ -44,7 +45,8 @@ import SlimeCore
     }
     var slimeMood: SlimeMood {
         if !pendingInputs.isEmpty { return .attention }
-        if isBusy { return .working }
+        if speech.phase == .recording { return .listening }
+        if isBusy || speech.phase == .transcribing { return .working }
         if errorMessage != nil { return .error }
         if selectedTask?.state == .review { return .success }
         if selectedTask?.state == .interrupted { return .disconnected }
@@ -71,6 +73,11 @@ import SlimeCore
         palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
     }
     func load() async {
+        speech.receiveText = { [weak self] text in
+            guard let self else { return }
+            self.draft += self.draft.isEmpty ? text : "\n" + text
+        }
+        await speech.load()
         do {
             try await store.recover()
             try await refresh()
@@ -92,7 +99,7 @@ import SlimeCore
         }
     }
     func submit() {
-        guard let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
+        guard !speech.active, let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
         let prompt=draft;draft=""
         let task: WorkTask
         if let existing=selectedTask,existing.projectID == project.id, existing.id != activeTaskID,
@@ -191,6 +198,7 @@ import SlimeCore
         }
         isBusy=false;activeTaskID=nil;activeRunID=nil;activeThreadID=nil;activeTurnID=nil;pendingInputs=[];deliveringInputs=[];items=[:]
         status=state == .review ? "Work is ready to review" : state.rawValue.capitalized;activity=status
+        if state == .review, speech.spokenReplies, let output = tasks.first(where: { $0.id == taskID })?.output { speech.speak(output) }
         if continueQueue {await runNext()}
     }
     func answer(_ input:AgentInput,result:JSONValue) {
@@ -210,6 +218,7 @@ import SlimeCore
         Task {do {try await runtime.interrupt(threadID:thread,turnID:turn)} catch {report(error)}}
     }
     func shutdown() {
+        speech.cancel(); speech.stopSpeaking()
         runtimeEvents?.cancel()
         if let runtime {Task {await runtime.client.stop()}}
     }

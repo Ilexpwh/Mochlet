@@ -83,7 +83,7 @@ public struct GoogleDelivery: Sendable {
         return DeliveryDraft(id: actionID, account: account, projectID: projectID, kind: kind, collection: calendarID, remoteID: remoteID, expectedRevision: revision, payload: payload, preview: preview)
     }
     public func execute(_ draft: DeliveryDraft, store: Store) async throws {
-        guard draft.accountID == account.id, draft.accountGeneration == account.generation else { throw MochletError.message("This preview belongs to a different account state.") }
+        guard draft.kind.provider == "google", draft.accountID == account.id, draft.accountGeneration == account.generation else { throw MochletError.message("This preview belongs to a different account state.") }
         try await reader.verify(scope: draft.kind.scope)
         var request: URLRequest
         switch draft.kind {
@@ -144,7 +144,7 @@ public struct GoogleDelivery: Sendable {
     }
     public func reconcile(_ record: DeliveryRecord, store: Store) async throws {
         let draft = record.draft
-        guard record.state == "uncertain", draft.accountID == account.id else { throw MochletError.message("Only an uncertain action for this account can be reconciled.") }
+        guard draft.kind.provider == "google", record.state == "uncertain", draft.accountID == account.id else { throw MochletError.message("Only an uncertain action for this account can be reconciled.") }
         let receipt: JSONValue
         switch draft.kind {
         case .gmailSend, .gmailDraft:

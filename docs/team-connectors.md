@@ -21,3 +21,19 @@ Fixture tests cover Slack pagination/root/account checks, Linear errors/team cha
 - [Slack conversations.replies](https://docs.slack.dev/reference/methods/conversations.replies/), [auth.test](https://docs.slack.dev/reference/methods/auth.test/) and [chat.getPermalink](https://docs.slack.dev/reference/methods/chat.getPermalink/). Current method documentation governs rate limits; fixed backoff assumptions from older articles are not used.
 - [Linear GraphQL authentication](https://linear.app/developers/graphql), [pagination](https://linear.app/developers/pagination), and [official SDK schema](https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql). Personal keys and OAuth bearer tokens have distinct authorization syntax; this implementation accepts personal keys.
 - [Lark user identity](https://open.larksuite.com/document/home/user-identity-introduction), [official Go SDK authen types](https://github.com/larksuite/oapi-sdk-go/blob/v3_main/service/authen/v1/model.go), and [official Node SDK](https://github.com/larksuite/node-sdk). Lark and Feishu use separate API hosts and account namespaces.
+
+## Reviewed replies
+
+Connections now offers a default-off local permission for reviewed replies. The service token still needs its actual write grant. Choose a project and read a source, compose text, then preview the exact account, destination and message before explicitly sending. Replies do not originate automatically from agent output or meetings.
+
+The shared delivery journal stores immutable previews, expires them after 15 minutes, and commits an uncertain attempt before network I/O. Changed source revisions, accounts, project grants and previews block dispatch. A narrow set of definitive HTTP/Slack rejections becomes rejected; ambiguous errors remain uncertain. Reconciliation performs reads only and requires a unique matching author, destination and body. Token rotation or removal of write permission does not prevent reconciliation when current read/project access and the original remote user remain valid. Reconnecting a different user cannot adopt the record.
+
+Slack and Lark/Feishu replies contain a visible UUID delivery footer included in the preview. Slack markup mentions are escaped and broadcast/unfurls disabled. Lark uses text messages, a reply UUID and thread replies; unsupported thread destinations may reject. Linear supplies a comment UUID and disables creation on a synced Slack thread. No retry automatically resends an uncertain action. Unrecognized service denials can remain uncertain and require service inspection; full error-catalog handling and live workspace compatibility remain open.
+
+Contracts verified from primary sources:
+
+- [Slack chat.postMessage](https://docs.slack.dev/reference/methods/chat.postMessage/) and [thread retrieval](https://docs.slack.dev/reference/methods/conversations.replies/).
+- [Official Lark CLI reply implementation](https://pkg.go.dev/github.com/larksuite/cli/shortcuts/im) and [reply API](https://open.larksuite.com/document/server-docs/im-v1/message/reply).
+- [Linear generated schema](https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql), including CommentCreateInput, caller-supplied IDs and commentCreate.
+
+Verification: fixtures cover all four services for immediate receipts, lost responses, wrong authors, stale source revisions, revoked grants and read-only reconciliation after token rotation. Slack denial/correction is tested separately. Native [delivery-history walkthrough](evidence/native-team-delivery.png) uses a disposable local fixture without credentials. Actual remote sends, actual service authorization, full preview-to-send native workflow, notification behavior and provider normalization remain unverified.

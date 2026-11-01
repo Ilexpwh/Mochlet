@@ -74,3 +74,7 @@ AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores p
 ### Task organization
 
 `TaskDetails` stores local planning metadata separately from runtime task state; `TaskComment` is local and never syncs automatically. The board preserves exact session/source destinations. Dependency graphs must stay within one project and acyclic; both enqueue and run claim require completed dependencies. Task edits and submission use optimistic transaction checks. See [task board](task-board.md).
+
+### Reviewed team delivery
+
+`TeamDelivery` shares the immutable delivery journal with Google, with provider-specific capability checks. Replies require fresh source revisions, an exact preview and explicit Send. Lost responses remain uncertain; reconciliation only reads matching remote evidence. See [team connector contracts and limitations](team-connectors.md).

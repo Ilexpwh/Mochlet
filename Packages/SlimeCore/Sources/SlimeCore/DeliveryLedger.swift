@@ -4,11 +4,22 @@ import CryptoKit
 
 public enum DeliveryKind: String, Codable, Sendable, CaseIterable {
     case gmailSend, gmailDraft, calendarCreate, calendarUpdate, calendarCancel
+    case slackReply, larkReply, feishuReply, linearComment
+    public var provider: String {
+        switch self {
+        case .slackReply: "slack"
+        case .larkReply: "lark"
+        case .feishuReply: "feishu"
+        case .linearComment: "linear"
+        default: "google"
+        }
+    }
     public var scope: String {
         switch self {
         case .gmailSend: GoogleScope.send
         case .gmailDraft: GoogleScope.compose
-        default: GoogleScope.calendarWrite
+        case .calendarCreate, .calendarUpdate, .calendarCancel: GoogleScope.calendarWrite
+        default: provider + ".reply.write"
         }
     }
     public var title: String {
@@ -18,6 +29,10 @@ public enum DeliveryKind: String, Codable, Sendable, CaseIterable {
         case .calendarCreate: "Create event"
         case .calendarUpdate: "Update event"
         case .calendarCancel: "Cancel event"
+        case .slackReply: "Reply in Slack"
+        case .larkReply: "Reply in Lark"
+        case .feishuReply: "Reply in Feishu"
+        case .linearComment: "Comment on Linear issue"
         }
     }
 }
@@ -95,7 +110,7 @@ extension Store {
             throw MochletError.message("This action expired or its account was disconnected. Prepare a fresh preview.")
         }
         let account = try JSONDecoder().decode(ConnectedAccount.self, from: data)
-        guard account.provider == "google", account.generation == draft.accountGeneration, account.scopes.contains(draft.kind.scope),
+        guard account.provider == draft.kind.provider, account.generation == draft.accountGeneration, account.scopes.contains(draft.kind.scope),
               account.projectIDs.contains(draft.projectID), try Project.fetchOne(db, key: draft.projectID) != nil else {
             throw MochletError.message("The action's account, permission or project binding changed. Prepare a fresh preview.")
         }

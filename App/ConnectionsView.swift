@@ -5,7 +5,7 @@ import SlimeCore
     let store: Store
     let tokens: TokenConnections
     var accounts: [ConnectedAccount] = []
-    var accountID = "" { didSet { if oldValue != accountID { source = nil; collection = ""; objectID = "" } } }
+    var accountID = "" { didSet { if oldValue != accountID { source = nil; collection = ""; objectID = ""; replyPreview = nil; replyBody = "" } } }
     var account: ConnectedAccount? { accounts.first { $0.id == accountID } }
     var service: TeamService = .slack
     var token = ""
@@ -13,12 +13,15 @@ import SlimeCore
     var objectID = ""
     var instruction = ""
     var source: ConnectedSource?
+    var replyBody = ""
+    var replyPreview: DeliveryDraft?
+    var deliveries: [DeliveryRecord] = []
     var busy = false
     var message: String?
     private var operation: Task<Void, Never>?
     init(store: Store) { self.store = store; tokens = TokenConnections(store: store) }
     func load() async {
-        do { accounts = try await store.connections().filter { TeamService(rawValue: $0.provider) != nil }; if !accounts.contains(where: { $0.id == accountID }) { accountID = accounts.first?.id ?? "" } }
+        do { accounts = try await store.connections().filter { TeamService(rawValue: $0.provider) != nil }; if !accounts.contains(where: { $0.id == accountID }) { accountID = accounts.first?.id ?? "" }; deliveries = try await store.deliveries(accountID: accountID) }
         catch { message = error.localizedDescription }
     }
     func run(_ action: @escaping @MainActor () async throws -> Void) {
@@ -46,7 +49,7 @@ import SlimeCore
     func fetch(account: ConnectedAccount, collection: String, id: String) async throws -> ConnectedSource {
         let source = try await tokens.reader(account).read(account: account, collection: collection, objectID: id)
         try Task.checkCancellation(); try await store.saveSources([source], account: account)
-        self.source = source; return source
+        self.source = source; self.replyPreview = nil; return source
     }
     func read() {
         guard let account else { return }; let collection = collection.trimmingCharacters(in: .whitespacesAndNewlines), id = objectID.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -111,6 +114,8 @@ struct ConnectionsView: View {
                             DisclosureGroup("Projects this connection can supply context to") {
                                 ForEach(model.projects) { project in Toggle(project.name, isOn: Binding(get: { account.projectIDs.contains(project.id) }, set: { connections.bind(project.id, enabled: $0) })) }
                             }
+                            Toggle("Allow reviewed replies from Mochlet", isOn: Binding(get: { account.scopes.contains(account.provider + ".reply.write") }, set: { connections.allowReplies($0) }))
+                            Text("This local setting does not grant service permissions. The token also needs Slack chat:write, Lark/Feishu message-send-as-user permission, or Linear comment write access.").font(.caption).foregroundStyle(.secondary)
                             Divider()
                             if account.provider == "slack" {
                                 TextField("Channel ID (C…, G… or D…)", text: $connections.collection)
@@ -134,11 +139,13 @@ struct ConnectionsView: View {
                                     Button("Prepare task draft") { connections.prepare(model: model, openTask: openTask) }
                                     Button("Save project memory copy") { connections.remember(model: model) }
                                 }.disabled(!account.projectIDs.contains(model.selectedProjectID))
+                                TeamReplyView(model: model)
                                 Text("Refreshing never starts work or sends a message. Task drafts use \(model.defaultProvider.title) for new tasks and preserve the original agent on existing tasks.").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }.disabled(connections.busy)
                 }
+                TeamDeliveryHistory(controller: connections)
                 if let message = connections.message { Text(message).font(.callout).textSelection(.enabled) }
             }.padding(28).frame(maxWidth: 1000, alignment: .leading)
         }
@@ -146,7 +153,7 @@ struct ConnectionsView: View {
     private func setup(_ service: TeamService) -> String {
         switch service {
         case .slack: "Use a Slack app user OAuth token with history access to the conversation. Public/private channels, direct messages and Slack Connect have different membership and app-policy limits. Files and linked content are not fetched."
-        case .linear: "Create a read-only personal API key in Linear Security & access for the intended workspace and teams. Mochlet verifies the viewer and organization before reading an issue."
+        case .linear: "Create a personal API key with read access (and comment write access only if you enable reviewed replies) in Linear Security & access for the intended workspace and teams. Mochlet verifies the viewer and organization before reading an issue."
         case .lark, .feishu: "Use a current user_access_token for your app with message-read permission. Choose the matching Lark or Feishu region. Tenant/app tokens are not accepted by this user-identity flow. Restricted or invisible messages remain inaccessible."
         }
     }

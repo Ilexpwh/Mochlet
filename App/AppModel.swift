@@ -7,6 +7,7 @@ import SlimeCore
     let speech = SpeechController()
     let knowledge: KnowledgeController
     let meetings: MeetingController
+    let github: GitHubController
     var includeKnowledge = false
     var includePersonalKnowledge = false
     let store: Store
@@ -30,6 +31,8 @@ import SlimeCore
     var usage: JSONValue = .null
     var usageDate: Date?
     var activity = ""
+    var taskWorkspaces: [String: TaskWorkspace] = [:]
+    var reviewText: String?
     var items: [String:JSONValue] = [:]
     var readOnly = false
     var codexPath: String = UserDefaults.standard.string(forKey:"codexPath") ?? "/opt/homebrew/bin/codex" {
@@ -77,6 +80,7 @@ import SlimeCore
         self.store = store; self.folder = folder
         self.knowledge = KnowledgeController(folder: folder)
         self.meetings = MeetingController(folder: folder, speech: speech)
+        self.github = GitHubController(store: store)
         slimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
         palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
     }
@@ -93,7 +97,19 @@ import SlimeCore
             selectedProjectID = projects.first?.id ?? ""
         } catch { report(error) }
     }
-    func refresh() async throws { projects = try await store.projects(); tasks = try await store.tasks() }
+    func refresh() async throws {
+        projects = try await store.projects(); tasks = try await store.tasks()
+        var workspaces: [String: TaskWorkspace] = [:]
+        for task in tasks { if let workspace = try await store.workspace(taskID: task.id) { workspaces[task.id] = workspace } }
+        taskWorkspaces = workspaces
+    }
+    func reviewWorkspace(_ task: WorkTask) {
+        guard let workspace = taskWorkspaces[task.id], let project = projects.first(where: { $0.id == task.projectID }) else { return }
+        Task {
+            do { reviewText = try await TaskWorkspaces.review(workspace, project: project) }
+            catch { report(error) }
+        }
+    }
     func report(_ error: Error) { errorMessage = error.localizedDescription }
     func addProject() {
         let panel = NSOpenPanel(); panel.canChooseFiles = false; panel.canChooseDirectories = true
@@ -139,13 +155,24 @@ import SlimeCore
     func runNext() async {
         guard !isBusy,!queue.isEmpty else{return}
         let (queued,prompt,readOnly)=queue.removeFirst()
-        guard let project=projects.first(where:{$0.id == queued.projectID}) else{return}
+        guard var project=projects.first(where:{$0.id == queued.projectID}) else{return}
         isBusy=true;activeTaskID=queued.id
         var task=queued;task.state = .running
         if !task.output.isEmpty {task.output += "\n\n— Follow-up —\n\(prompt)\n\n"}
         let run=Run(taskID:task.id,prompt:prompt);activeRunID=run.id
         do {
             try await store.begin(task,run:run);try await refresh()
+            if let binding = try await store.githubTaskBinding(taskID: task.id) {
+                guard binding.projectID == project.id else { throw MochletError.message("Issue task project does not match its repository binding.") }
+                try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
+                try await GitHubClient(executable: github.ghPath).verify(binding)
+            }
+            if let workspace = try await store.workspace(taskID: task.id) {
+                try await TaskWorkspaces.validate(workspace, project: project)
+                project.root = workspace.root
+            } else if try await store.githubTaskBinding(taskID: task.id) != nil {
+                throw MochletError.message("This issue's workspace is not ready. Prepare it again from GitHub.")
+            }
             if runtime == nil {
                 let r=CodexRuntime();runtime=r
                 runtimeEvents=Task { [weak self] in

@@ -15,7 +15,7 @@ public struct Project: Codable, Identifiable, Sendable, FetchableRecord, Persist
 }
 
 public enum WorkState: String, Codable, Sendable, CaseIterable {
-    case queued, running, waiting, review, completed, interrupted, failed, cancelled
+    case draft, queued, running, waiting, review, completed, interrupted, failed, cancelled
 }
 
 public struct WorkTask: Codable, Identifiable, Sendable, FetchableRecord, PersistableRecord, Equatable {

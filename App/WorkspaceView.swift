@@ -14,6 +14,7 @@ struct WorkspaceView: View {
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Meetings",systemImage:"waveform").tag("Meetings")
                     Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
+                    Label("GitHub",systemImage:"point.3.connected.trianglepath.dotted").tag("GitHub")
                     Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
                     Label("Speech & Models",systemImage:"waveform").tag("Speech")
@@ -28,6 +29,7 @@ struct WorkspaceView: View {
                 case "History": history
                 case "Meetings": MeetingsView(model: model)
                 case "Files": FilesView(model: model)
+                case "GitHub": GitHubView(model: model)
                 case "Knowledge": KnowledgeView(model: model)
                 case "Appearance": appearance
                 case "Speech": SpeechSettingsView(speech: model.speech)
@@ -109,7 +111,14 @@ struct CompanionView: View {
             if !compact, let pending=model.pendingInputs.first { AttentionView(input:pending,model:model).id(pending.id) }
             if model.isBusy { HStack {ProgressView().controlSize(.small);Text(model.activity).font(.caption);Spacer();Button("Stop",action:model.cancelRun)} }
             if let task = model.selectedTask {
-                HStack { Text(task.state.rawValue.capitalized).font(.caption.weight(.semibold));Spacer();Button("New conversation") { model.selectedTaskID=nil } }
+              HStack { Text(task.state.rawValue.capitalized).font(.caption.weight(.semibold));Spacer();Button("New conversation") { model.selectedTaskID=nil } }
+              if let workspace = model.taskWorkspaces[task.id] {
+                  HStack {
+                      Label("Isolated task workspace", systemImage: "arrow.triangle.branch").font(.caption).help(workspace.root)
+                      Spacer(); Button("Review changes") { model.reviewWorkspace(task) }.disabled(model.isBusy)
+                      Button("Show folder") { NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: workspace.root) }
+                  }.font(.caption)
+              }
                 ScrollView { Text(task.output.isEmpty ? task.title : task.output).frame(maxWidth:.infinity,alignment:.leading).textSelection(.enabled).padding(8) }.background(.quaternary.opacity(0.4),in:RoundedRectangle(cornerRadius:12))
             } else {
                 Spacer(minLength:0)
@@ -136,6 +145,12 @@ struct CompanionView: View {
             if let message = model.speech.message { Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
             if compact, let error=model.errorMessage { Text(error).font(.caption).foregroundStyle(.red).lineLimit(3) }
         }.padding(compact ? 16:30).frame(minWidth:compact ? 360:420)
-        .onAppear { composerFocused = !compact }
+          .onAppear { composerFocused = !compact }
+          .sheet(isPresented: Binding(get: { model.reviewText != nil }, set: { if !$0 { model.reviewText = nil } })) {
+              VStack(alignment: .leading) {
+                  HStack { Text("Task changes").font(.title2.bold()); Spacer(); Button("Done") { model.reviewText = nil } }
+                  ScrollView([.horizontal, .vertical]) { Text(model.reviewText ?? "").font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+              }.padding(24).frame(minWidth: 700, minHeight: 480)
+          }
     }
 }

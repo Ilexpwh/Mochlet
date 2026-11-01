@@ -55,6 +55,7 @@ struct GoogleView: View {
                 Link("Manage access in Google Account", destination: URL(string: "https://myaccount.google.com/connections")!).font(.caption)
             }
         }.disabled(google.busy)
+        .task(id: google.accountID) { await google.loadSavedCalendars() }
     }
     @ViewBuilder private func sourceSection(_ google: GoogleController) -> some View {
         @Bindable var google = google
@@ -76,24 +77,48 @@ struct GoogleView: View {
                 DatePicker("Seven-day agenda from", selection: $google.agendaStart, displayedComponents: [.date])
                 Button("Check selected calendar availability", action: google.checkAvailability).disabled(google.calendarID.isEmpty)
                 if let availability = google.availability { Text(availability).font(.caption).textSelection(.enabled) }
+                DisclosureGroup("Saved calendar records") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Sync reads this calendar’s event history and recurring series into local storage (up to 5,000 records). Later syncs apply changes and deletions. It runs only when you click Sync; it never starts tasks or changes events.").font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Button("Sync calendar records", action: google.syncCalendar)
+                            Button("Load saved records", action: google.loadCalendarSnapshot)
+                        }.disabled(google.calendarID.isEmpty)
+                    }.padding(.top, 8)
+                }
             }
             Button(google.service == "calendar" ? "Refresh agenda" : "Search", action: google.search).buttonStyle(.borderedProminent)
+            if let summary = google.calendarSyncSummary { Text(summary).font(.callout).foregroundStyle(.secondary) }
+            if google.calendarRecordsMode { TextField("Filter saved calendar records", text: $google.calendarRecordQuery) }
             if google.sources.isEmpty { Text("Results appear here after retrieval.").foregroundStyle(.secondary).padding(.vertical) }
-            ForEach(google.sources) { source in
+            ForEach(google.visibleSources) { source in
                 Button { google.selected = source; google.answer = nil } label: {
                     HStack { Image(systemName: google.selected?.id == source.id ? "checkmark.circle.fill" : "doc.text"); Text(source.title).lineLimit(2); Spacer() }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
                 }.buttonStyle(.bordered)
+            }
+            if google.filteredSources.count > google.displayLimit {
+                Button("Show more (\(google.displayLimit) of \(google.filteredSources.count))") { google.displayLimit += 100 }
             }
             if let source = google.selected {
                 Divider()
                 Text(source.title).font(.title2.bold()).textSelection(.enabled)
                 Text("Retrieved \(source.fetchedAt.formatted()) • revision \(source.revision.isEmpty ? "unavailable" : source.revision)").font(.caption).foregroundStyle(.secondary)
                 ForEach(source.warnings, id: \.self) { Text($0).font(.callout).foregroundStyle(.orange) }
+                if google.calendarRecordsMode {
+                    let cancelled = google.calendarCancellations.filter { $0.seriesID == source.remoteID }
+                    if !cancelled.isEmpty {
+                        Text("Saved cancelled occurrences: \(cancelled.count)").font(.headline)
+                        ForEach(Array(cancelled.prefix(20).enumerated()), id: \.offset) { _, occurrence in
+                            Text(CalendarEventCard.dateLabel(occurrence.originalStartTime)).font(.caption).textSelection(.enabled)
+                        }
+                    }
+                }
                 HStack {
                     Button("Read current content", action: google.read)
                     if let url = URL(string: source.url), url.scheme == "https" { Link("Open source", destination: url) }
                 }
-                Text(source.body).font(.body).textSelection(.enabled).lineLimit(40)
+                if source.service == "calendar" { CalendarEventCard(source: source) }
+                else { Text(source.body).font(.body).textSelection(.enabled).lineLimit(40) }
                 Text("Summary sends the selected text to your configured OpenRouter analysis model: \(model.speech.analysisModel.isEmpty ? "none selected" : model.speech.analysisModel). Exports may omit content, as shown above.").font(.caption).foregroundStyle(.secondary)
                 Button("Summarize selected source") { google.summarize(speech: model.speech) }.disabled(model.speech.analysisModel.isEmpty)
                 if let answer = google.answer {
@@ -111,5 +136,32 @@ struct GoogleView: View {
                 Text("The draft uses \(model.defaultProvider.title) for new tasks; existing tasks keep their original agent. It runs only after you review and Send. Memory copies remain until explicitly forgotten.").font(.caption).foregroundStyle(.secondary)
             }
         }.disabled(google.busy)
+    }
+}
+
+private struct CalendarEventCard: View {
+    let source: ConnectedSource
+    static func dateLabel(_ value: JSONValue) -> String {
+        if let date = value["date"].string { return date + " · all day" }
+        if let date = value["dateTime"].string {
+            return date.replacingOccurrences(of: "T", with: " ") + (value["timeZone"].string.map { " · " + $0 } ?? "")
+        }
+        return "Not supplied"
+    }
+    var body: some View {
+        if let event = try? JSONDecoder().decode(JSONValue.self, from: Data(source.body.utf8)) {
+            VStack(alignment: .leading, spacing: 12) {
+                LabeledContent("Starts", value: Self.dateLabel(event["start"]))
+                    .accessibilityElement(children: .ignore).accessibilityLabel("Starts: " + Self.dateLabel(event["start"]))
+                LabeledContent(event["end"]["date"].string == nil ? "Ends" : "Ends before", value: Self.dateLabel(event["end"]))
+                    .accessibilityElement(children: .ignore).accessibilityLabel((event["end"]["date"].string == nil ? "Ends: " : "Ends before: ") + Self.dateLabel(event["end"]))
+                if let location = event["location"].string, !location.isEmpty { LabeledContent("Location", value: location) }
+                if let status = event["status"].string { LabeledContent("Status", value: status.capitalized) }
+                if !event["recurrence"].array.isEmpty { Label("Recurring event", systemImage: "repeat").foregroundStyle(.secondary) }
+                if let description = event["description"].string, !description.isEmpty { Text(description).lineLimit(40) }
+                DisclosureGroup("Source details") { Text(source.body).font(.caption.monospaced()).textSelection(.enabled).padding(.top, 8) }
+                    .accessibilityLabel("Source details")
+            }.padding(16).background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 14)).accessibilityElement(children: .contain)
+        } else { Text(source.body).textSelection(.enabled).lineLimit(40) }
     }
 }

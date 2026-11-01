@@ -10,9 +10,19 @@ import SlimeCore
     var sources: [ConnectedSource] = []
     var selected: ConnectedSource?
     var calendars: [JSONValue] = []
-    var calendarID = "" { didSet { availability = nil } }
+    var calendarID = "" { didSet { availability = nil; if oldValue != calendarID { clearCalendarResults() } } }
     var availability: String?
-    var service = "gmail" { didSet { sources = []; selected = nil; answer = nil } }
+    var service = "gmail" { didSet { sources = []; selected = nil; answer = nil; calendarRecordsMode = false; calendarSyncSummary = nil } }
+    var calendarRecordsMode = false
+    var calendarSyncSummary: String?
+    var calendarCancellations: [GoogleCalendarCancellation] = []
+    var calendarRecordQuery = "" { didSet { displayLimit = 100 } }
+    var displayLimit = 100
+    var filteredSources: [ConnectedSource] {
+        guard calendarRecordsMode, !calendarRecordQuery.isEmpty else { return sources }
+        return sources.filter { $0.title.localizedCaseInsensitiveContains(calendarRecordQuery) || $0.body.localizedCaseInsensitiveContains(calendarRecordQuery) }
+    }
+    var visibleSources: [ConnectedSource] { Array(filteredSources.prefix(displayLimit)) }
     var query = "newer_than:7d"
     var driveQuery = ""
     var agendaStart = Date() { didSet { availability = nil } }
@@ -36,6 +46,16 @@ import SlimeCore
         do {
             accounts = try await store.connections().filter { $0.provider == "google" }
             if !accounts.contains(where: { $0.id == accountID }) { accountID = accounts.first?.id ?? "" }
+            await loadSavedCalendars()
+        } catch { message = error.localizedDescription }
+    }
+    func loadSavedCalendars() async {
+        guard calendars.isEmpty, let account else { return }
+        do {
+            let saved = try await store.savedCalendarIDs(account: account)
+            guard self.accountID == account.id, calendars.isEmpty else { return }
+            calendars = saved.map { .object(["id": .string($0), "summary": .string($0 + " (saved)")]) }
+            if calendarID.isEmpty { calendarID = saved.first ?? "" }
         } catch { message = error.localizedDescription }
     }
     func run(_ action: @escaping @MainActor () async throws -> Void) {
@@ -94,8 +114,42 @@ import SlimeCore
                 result = try await self.reader(account, scope: GoogleScope.calendar).agenda(calendarID: calendarID, from: start, to: end)
             }
             try Task.checkCancellation(); try await self.store.saveSources(result, account: account)
-            self.sources = result; self.selected = nil; self.answer = nil
+            self.sources = result; self.selected = nil; self.answer = nil; self.displayLimit = 100
+            self.calendarRecordsMode = false; self.calendarSyncSummary = nil
             self.message = "\(result.count) items retrieved from \(account.label)."
+        }
+    }
+    private func clearCalendarResults() {
+        sources = []; selected = nil; answer = nil; calendarSyncSummary = nil; calendarRecordsMode = false
+        calendarRecordQuery = ""; displayLimit = 100; calendarCancellations = []
+    }
+    private func showCalendarSnapshot(_ snapshot: GoogleCalendarSnapshot, account: ConnectedAccount) {
+        sources = snapshot.records; selected = nil; answer = nil; calendarRecordsMode = true; displayLimit = 100
+        calendarRecordQuery = ""
+        calendarCancellations = snapshot.cancelledOccurrences
+        calendarSyncSummary = "Saved records: \(snapshot.records.count) active · cancelled occurrences: \(snapshot.cancelledOccurrences.count) · \(account.label) • synchronized \(snapshot.syncedAt.formatted()). Recurring series are not expanded. Use Refresh agenda for occurrences or Check availability for busy time."
+    }
+    func syncCalendar() {
+        guard let account, !calendarID.isEmpty else { return }
+        let calendar = calendarID
+        run {
+            self.clearCalendarResults()
+            let snapshot = try await self.reader(account, scope: GoogleScope.calendar).syncCalendar(calendarID: calendar, store: self.store)
+            try Task.checkCancellation()
+            self.showCalendarSnapshot(snapshot, account: account)
+            self.message = "Calendar synchronized. Deleted records were removed from its cache. No events were changed in Google."
+        }
+    }
+    func loadCalendarSnapshot() {
+        guard let account, !calendarID.isEmpty else { return }
+        let calendar = calendarID
+        run {
+            self.clearCalendarResults()
+            guard let snapshot = try await self.store.calendarSnapshot(account: account, calendarID: calendar), snapshot.accountGeneration == account.generation else {
+                throw MochletError.message("No saved records for this calendar and current account permissions. Synchronize first.")
+            }
+            self.showCalendarSnapshot(snapshot, account: account)
+            self.message = "Loaded saved records. These may be out of date; current content is checked before task or memory capture."
         }
     }
     func checkAvailability() {

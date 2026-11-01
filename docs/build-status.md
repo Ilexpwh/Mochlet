@@ -212,3 +212,11 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - The walkthrough caught and fixed SwiftUI preview state capture, folder-picker focus and `/private/var` versus `/var` attachment invalidation. AI provider quality/live inference, whole-directory relocation and cross-volume copying remain unverified or unsupported; [behavior and bounds](file-organization.md).
 
 The final native accessibility pass exposes each file’s Preview, Show and Detach controls separately. Opened the fictional meeting preview and detached its attachment through those controls; the original fixture remained on disk. Debug rebuild passed after the accessibility layout change.
+
+### 2026-11-01 — Durable selected-calendar synchronization
+
+Added per-account/calendar sync snapshots with complete-page transactions, optimistic version/account-generation checks, constant delta query parameters, bounded full rebuilds after HTTP 410, deletion handling and separately retained cancelled recurrence exceptions. Saved calendars are discoverable after restart without a network request. The native Google workspace now supports sync, offline load, filtering, pagination and readable calendar details; live agenda/free-busy remain separate actions.
+
+Verification: the full check reported 98 tests (95 fixture declarations plus three opt-in live skips), Debug build and native runtime/source/Pi fixtures passed. Five focused calendar tests also pass after extending parent-deletion coverage to retain both an active child and a cancelled exception before deletion. The native app loaded a disposable fictional snapshot after relaunch, showed its cancelled occurrence and readable start/end dates. This is fixture/native evidence, not a live Google OAuth or API test. [Contract](google-calendar-sync.md).
+
+The final native accessibility tree exposes separate Starts, Ends before and Source details labels. [Native calendar evidence](evidence/native-calendar-sync.png) captures the saved snapshot, cancelled occurrence and readable event card.

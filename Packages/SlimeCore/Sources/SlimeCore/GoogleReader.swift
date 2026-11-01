@@ -85,11 +85,7 @@ public struct GoogleReader: Sendable {
         return try rows.filter { $0["status"].string != "cancelled" }.compactMap { row in
             guard let id = row["id"].string else { throw MochletError.message("Calendar event identity is missing.") }
             guard ids.insert(id).inserted else { return nil }
-            let fields = ["summary", "description", "location", "start", "end", "recurringEventId", "originalStartTime", "status", "transparency"]
-            let body = JSONValue.object(Dictionary(uniqueKeysWithValues: fields.map { ($0, row[$0]) })).formatted
-            var source = ConnectedSource(accountID: account.id, service: "calendar", collection: calendarID, remoteID: id, title: row["summary"].string ?? "Busy or private event", body: body, url: row["htmlLink"].string ?? "https://calendar.google.com/", revision: row["etag"].string ?? "")
-            if row["start"]["date"].string != nil { source.warnings.append("All-day event. The end date is exclusive in the calendar's timezone.") }
-            return source
+            return try calendarSource(row, calendarID: calendarID)
         }
     }
     public func freeBusy(calendarID: String, from: Date, to: Date) async throws -> JSONValue {
@@ -157,11 +153,18 @@ public struct GoogleReader: Sendable {
         try await verify(scope: GoogleScope.calendar)
         let row = try await get("www.googleapis.com", ["calendar", "v3", "calendars", calendarID, "events", id])
         guard row["id"].string == id, row["status"].string != "cancelled" else { throw MochletError.message("This event is no longer available.") }
-        let fields = ["summary", "description", "location", "start", "end", "recurringEventId", "originalStartTime", "status", "transparency"]
-        return ConnectedSource(accountID: account.id, service: "calendar", collection: calendarID, remoteID: id,
+        return try calendarSource(row, calendarID: calendarID)
+    }
+    func calendarSource(_ row: JSONValue, calendarID: String) throws -> ConnectedSource {
+        guard let id = row["id"].string, !id.isEmpty else { throw MochletError.message("Calendar event identity is missing.") }
+        let fields = ["summary", "description", "location", "start", "end", "recurrence", "recurringEventId", "originalStartTime", "status", "transparency"]
+        var source = ConnectedSource(accountID: account.id, service: "calendar", collection: calendarID, remoteID: id,
             title: row["summary"].string ?? "Busy or private event",
             body: JSONValue.object(Dictionary(uniqueKeysWithValues: fields.map { ($0, row[$0]) })).formatted,
             url: row["htmlLink"].string ?? "https://calendar.google.com/", revision: row["etag"].string ?? "")
+        if row["start"]["date"].string != nil { source.warnings.append("All-day event. The end date is exclusive in the calendar's timezone.") }
+        if !row["recurrence"].array.isEmpty { source.warnings.append("Recurring series definition. Exceptions and cancelled occurrences require an agenda lookup; this record is not an availability calculation.") }
+        return source
     }
 
 }

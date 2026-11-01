@@ -41,7 +41,7 @@ The user requested close Coucou UI/UX and motion parity and authorized reuse of 
 
 ## Stage G provider progress — 2026-11-01
 
-Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. Google account/source readers and native task/memory capture are now implemented with fixture and setup evidence; live Google and outbound/sync gates remain open. Slack/Lark/Feishu/Linear now support verified token connections and selected source capture; live access, automatic renewal and outbound writes remain open. Stored Codex history browsing and explicit exact-session import are implemented; external-client liveness and control remain open. See [session contract](../docs/codex-sessions.md). Existing unchecked release criteria are retained.
+Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. Google account/source readers and native task/memory capture are now implemented with fixture and setup evidence; live Google validation and broader synchronization gates remain open. Slack/Lark/Feishu/Linear now support verified token connections and selected source capture; reviewed replies have durable delivery records; live access, automatic renewal and richer write-back remain open. Stored Codex history browsing and explicit exact-session import are implemented; external-client liveness and control remain open. See [session contract](../docs/codex-sessions.md). Existing unchecked release criteria are retained.
 
 ### GitHub publication evidence
 
@@ -50,3 +50,7 @@ G06 now has committed-workspace review, explicit push/draft-PR publication, immu
 Calendar incremental synchronization now has transactional per-account/calendar cursors, bounded rebuilds, cancellation-exception retention and offline native browsing. [Contract and evidence](../docs/google-calendar-sync.md). U07 remains open for Gmail history synchronization and live revocation/recovery evidence.
 
 Gmail history synchronization now refreshes an explicit tracked set with complete-page transactions, bounded rebuilds and offline native browsing. [Contract and evidence](../docs/gmail-sync.md). U07 remains open for live account/revocation checks, backoff and broader sleep/network validation. No unchecked acceptance criteria have been removed.
+
+### File and task completion evidence
+
+New task attempts retain separate assistant replies with active-run checkpoints, bounded Unicode-safe storage and explicit legacy unavailability. [Task contract](../docs/task-board.md). Files summaries now offer explicit image previews with fresh modality checks, bounded revision-pinned preparation, metadata removal and source-ID citations. [Image contract](../docs/image-analysis.md). Live model quality, manual board ordering and multiple companion profiles remain open; no release gate is inferred from fixture success.

@@ -19,6 +19,8 @@ Voice and meetings require your own API configuration and further live validatio
 
 ## Implementation
 
+The [HTML system map](docs/system-map.html) explains the implemented functions, architecture and remaining release gates, with an actual native screenshot.
+
 The approved [technical specification](docs/technical-spec.md), [visual design system](docs/design-system.html) and [implementation sequence](tasks/implementation-plan.md) guide the build. [Build status](docs/build-status.md) distinguishes implemented behavior from pending live and release checks.
 
 ## Run locally

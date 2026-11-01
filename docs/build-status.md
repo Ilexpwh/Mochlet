@@ -258,3 +258,17 @@ Added selected-issue discussion reader/cache and comment-pinned coding context. 
 ## 2026-11-02 — Projects V2 board workflow
 
 Implemented explicit board URL binding, nested GraphQL paging, typed issue/PR/draft/redacted cards, archived state, complete-snapshot cache and stale status-mapping detection. Eligible issue preparation checks exact REST/GraphQL identity and persists board provenance for dispatch revalidation. Three core regressions plus full native host checks pass: 122 reported tests, three opt-in live skips; `/tmp/mochlet-boardv2-final-check.log`. Read-only review found no Required findings. Schema introspection passed, but actual query validation is limited by missing `read:project` on existing CLI auth. Native interactive board checks remain pending. [Details](github-projects.md).
+
+## 2026-11-02 — Native walkthrough and refreshed package
+
+Isolated native Debug QA (same runtime code as 7b0d9e8, separate bundle ID and temporary data folder) passed: profile create/edit/archive/restore, agent change for new drafts while preserving earlier task snapshots, native folder registration, manual board arrow reordering and quit/relaunch persistence. Left/right placement controls and inward-expanded side panels rendered correctly. Physical drag still fails in the automation backend with noWindowsAvailable, so U08 remains open. No audio, model inference or connected-account data was used for this walkthrough.
+
+Fresh Release archive: `dist/Mochlet-0.1.0-arm64-76dAKy/Mochlet.zip`, clean source revision `7b0d9e8`, arm64, minimum build target15, ad-hoc signed. ZIP integrity and SHA-256 verified. The adjacent manifest records exact provenance; native QA screenshots are beside the ZIP. This does not establish macOS15 runtime compatibility, notarization, live audio quality or the two-hour mixed-workload gate.
+
+## 2026-11-02 — Bounded Google read recovery and HTML system map
+
+Google GET retrieval now retries transient rate/service errors and connection loss/timeouts with bounded exponential jitter and server wait handling. Each request has at most three retries and 15 seconds of scheduled waiting; cancellation prevents further attempts. Outbound writes and other connectors remain single-attempt. Complete-page sync commits and source/account guards remain effective. [Recovery contract](google-read-recovery.md).
+
+`scripts/check.sh` passes: 127 reported tests, three opt-in live skips, Debug build and native runtime/source/profile/Pi fixtures; `/tmp/mochlet-readretry-full-check.log`. Five new tests cover retry/cancellation boundaries and calendar cursor atomicity. An existing calendar fixture's fixed request-count assumption was updated to represent an explicit longer outage; no sync acceptance assertion was removed. Read-only review found no Required/Critical implementation issues. Live Google validation remains pending.
+
+The [HTML system map](system-map.html) now documents functions, architecture, native evidence and remaining gates with an embedded native screenshot. Static inspection verifies its image MIME/signature, accessible labels and local links. Browser rendering was unavailable because the browser tool disallows local file URLs; no browser walkthrough is claimed.

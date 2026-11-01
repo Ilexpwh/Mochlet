@@ -32,3 +32,7 @@ Select a project and enable Manual order. Drag a card onto another card in the s
 Ordering is presentation only. It does not modify task states, priorities, dependencies, agent sessions or the execution queue. Each write compares a complete project-order snapshot and checks current project/column membership. Concurrent edits or moved cards fail visibly rather than silently overwriting another arrangement. Reloads ignore obsolete project requests.
 
 Two new core tests cover persistence/reopening, queue isolation, stale snapshots, new membership, moved projects and cross-column rejection. Full checks pass 114 reported tests (111 fixture declarations and three opt-in live skips), native Debug build and runtime fixtures; the final native reload-guard rebuild passes. Read-only review found no Required findings. A native walkthrough launched the isolated build but screen-capture/control availability interrupted the UI path; physical card dragging and the arrow-control walkthrough remain unverified.
+
+### Native manual-order evidence — 2026-11-02
+
+An isolated Debug QA copy created two draft tasks through native controls, enabled Manual order, moved the second draft above the first with its accessible arrow control, opened task details and quit/relaunched. The order persisted and both tasks remained drafts; no agent was started. Screenshot evidence is saved beside the 7b0d9e8 local Release ZIP. Drag-and-drop ordering itself remains unverified.

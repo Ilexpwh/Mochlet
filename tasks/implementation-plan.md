@@ -49,11 +49,11 @@ G06 now has committed-workspace review, explicit push/draft-PR publication, immu
 
 Calendar incremental synchronization now has transactional per-account/calendar cursors, bounded rebuilds, cancellation-exception retention and offline native browsing. [Contract and evidence](../docs/google-calendar-sync.md). U07 remains open for Gmail history synchronization and live revocation/recovery evidence.
 
-Gmail history synchronization now refreshes an explicit tracked set with complete-page transactions, bounded rebuilds and offline native browsing. [Contract and evidence](../docs/gmail-sync.md). U07 remains open for live account/revocation checks, backoff and broader sleep/network validation. No unchecked acceptance criteria have been removed.
+Gmail history synchronization now refreshes an explicit tracked set with complete-page transactions, bounded rebuilds and offline native browsing. [Contract and evidence](../docs/gmail-sync.md). Bounded Google GET backoff is implemented; U07 remains open for live account/revocation checks and broader sleep/network validation. No unchecked acceptance criteria have been removed.
 
 ### File and task completion evidence
 
-New task attempts retain separate assistant replies with active-run checkpoints, bounded Unicode-safe storage and explicit legacy unavailability. [Task contract](../docs/task-board.md). Files summaries now offer explicit image previews with fresh modality checks, bounded revision-pinned preparation, metadata removal and source-ID citations. [Image contract](../docs/image-analysis.md). Live model quality remains open; no release gate is inferred from fixture success. Manual board ordering and saved companion profiles are now implemented with core/native-host fixture evidence; their interactive UI walkthroughs remain pending. See [profiles](../docs/companion-profiles.md).
+New task attempts retain separate assistant replies with active-run checkpoints, bounded Unicode-safe storage and explicit legacy unavailability. [Task contract](../docs/task-board.md). Files summaries now offer explicit image previews with fresh modality checks, bounded revision-pinned preparation, metadata removal and source-ID citations. [Image contract](../docs/image-analysis.md). Live model quality remains open; no release gate is inferred from fixture success. Manual board ordering and saved companion profiles are now implemented with core/native-host fixture evidence; native profile editing and manual arrow ordering/relaunch walkthroughs now pass. Physical dragging and full accessibility validation remain pending. See [profiles](../docs/companion-profiles.md).
 
 ### Projects and discussion progress — 2026-11-02
 

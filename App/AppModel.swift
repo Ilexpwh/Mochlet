@@ -50,6 +50,15 @@ import SlimeCore
         if selectedTask?.state == .interrupted { return .disconnected }
         return .idle
     }
+    var dockEdge = DockEdge(rawValue: UserDefaults.standard.string(forKey: "dockEdge") ?? "top") ?? .top {
+        didSet { UserDefaults.standard.set(dockEdge.rawValue, forKey: "dockEdge") }
+    }
+    var dockFraction = UserDefaults.standard.object(forKey: "dockFraction") as? Double ?? 0.5 {
+        didSet { UserDefaults.standard.set(dockFraction, forKey: "dockFraction") }
+    }
+    var dockDisplayID = UserDefaults.standard.integer(forKey: "dockDisplayID") {
+        didSet { UserDefaults.standard.set(dockDisplayID, forKey: "dockDisplayID") }
+    }
     var openOnHover = UserDefaults.standard.bool(forKey: "openOnHover") {
         didSet { UserDefaults.standard.set(openOnHover, forKey: "openOnHover") }
     }

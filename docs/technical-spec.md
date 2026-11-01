@@ -46,4 +46,8 @@ Follow the existing GitHub and Google designs. Metadata sync, source checkout, f
 
 ## Verification
 
+### Edge docking
+
+The compact companion and expanded header are drag handles. A drag suspends hover dismissal and keeps pointer events enabled until release. Release chooses the nearest top/left/right edge on the display under the pointer. Store the display ID, edge and normalized position in app preferences. Clamp the fixed host within the display so expansion remains visible. Side docks use a vertical compact layout and expand inward; character and text remain upright. Appearance offers an equivalent edge picker and centering action. If a saved display disappears, use the built-in display or current main display without overwriting the saved preference. Screen-coordinate geometry must handle negative origins. Multi-display and physical drag walkthroughs remain separate from core geometry tests.
+
 Core fixtures cover routing, durable state, framing, question identity, recovery, retrieval scope and provider failures. Native checks cover focus, screen changes, recording permissions, accessibility and motion. Live CLI/API checks require available credentials and selected non-sensitive fixtures. A runnable development app is not a notarized public release. See implementation-plan.md and build-status.md for measured evidence.

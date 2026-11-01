@@ -19,6 +19,8 @@ Builds use `/Applications/Xcode.app/Contents/Developer` without changing global 
 
 Coucou's island geometry and motion code are adapted under MIT; see [attribution and parity notes](docs/coucou-adaptation.md). No Coucou character or audio assets are bundled.
 
+Drag the compact slime or the expanded island's name/character to dock at the top, left or right screen edge. Side panels expand inward. Mochlet remembers the display and position; Appearance → Screen edge provides the same placement choices without dragging.
+
 ## Start here
 
 1. [Build plan](tasks/plan.md) — scope, architecture choices, milestones, dependencies and risks.

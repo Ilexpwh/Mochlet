@@ -31,6 +31,16 @@ These are test specifications, not passing results. Build deterministic fixtures
 | GH-09 | Remote board option changes during a pending local update | Flag mapping/revision conflict instead of selecting an option by guess |
 | GH-10 | Run succeeds but PR is unmerged and issue stays open | Local review state, no inferred remote completion |
 
+## Edge docking scenarios
+
+| ID | Setup / request | Required result |
+|---|---|---|
+| DOCK-01 | Drag compact slime or expanded header to top, left or right | Follow pointer; snap to nearest supported edge; side panel expands inward |
+| DOCK-02 | Drag or choose edge, then quit and relaunch | Restore display, edge and normalized position |
+| DOCK-03 | Negative-origin display, removed display, changed resolution | Correct coordinate mapping; panel remains reachable on an available display |
+| DOCK-04 | Drag during hover dismissal or while a draft exists | No dismissal during drag, no lost draft, no task submission |
+| DOCK-05 | Use Appearance controls without a pointer drag | Equivalent Top/Left/Right choices and centering action |
+
 ## Google connector scenarios
 
 | ID | Setup / request | Required result |

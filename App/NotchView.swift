@@ -9,6 +9,10 @@ import SlimeCore
     var notchHeight: CGFloat = 32
     var hasNotch = true
     var tab = "Chat"
+    var edge: DockEdge = .top
+    var dragging = false
+    var alignment: Alignment { edge == .top ? .top : edge == .left ? .leading : .trailing }
+    var topInset: CGFloat { edge == .top ? notchHeight : 12 }
     var topRadius: CGFloat = -6
     var cornerRadius: CGFloat = 14
 }
@@ -22,6 +26,12 @@ struct NotchView: View {
     let interact: () -> Void
     let workspace: () -> Void
     let stateChanged: () -> Void
+    let placementChanged: () -> Void
+    let dragChanged: (CGSize) -> Void
+    let dragEnded: () -> Void
+    private var dockingGesture: some Gesture {
+        DragGesture(minimumDistance: 8).onChanged { dragChanged($0.translation) }.onEnded { _ in dragEnded() }
+    }
 
     private var shape: IslandShape {
         IslandShape(width: island.width, height: island.height,
@@ -32,12 +42,13 @@ struct NotchView: View {
             if island.interaction.mode == .expanded {
                 expanded
                     .frame(width: 640, height: 400, alignment: .top)
-                    .padding(.top, island.notchHeight)
+                    .padding(.top, island.topInset)
             } else if island.interaction.mode == .compact {
-                HStack(spacing: 0) {
+                let layout = island.edge == .top ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 4))
+                layout {
                     SlimeView(mood: model.slimeMood, tint: model.tint)
                         .frame(width: 36, height: 36)
-                    Spacer(minLength: island.notchWidth)
+                    if island.edge == .top { Spacer(minLength: island.notchWidth) }
                     if !model.pendingInputs.isEmpty {
                         Text("\(model.pendingInputs.count)").font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.black).frame(width: 20, height: 20).background(model.tint, in: Circle())
@@ -47,7 +58,9 @@ struct NotchView: View {
                             .frame(width: 24)
                     }
                 }
-                .padding(.horizontal, 18).frame(width: island.width, height: island.height)
+                .padding(.horizontal, island.edge == .top ? 18 : 4).frame(width: island.width, height: island.height)
+                .contentShape(Rectangle()).gesture(dockingGesture)
+                .help("Drag to the top, left or right edge")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Open Mochlet, \(model.pendingInputs.count) requests")
                 .accessibilityAddTraits(.isButton)
@@ -55,28 +68,32 @@ struct NotchView: View {
             }
         }
         .frame(width: island.width, height: island.height, alignment: .top)
-        .background(shape.fill(.black.opacity(island.interaction.mode == .hidden && island.hasNotch ? 0 : 1)))
+        .background(shape.fill(.black.opacity(island.interaction.mode == .hidden && island.hasNotch && island.edge == .top ? 0 : 1)))
         .clipShape(shape)
         .contentShape(shape)
         .onHover(perform: hover)
         .onTapGesture { if island.interaction.mode != .expanded { open() } else { interact() } }
         .preferredColorScheme(.dark)
         .tint(model.tint)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: island.alignment)
         .onChange(of: model.pendingInputs.count) { _, count in
             if count > 0 { island.tab = "Attention" }
             stateChanged()
         }
         .onChange(of: model.isBusy) { _, _ in stateChanged() }
         .onChange(of: model.draft.isEmpty) { _, _ in stateChanged() }
+        .onChange(of: model.dockEdge) { _, _ in placementChanged() }
+        .onChange(of: model.dockFraction) { _, _ in placementChanged() }
         .onChange(of: model.hideWhenIdle) { _, _ in stateChanged() }
     }
 
     private var expanded: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                SlimeView(mood: model.slimeMood, tint: model.tint).frame(width: 32, height: 32)
-                Text(model.slimeName).font(.system(size: 13, weight: .semibold))
+                HStack(spacing: 8) {
+                    SlimeView(mood: model.slimeMood, tint: model.tint).frame(width: 32, height: 32)
+                    Text(model.slimeName).font(.system(size: 13, weight: .semibold))
+                }.contentShape(Rectangle()).gesture(dockingGesture).help("Drag to dock Mochlet at a screen edge")
                 Spacer()
                 ForEach(["Chat", "Tasks", "Attention"], id: \.self) { tab in
                     Button { island.tab = tab; interact() } label: {

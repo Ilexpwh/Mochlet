@@ -19,12 +19,14 @@ final class CompanionPanel: NSPanel {
     private var dismissal: Task<Void, Never>?
     private var screen: NSScreen?
     private var pointerMonitor: Any?
+    private var dragStart: (origin: CGPoint, pointer: CGPoint)?
 
     init(model: AppModel) {
         self.model = model
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         panel = CompanionPanel(contentRect: .init(x: 0, y: 0, width: 680, height: 480), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
+        panel.title = "Mochlet Companion"
         statusItem.button?.image = NSImage(systemSymbolName: "eyes", accessibilityDescription: "Open Mochlet")
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
@@ -41,7 +43,10 @@ final class CompanionPanel: NSPanel {
             collapse: { [weak self] in self?.collapse() },
             interact: { [weak self] in self?.interact() },
             workspace: { [weak self] in self?.showWorkspace() },
-            stateChanged: { [weak self] in self?.workChanged() }))
+            stateChanged: { [weak self] in self?.workChanged() },
+            placementChanged: { [weak self] in self?.reposition() },
+            dragChanged: { [weak self] in self?.drag($0) },
+            dragEnded: { [weak self] in self?.endDrag() }))
         // Coucou's fixed transparent host avoids resizing AppKit around an animating
         // SwiftUI tree. Only the island shape changes size; empty space passes clicks.
         let container = NSView(frame: .init(origin: .zero, size: panel.frame.size))
@@ -82,11 +87,11 @@ final class CompanionPanel: NSPanel {
         scheduleDismissal()
     }
 
-    private var heldOpen: Bool { !model.draft.isEmpty || !model.pendingInputs.isEmpty }
+    private var heldOpen: Bool { island.dragging || !model.draft.isEmpty || !model.pendingInputs.isEmpty }
     private var heldVisible: Bool { heldOpen || model.isBusy }
 
     private func hover(_ inside: Bool) {
-        guard island.interaction.hovered != inside else { return }
+        guard !island.dragging, island.interaction.hovered != inside else { return }
         dismissal?.cancel()
         if inside { island.interaction.enter(openOnHover: model.openOnHover) }
         else { island.interaction.leave() }
@@ -129,9 +134,9 @@ final class CompanionPanel: NSPanel {
     // See LICENSES/Coucou-MIT.txt. No frame timer runs while idle.
     private func render(animated: Bool = true) {
         let mode = island.interaction.mode
-        let width: CGFloat = mode == .expanded ? 640 : mode == .compact ? island.notchWidth + 112 : island.notchWidth + 12
-        let height: CGFloat = mode == .expanded ? 400 + island.notchHeight : mode == .compact ? max(38, island.notchHeight + 4) : island.notchHeight
-        guard width != island.width || height != island.height else { return }
+        let side = island.edge != .top
+        let width: CGFloat = mode == .expanded ? 640 : side ? (mode == .compact ? 48 : 8) : mode == .compact ? island.notchWidth + 112 : island.notchWidth + 12
+        let height: CGFloat = mode == .expanded ? 400 + island.topInset : side ? (mode == .compact ? 84 : 56) : mode == .compact ? max(38, island.notchHeight + 4) : island.notchHeight
         let shrinking = width < island.width || height < island.height
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let animation: Animation? = !animated || reduceMotion ? nil : shrinking
@@ -140,21 +145,26 @@ final class CompanionPanel: NSPanel {
         withAnimation(animation) {
             island.width = width; island.height = height
             island.cornerRadius = mode == .expanded ? 24 : 14
-            island.topRadius = mode == .expanded ? 0 : -6
+            island.topRadius = side ? (mode == .expanded ? 24 : 14) : mode == .expanded ? 0 : -6
         }
         panel.ignoresMouseEvents = !islandFrame.contains(NSEvent.mouseLocation)
     }
     private var islandFrame: CGRect {
-        .init(x: panel.frame.midX - island.width / 2, y: panel.frame.maxY - island.height,
-              width: island.width, height: island.height)
+        let x = island.edge == .top ? panel.frame.midX - island.width / 2 : island.edge == .left ? panel.frame.minX : panel.frame.maxX - island.width
+        let y = island.edge == .top ? panel.frame.maxY - island.height : panel.frame.midY - island.height / 2
+        return .init(x: x, y: y, width: island.width, height: island.height)
     }
     private func updateHitRegion() {
+        guard !island.dragging else { panel.ignoresMouseEvents = false; return }
         let inside = islandFrame.contains(NSEvent.mouseLocation)
         panel.ignoresMouseEvents = !inside
         hover(inside)
     }
     @objc func reposition() {
-        screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main ?? NSScreen.screens.first
+        guard !island.dragging else { return }
+        screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue == model.dockDisplayID })
+            ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main ?? NSScreen.screens.first
+        island.edge = model.dockEdge
         guard let screen else { return }
         island.hasNotch = screen.safeAreaInsets.top > 0
         island.notchHeight = island.hasNotch ? screen.safeAreaInsets.top : 26
@@ -162,8 +172,28 @@ final class CompanionPanel: NSPanel {
             island.notchWidth = max(160, screen.frame.width - left.width - right.width)
         } else { island.notchWidth = 170 }
         render(animated: false)
-        panel.setFrameOrigin(.init(x: screen.frame.midX - panel.frame.width / 2,
-                                  y: screen.frame.maxY - panel.frame.height))
+        panel.setFrameOrigin(DockPlacement(edge: model.dockEdge, fraction: model.dockFraction).panelOrigin(in: screen.frame, size: panel.frame.size))
+        updateHitRegion()
+    }
+    private func drag(_ translation: CGSize) {
+        let pointer = NSEvent.mouseLocation
+        if dragStart == nil {
+            dragStart = (panel.frame.origin, .init(x: pointer.x - translation.width, y: pointer.y + translation.height))
+            island.dragging = true; dismissal?.cancel()
+        }
+        guard let start = dragStart else { return }
+        panel.ignoresMouseEvents = false
+        panel.setFrameOrigin(.init(x: start.origin.x + pointer.x - start.pointer.x, y: start.origin.y + pointer.y - start.pointer.y))
+    }
+    private func endDrag() {
+        guard dragStart != nil else { return }
+        dragStart = nil; island.dragging = false
+        let pointer = NSEvent.mouseLocation
+        guard let destination = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? screen else { return }
+        let placement = DockPlacement.nearest(to: pointer, in: destination.frame)
+        model.dockDisplayID = (destination.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 0
+        model.dockEdge = placement.edge; model.dockFraction = placement.fraction
+        reposition(); scheduleDismissal()
     }
     @objc func togglePanel() {
         if NSApp.currentEvent?.type == .rightMouseUp {

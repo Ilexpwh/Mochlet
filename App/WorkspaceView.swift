@@ -59,6 +59,11 @@ struct WorkspaceView: View {
                 Picker("Palette",selection:$model.palette) { ForEach(["Mint","Peach","Sky","Lilac"],id:\.self) { Text($0) } }
             }
             Section("Notch behavior") {
+                Picker("Screen edge", selection: $model.dockEdge) {
+                    ForEach(DockEdge.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                }
+                Button("Center on selected edge") { model.dockFraction = 0.5 }
+                Text("Drag the compact slime or the expanded header to the top, left or right edge. Position is remembered.").font(.caption).foregroundStyle(.secondary)
                 Toggle("Open on hover", isOn: $model.openOnHover)
                 Toggle("Hide when idle", isOn: $model.hideWhenIdle)
                 Text("Hover to peek. Click to open. Escape to fold. Drafts, pending requests and pinned panels stay open.").font(.caption).foregroundStyle(.secondary)

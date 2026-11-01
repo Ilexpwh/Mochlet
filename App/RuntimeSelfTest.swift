@@ -82,10 +82,53 @@ import SlimeCore
             }
             model.shutdown()
         }
+        try await connectedDraftRouting(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
+    }
+    static func connectedDraftRouting(root: URL) async throws {
+        let store = try Store(path: ":memory:")
+        let a = Project(name: "A", root: root.path), b = Project(name: "B", root: root.appendingPathComponent("other").path)
+        try await store.save(a); try await store.save(b)
+        var account = ConnectedAccount(provider: "google", remoteID: "fixture", label: "fixture", scopes: [GoogleScope.mail]); account.projectIDs = [a.id]
+        try await store.saveConnection(account)
+        let source = ConnectedSource(accountID: account.id, service: "gmail", collection: "threads", remoteID: "fixture", title: "Context", body: "Untrusted reference", url: "https://mail.google.com", revision: "1")
+        try await store.saveSources([source], account: account)
+        let task = try await store.captureSource(source, account: account, projectID: a.id, provider: .codex)
+        let model = AppModel(store: store, folder: root); try await model.refresh()
+        model.selectedProjectID = b.id; model.selectedTaskID = task.id; model.draft = "Use source"
+        model.connectedDraft = .init(taskID: task.id, projectID: a.id, source: source, account: account)
+        model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission && model.draft == "Use source", "Source draft escaped into a different project")
+        model.errorMessage = nil; model.selectedProjectID = a.id; model.selectedTaskID = nil; model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission, "New conversation discarded source provenance")
+        model.errorMessage = nil; model.selectedTaskID = task.id; model.activeTaskID = task.id; model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission, "Active task fork discarded source provenance")
+        let queued = try await store.queuedCommands()
+        try require(queued.isEmpty, "Invalid source draft reached the queue")
+        model.activeTaskID = nil; model.connectedDraft = nil; model.draft = ""
+        let revision = model.composerRevision
+        model.draft = "New user draft during retrieval"
+        do {
+            try model.installConnectedDraft(.init(taskID: task.id, projectID: a.id, source: source, account: account), instruction: "Prepared instruction", expectedRevision: revision, expectedTaskID: task.id)
+            throw MochletError.message("Source retrieval overwrote a concurrent draft")
+        } catch {
+            try require(model.draft == "New user draft during retrieval" && model.connectedDraft == nil, "Concurrent composer edits were lost")
+        }
+        model.draft = ""
+        let currentRevision = model.composerRevision
+        let cancelled = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                try model.installConnectedDraft(.init(taskID: task.id, projectID: a.id, source: source, account: account), instruction: "Cancelled source", expectedRevision: currentRevision, expectedTaskID: task.id)
+                throw MochletError.message("Cancelled source preparation installed a draft")
+            } catch is CancellationError { }
+        }
+        try await cancelled.value
+        try require(model.draft.isEmpty && model.connectedDraft == nil, "Cancellation changed the composer")
+        print("Native source routing fixtures passed: changed project, new conversation, active-task fork.")
     }
     static func piWorkflow(root: URL, executable: String) async throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

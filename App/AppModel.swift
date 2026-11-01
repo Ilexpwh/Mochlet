@@ -8,6 +8,7 @@ import SlimeCore
     let shortcuts = HotKeyCenter.shared
     let knowledge: KnowledgeController
     let meetings: MeetingController
+    let google: GoogleController
     let github: GitHubController
     var includeKnowledge = false
     var includePersonalKnowledge = false
@@ -17,7 +18,16 @@ import SlimeCore
     var tasks: [WorkTask] = []
     var selectedProjectID = ""
     var selectedTaskID: String?
-    var draft = ""
+    struct ConnectedDraft {
+        let taskID: String
+        let projectID: String
+        let source: ConnectedSource
+        let account: ConnectedAccount
+    }
+    var connectedDraft: ConnectedDraft?
+    var preparingSubmission = false
+    var composerRevision = UUID()
+    var draft = "" { didSet { composerRevision = UUID() } }
     var errorMessage: String?
     var isBusy = false
     var status = "Ready when you are"
@@ -104,6 +114,7 @@ import SlimeCore
         self.knowledge = KnowledgeController(folder: folder)
         self.meetings = MeetingController(folder: folder, speech: speech)
         self.github = GitHubController(store: store)
+        self.google = GoogleController(store: store)
         slimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
         palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
     }
@@ -114,6 +125,7 @@ import SlimeCore
         }
         await speech.load()
         await meetings.load()
+        await google.load()
         do {
             try await store.recover()
             try await refresh()
@@ -150,8 +162,26 @@ import SlimeCore
             } catch { report(error) }
         }
     }
+    func installConnectedDraft(_ source: ConnectedDraft, instruction: String, expectedRevision: UUID, expectedTaskID: String?) throws {
+        try Task.checkCancellation()
+        guard composerRevision == expectedRevision, draft.isEmpty, connectedDraft == nil, !preparingSubmission,
+              selectedProjectID == source.projectID, selectedTaskID == expectedTaskID else {
+            throw MochletError.message("The composer changed while reading this source. Your draft was preserved; prepare the source again when ready.")
+        }
+        guard source.taskID != activeTaskID, tasks.first(where: { $0.id == source.taskID })?.state != .queued else {
+            throw MochletError.message("This source task is active or queued. Wait for it to finish.")
+        }
+        selectedTaskID = source.taskID; connectedDraft = source; draft = instruction
+    }
     func submit() {
-        guard !cancellingQueue, !speech.active, !files.busy, let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
+        guard !preparingSubmission, !cancellingQueue, !speech.active, !files.busy, let project = selectedProject, !draft.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
+        let sourceDraft = connectedDraft
+        if let sourceDraft {
+            guard sourceDraft.projectID == project.id, sourceDraft.taskID == selectedTaskID,
+                  selectedTask?.id != activeTaskID, selectedTask?.state != .queued else {
+                report(MochletError.message("This source draft is bound to its original task and project. Return to that task, or discard the source draft and prepare it again from Google.")); return
+            }
+        }
         let prompt=draft;draft=""
         let submissionGeneration = queueGeneration
         let useKnowledge = includeKnowledge; let usePersonal = includePersonalKnowledge; let runReadOnly = readOnly
@@ -162,11 +192,20 @@ import SlimeCore
         if let existing=selectedTask,existing.projectID == project.id, existing.id != activeTaskID,
            existing.state != .queued {task=existing}
         else {var fresh=WorkTask(projectID:project.id,title:prompt);fresh.provider=destinationProvider.rawValue;task=fresh}
+        preparingSubmission = true
         Task {
+            defer { preparingSubmission = false }
             do {
                 try ProjectResolver.validateRoot(project)
                 var queued=task;queued.state = .queued
                 var contextPrompt = prompt + attachmentContext
+                if let sourceDraft {
+                    guard task.id == sourceDraft.taskID else { throw MochletError.message("The source task changed before submission.") }
+                    try await store.validateConnectedTask(task.id)
+            try await google.validateTask(task.id)
+                    guard try await store.connections().contains(sourceDraft.account) else { throw MochletError.message("Source account permissions changed. Prepare this draft again.") }
+                    contextPrompt += "\n\n" + (try sourceDraft.source.context(account: sourceDraft.account))
+                }
                 if useKnowledge, let vault = knowledge.vault {
                     let notes = try await vault.search(prompt, scope: project.id, includePersonal: usePersonal, limit: 6)
                     if !notes.isEmpty {
@@ -183,6 +222,7 @@ import SlimeCore
                     throw MochletError.message("This submission was cancelled before dispatch.")
                 }
                 selectedTaskID=queued.id
+                if sourceDraft != nil { connectedDraft = nil }
                 files.selectedIDs.subtract(attachments)
                 queue.append((queued,contextPrompt,runReadOnly));await runNext()
             } catch {draft = draft.isEmpty ? prompt : prompt + "\n" + draft;report(error)}
@@ -208,6 +248,8 @@ import SlimeCore
         var claimed = false
         do {
             try await store.begin(task,run:run); claimed = true; try await refresh()
+            try await store.validateConnectedTask(task.id)
+            try await google.validateTask(task.id)
             if let binding = try await store.githubTaskBinding(taskID: task.id) {
                 guard binding.projectID == project.id else { throw MochletError.message("Issue task project does not match its repository binding.") }
                 try await GitHubClient.verifyRemote(project: project, repository: binding.repository)

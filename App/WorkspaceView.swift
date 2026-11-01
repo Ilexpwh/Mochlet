@@ -15,6 +15,7 @@ struct WorkspaceView: View {
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Meetings",systemImage:"waveform").tag("Meetings")
                     Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
+                    Label("Google",systemImage:"person.crop.circle.badge.checkmark").tag("Google")
                     Label("GitHub",systemImage:"point.3.connected.trianglepath.dotted").tag("GitHub")
                     Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
@@ -30,6 +31,7 @@ struct WorkspaceView: View {
                 case "History": history
                 case "Meetings": MeetingsView(model: model)
                 case "Files": FilesView(model: model)
+                case "Google": GoogleView(model: model) { section = "Companion" }
                 case "GitHub": GitHubView(model: model)
                 case "Knowledge": KnowledgeView(model: model)
                 case "Appearance": appearance
@@ -161,6 +163,12 @@ struct CompanionView: View {
                 Spacer(minLength:0)
             }
             VStack(spacing:10) {
+                if let source = model.connectedDraft {
+                    HStack {
+                        Label(source.source.title, systemImage: "link").font(.caption).lineLimit(1)
+                        Button("Discard source draft") { model.draft = ""; model.connectedDraft = nil }.disabled(model.preparingSubmission)
+                    }
+                }
                 if !model.files.selected.isEmpty { AttachmentChips(files: model.files, tint: model.tint) }
                 TextField("What shall we work on?",text:$model.draft,axis:.vertical).lineLimit(compact ? 1...3 : 3...6).textFieldStyle(.plain).focused($composerFocused)
                 HStack {

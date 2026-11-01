@@ -41,4 +41,4 @@ The user requested close Coucou UI/UX and motion parity and authorized reuse of 
 
 ## Stage G provider progress — 2026-11-01
 
-Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. External-session observation and Slack/Lark/Linear/Google connectors remain planned. Existing unchecked release criteria are retained.
+Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. Google account/source readers and native task/memory capture are now implemented with fixture and setup evidence; live Google and outbound/sync gates remain open. External-session observation and Slack/Lark/Linear remain planned. Existing unchecked release criteria are retained.

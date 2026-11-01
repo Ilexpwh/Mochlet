@@ -11,8 +11,9 @@ Implemented native workflows include:
 - Personal/project memory, source-linked answers, portable Markdown import/export, file feeding and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
 - GitHub account/repository binding, issue synchronization, isolated task worktrees and local diff review.
+- Google Desktop OAuth configuration, account/project bindings, Gmail threads, calendar agenda/availability and selected Drive text; reviewed source task drafts and explicit memory copies.
 
-Voice and meetings require your own API configuration and further live validation. Slack/Lark/Linear/Google, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Slack/Lark/Linear, Google outbound actions/incremental sync, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 

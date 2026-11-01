@@ -152,3 +152,7 @@ Provider research was performed on 2026-11-01. Recheck protocols against install
 - [Native quality](native-quality.md) owns animation, input responsiveness, display/focus behavior and service-lifetime/resource budgets from the first milestone.
 
 This revision retains the native Swift architecture and does not introduce a mandatory OpenViking server, remote memory database or always-on cloud relay.
+
+## Google source implementation — 2026-11-01
+
+AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores per-account authorization state. `GoogleReader` performs bounded account-verified Gmail, Calendar and Drive reads through an ephemeral no-redirect transport. `Connections` persists account generations, source identities and project grants separately from tasks. `GoogleController` orchestrates native selection and explicit analysis/memory/task capture. Source drafts retain structured provenance through Send, with local and remote access checks before dispatch. See [Google implementation and limits](google-integration.md). Outbound delivery and incremental sync remain separate work.

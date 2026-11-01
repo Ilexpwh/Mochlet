@@ -62,3 +62,7 @@ Claude session creation journals a UUID before the first prompt and confirms it 
 
 
 Pi 1.4.0 is now an experimental `AgentRuntime`. Its command/response protocol remains separate from Codex JSON-RPC. A bundled original extension verifies effective cwd, exact session ID/file and tools before user-prompt dispatch, then gates mutating tool calls. Resume also checks the saved JSONL header. The runtime supports extension dialogs, final-text reconciliation, clear-queue-before-abort and `agent_settled` completion. Session statistics are optional and never presented as subscription limits. See [pinned contract and evidence](pi-compatibility.md) for the flags, bounds and remaining live checks.
+
+## Google source implementation — 2026-11-01
+
+AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores per-account authorization state. `GoogleReader` performs bounded account-verified Gmail, Calendar and Drive reads through an ephemeral no-redirect transport. `Connections` persists account generations, source identities and project grants separately from tasks. `GoogleController` orchestrates native selection and explicit analysis/memory/task capture. Source drafts retain structured provenance through Send, with local and remote access checks before dispatch. See [Google implementation and limits](google-integration.md). Outbound delivery and incremental sync remain separate work.

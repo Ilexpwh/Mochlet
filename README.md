@@ -7,7 +7,7 @@ A native macOS companion that lives at the notch, runs work through your selecte
 Implemented native workflows include:
 
 - A simple customizable slime, Coucou-derived island motion, top/left/right docking, menu-bar fallback and workspace.
-- Durable project/task history, a recoverable queue, exact agent sessions, approvals/questions and available Codex allowance windows.
+- Durable project/task history, a recoverable queue, exact agent sessions, project-scoped stored Codex history browsing, approvals/questions and available Codex allowance windows.
 - Personal/project memory, source-linked answers, portable Markdown import/export, file feeding and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
 - GitHub account/repository binding, issue synchronization, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
@@ -55,7 +55,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, external-session observation, team write-back and incremental Google synchronization. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include richer project boards, GitHub Projects/PR workflows, external-client liveness/control, team write-back and incremental Google synchronization. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 

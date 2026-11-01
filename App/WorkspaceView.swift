@@ -12,6 +12,7 @@ struct WorkspaceView: View {
                 List(selection:$section) {
                     Label("Companion",systemImage:"bubble.left.and.bubble.right").tag("Companion")
                     Label("Projects",systemImage:"folder").tag("Projects")
+                    Label("Codex sessions",systemImage:"text.bubble").tag("Sessions")
                     Label("Task history",systemImage:"clock").tag("History")
                     Label("Meetings",systemImage:"waveform").tag("Meetings")
                     Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
@@ -30,6 +31,7 @@ struct WorkspaceView: View {
                 switch section {
                 case "Projects": projectList
                 case "History": history
+                case "Sessions": CodexSessionsView(model: model) { section = "Companion" }
                 case "Meetings": MeetingsView(model: model)
                 case "Files": FilesView(model: model)
                 case "Connections": ConnectionsView(model: model) { section = "Companion" }

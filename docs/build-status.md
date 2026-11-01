@@ -153,3 +153,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - GitHub issue drafts now carry structured source/project/task provenance. Queued/active issue snapshots cannot be replaced; dispatch rechecks the current issue and stops changed-source work before connecting an agent.
 - `scripts/check.sh` passes 62 fixture declarations (two parameterized across six cases), three opt-in live tests skipped, native Debug build and AppModel fixture host. Seven publication tests include actual object transfer to a disposable bare Git repository and refusal to overwrite a raced branch. Review findings on account pinning, preflight recovery, advanced-base recovery and queued snapshot mutation were fixed and re-reviewed.
 - Native walkthrough registered this source project, verified `Ilexpwh/Mochlet` against the existing CLI account, and inspected the PR setup sheet with empty submission disabled. [Evidence](evidence/native-pr-review-setup.png). No live branch/PR was created for testing; a populated native diff preview and live GitHub publication remain unverified. [Contract and limits](github-publication.md).
+
+## Stored Codex session browser — 2026-11-01
+
+- Added exact-project, bounded read-only session listing/history and optional ten-second refresh. Explicit import rechecks metadata and creates/reuses an interrupted task without dispatch. External client liveness is explicitly unknown; its approvals stay in that client.
+- Full checks pass: 65 fixture declarations, three live tests skipped, native build and AppModel host. Independent review found no Required/Critical issues. Real read-only protocol list/read/history probes pass; native empty-list refresh displays count/freshness. No external session was resumed during validation.
+- [Contract and evidence](codex-sessions.md). Populated native import and external-client overlap remain unverified.

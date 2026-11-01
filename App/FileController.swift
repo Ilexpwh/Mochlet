@@ -16,6 +16,8 @@ import SlimeCore
     private var generation = UUID()
     var selected: [FileExtraction] { files.filter { selectedIDs.contains($0.id) } }
     func choose() {
+        let presentingWindow = NSApp.keyWindow
+        defer { presentingWindow?.makeKeyAndOrderFront(nil) }
         let panel = NSOpenPanel(); panel.canChooseFiles = true; panel.canChooseDirectories = true; panel.allowsMultipleSelection = true
         panel.message = "Feed text, PDF or images to Mochlet. Folder imports skip hidden files and symbolic links."
         if panel.runModal() == .OK { ingest(panel.urls) }
@@ -47,7 +49,7 @@ import SlimeCore
     }
     func notes(scope: String) -> [KnowledgeNote] {
         selected.map { file in
-            var note = KnowledgeNote(scope: scope, title: file.title, body: file.text + "\n\nExtraction warnings: " + file.warnings.joined(separator: " "), source: "\(file.citation) · SHA256 \(file.revision)")
+            var note = KnowledgeNote(scope: scope, title: file.title, body: file.text, source: "\(file.citation) · SHA256 \(file.revision) · Extraction limits: \(file.warnings.joined(separator: " "))")
             note.id = file.id; note.revision = file.revision; return note
         }
     }
@@ -60,6 +62,8 @@ import SlimeCore
         analyzing = true; answer = nil; defer { analyzing = false }
         let sources = notes(scope: "attachment")
         do {
+            let catalog = try await speech.service.models(transcription: false)
+            guard catalog.contains(where: { $0.id == speech.analysisModel && $0.outputModalities.contains("text") }) else { throw MochletError.message("Choose an available text-output analysis model in Speech & Models.") }
             let text = try await speech.service.answer(prompt: KnowledgeAnswer.prompt(question: "Summarize these selected file excerpts. Identify useful facts, conflicts, missing coverage and extraction limitations. Preserve page/line references in the answer where available.", notes: sources), model: speech.analysisModel, key: speech.key())
             guard Set(sources.map(\.id)) == Set(selected.map(\.id)) else { return }
             answer = try KnowledgeAnswer.decode(text, notes: sources)

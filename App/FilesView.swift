@@ -43,6 +43,9 @@ struct FilesView: View {
                     Button("Remove") { model.files.remove(file) }
                 }.padding(.vertical, 5)
             }
+            DisclosureGroup("Organize files and undo") {
+                ScrollView { FileOperationsView(model: model) }.frame(maxHeight: 220)
+            }
         }.padding(24).overlay(FileDropSurface { model.files.ingest($0) })
             .sheet(item: $preview) { file in
                 VStack(alignment: .leading, spacing: 12) {

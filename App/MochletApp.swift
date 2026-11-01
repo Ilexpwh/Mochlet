@@ -66,7 +66,7 @@ import SlimeCore
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let model, model.isBusy || model.speech.active || model.meetings.active || model.google.busy || model.connections.busy || model.github.busy {
             let alert = NSAlert(); alert.messageText = "Work is still active"
-            alert.informativeText = "Quitting interrupts active work, saves meeting segments and discards any voice command in progress. An in-flight Google or GitHub write may remain uncertain; inspect its delivery history before trying again."
+            alert.informativeText = "Quitting interrupts active work, saves meeting segments and discards any voice command in progress. An in-flight connector write may remain uncertain; inspect its delivery history before trying again."
             alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
         }

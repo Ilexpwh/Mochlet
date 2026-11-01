@@ -190,3 +190,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Review found that Google/team source tasks rechecked remote access but discarded the fresh body; a queued copied prompt could outlive its source revision. Connected drafts now validate the exact captured body/revision before enqueue and persist immutable source evidence alongside the queued command.
 - Dispatch checks remote content before runtime startup and after session preparation, then rechecks the local snapshot after memory validation. Cache refresh, changed permissions or remote identity cannot replace the queued reference. Legacy copied-source queues without revision evidence become interrupted during migration.
 - `scripts/check.sh` passes: 83 reported tests (80 fixture declarations plus three opt-in live skips), native build and runtime host. New tests cover cache changes with unchanged provider revisions, persistence/relaunch, cancellation cleanup, unbound-task rejection and source changes at both native dispatch boundaries. No stale-source fixture reached `turn/start`.
+
+## Local Release packaging and idle evidence — 2026-11-01
+
+- Added an original app icon rendered from the native slime, required icon sizes, bundled GRDB MIT attribution and a reproducible Release ZIP/manifest/checksum script. Local ad-hoc signature verification and arm64/deployment metadata checks pass; failed packaging cleans only its own new output directory.
+- Release app compiled and launched successfully. A 60-second compact-idle measurement averaged 0.77% of one CPU core with approximately 104–108 MiB sampled RSS. This is a single-process idle sample, not latency, energy or mixed-soak evidence. [Reproduction and limitations](local-package.md).
+- Independent bounded review found no Required/Critical issues in packaging, process sampling or icon generation. Public signing/notarization, actual macOS 15 compatibility and two-hour mixed-workload validation remain open.

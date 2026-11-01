@@ -76,3 +76,5 @@ The roadmap remains broader than the development build. Consult the evidence led
 [Component research](docs/component-research.md) and [Coucou porting details](docs/coucou-porting-research.md) record pinned upstream sources, licenses and adoption decisions. Coucou code is adapted with its MIT attribution; no proprietary character assets are included.
 
 Project names, exact aliases and per-project coding instructions are editable in Projects. See [project settings](docs/project-settings.md) for routing and relocation limits.
+
+Build a local Release ZIP with `./scripts/package-local.sh`. See [packaging and measured idle performance](docs/local-package.md) for artifact contents, reproduction and distribution limits.

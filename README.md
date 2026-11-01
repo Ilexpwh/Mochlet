@@ -4,6 +4,10 @@ A native macOS companion that lives at the notch, runs work through your selecte
 
 **Status:** planning workspace created on 2026-11-01. No native application or real integration has been implemented here yet. **Mochlet** is the proposed working product name; `slime-app` remains the development folder.
 
+## Implementation
+
+The approved [technical specification](docs/technical-spec.md), [visual design system](docs/design-system.html) and [implementation sequence](tasks/implementation-plan.md) guide the build. [Build status](docs/build-status.md) distinguishes implemented behavior from pending live and release checks.
+
 ## Start here
 
 1. [Build plan](tasks/plan.md) — scope, architecture choices, milestones, dependencies and risks.

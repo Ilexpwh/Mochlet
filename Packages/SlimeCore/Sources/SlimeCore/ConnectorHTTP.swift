@@ -3,7 +3,10 @@ import Foundation
 public struct ConnectorResponse: Sendable {
     public let data: Data
     public let status: Int
-    public init(data: Data, status: Int) { self.data = data; self.status = status }
+    public let retryAfter: String?
+    public init(data: Data, status: Int, retryAfter: String? = nil) {
+        self.data = data; self.status = status; self.retryAfter = retryAfter
+    }
 }
 public enum ConnectorError: Error, LocalizedError, Sendable {
     case http(Int)
@@ -16,12 +19,16 @@ public struct ConnectorHTTP: Sendable {
     private let transport: Transport
     public init(transport: @escaping Transport = ConnectorHTTP.network) { self.transport = transport }
     public func send(_ request: URLRequest) async throws -> Data {
-        let response = try await transport(request)
+        let response = try await response(request)
         guard (200..<300).contains(response.status) else {
             throw ConnectorError.http(response.status)
         }
-        guard response.data.count <= 2_000_000 else { throw MochletError.message("Connected content exceeds the 2 MB retrieval limit.") }
         return response.data
+    }
+    func response(_ request: URLRequest) async throws -> ConnectorResponse {
+        let response = try await transport(request)
+        guard response.data.count <= 2_000_000 else { throw MochletError.message("Connected content exceeds the 2 MB retrieval limit.") }
+        return response
     }
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
@@ -38,7 +45,7 @@ public struct ConnectorHTTP: Sendable {
             guard data.count < 2_000_000 else { throw MochletError.message("Connected content exceeds the 2 MB retrieval limit.") }
             data.append(byte)
         }
-        return .init(data: data, status: http.statusCode)
+        return .init(data: data, status: http.statusCode, retryAfter: http.value(forHTTPHeaderField: "Retry-After"))
     }
 }
 public enum GoogleScope {

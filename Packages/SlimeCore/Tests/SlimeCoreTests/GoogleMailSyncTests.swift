@@ -21,7 +21,8 @@ private actor MailSyncFixture {
         if request.url!.path.hasSuffix("/history") {
             queries.append(Dictionary(uniqueKeysWithValues: (URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems ?? []).map { ($0.name, $0.value ?? "") }))
         }
-        return .init(data: Data(next.body.utf8), status: next.status)
+        // Failure fixtures represent an outage longer than the interactive retry budget.
+        return .init(data: Data(next.body.utf8), status: next.status, retryAfter: next.status == 503 ? "60" : nil)
     }
 }
 private func mailSyncAccount() -> ConnectedAccount { .init(provider: "google", remoteID: "mail-fixture", label: "Fictional mail", scopes: [GoogleScope.mail]) }

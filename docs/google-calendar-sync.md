@@ -19,7 +19,7 @@ A SQLite migration adds `google_calendar_sync`, keyed by local account and calen
 
 The commit compares the account and expected snapshot version. Disconnects, permission/binding changes and a competing completed sync prevent stale results from committing. Disconnect cascades to the calendar snapshots. Changed permission generations require a new full sync before offline discovery exposes records.
 
-An incremental HTTP 410 invalidates only that calendar's cursor and cached sources, then attempts one full sync. If replacement fails, no old snapshot is presented as current. Other failures preserve the last completed snapshot, which can be explicitly loaded with its original timestamp. There is no background polling or automatic provider fallback.
+An incremental HTTP 410 invalidates only that calendar's cursor and cached sources, then attempts one full sync. If replacement fails, no old snapshot is presented as current. Other failures preserve the last completed snapshot, which can be explicitly loaded with its original timestamp. Temporary read failures use [bounded Google GET retries](google-read-recovery.md). Retry attempts retain the same page and cursor; only the completed result can commit. There is no background polling or automatic provider fallback.
 
 Changes/deletions invalidate older cached agenda instances of the affected recurring series. Independent source reads completed after the sync request began are retained for their own subsequent revision/access checks. This is a calendar record cache, not an offline recurrence-expansion engine or a guarantee of current availability.
 

@@ -4,6 +4,7 @@ public struct GoogleReader: Sendable {
     public let account: ConnectedAccount
     private let token: String
     private let http: ConnectorHTTP
+    var readRetry = GoogleReadRetry()
     public init(account: ConnectedAccount, token: String, http: ConnectorHTTP = .init()) { self.account = account; self.token = token; self.http = http }
     func request(host: String, path: [String], query: [String: String] = [:]) -> URLRequest {
         var url = URLComponents(); url.scheme = "https"; url.host = host
@@ -14,7 +15,7 @@ public struct GoogleReader: Sendable {
         return request
     }
     func get(_ host: String, _ path: [String], _ query: [String: String] = [:]) async throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: await http.send(request(host: host, path: path, query: query)))
+        try JSONDecoder().decode(JSONValue.self, from: await readRetry.send(request(host: host, path: path, query: query), http: http))
     }
     public func verify(scope: String) async throws {
         guard account.provider == "google", account.scopes.contains(scope) else { throw MochletError.message("This Google permission was not granted.") }
@@ -141,7 +142,7 @@ public struct GoogleReader: Sendable {
             }
             contentRequest = request(host: "www.googleapis.com", path: path, query: ["alt": "media", "supportsAllDrives": "true"])
         }
-        let data = try await http.send(contentRequest)
+        let data = try await readRetry.send(contentRequest, http: http)
         guard data.count <= 1_000_000, let body = String(data: data, encoding: .utf8) else { throw MochletError.message("Drive text must be UTF-8 and at most 1 MB.") }
         let current = try await get("www.googleapis.com", path, fields)
         guard current["modifiedTime"] == metadata["modifiedTime"], current["trashed"] != .bool(true), current["capabilities"]["canDownload"] == .bool(true) else {

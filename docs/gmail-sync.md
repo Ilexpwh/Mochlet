@@ -16,6 +16,8 @@ An HTTP 404 from the history endpoint means the cursor has expired. Mochlet inva
 
 `google_mail_sync` contains one account-keyed snapshot: tracking membership, complete thread records, permission generation, immutable version, history cursor and sync time. The cursor and source updates commit in the same SQLite transaction. Account identity/permissions and the expected version must still match at commit. Tracking changes, disconnects, competing completed syncs and cancellation prevent an old in-flight request from committing.
 
+[Bounded Google GET retries](google-read-recovery.md) recover transient failures without advancing the history cursor or changing the tracked set. Outbound actions remain single-attempt.
+
 Snapshots are independent between Google accounts and separate from calendar cursors. Disconnect deletes sync state. Permission-generation changes require rebuilding before old records are shown as a synchronized set. Account/project source guards still apply when capturing tasks, retrieving connected memory or dispatching coding work. Saved mail is local application data; there is no claim of encrypted-at-rest mail storage beyond the user's operating-system protections.
 
 ## Verification

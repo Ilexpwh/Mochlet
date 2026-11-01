@@ -19,7 +19,33 @@ private actor CalendarSyncFixture {
         return responses.removeFirst()
     }
 }
-private func calendarPage(_ json: String, status: Int = 200) -> ConnectorResponse { .init(data: Data(json.utf8), status: status) }
+// Failure fixtures represent an outage longer than the interactive retry budget.
+private func calendarPage(_ json: String, status: Int = 200) -> ConnectorResponse {
+    .init(data: Data(json.utf8), status: status, retryAfter: status == 503 ? "60" : nil)
+}
+
+@Test func calendarSyncRetriesOnePageWithoutAdvancingTheSavedCursor() async throws {
+    let store = try Store(path: ":memory:"), account = calendarAccount()
+    try await store.saveConnection(account)
+    let fixture = CalendarSyncFixture([calendarPage(#"{"items":[{"id":"a","etag":"1"}],"nextSyncToken":"s1"}"#)])
+    var reader = GoogleReader(account: account, token: "fixture", http: .init { try await fixture.send($0) })
+    reader.readRetry.sleep = { _ in
+        let saved = try await store.calendarSnapshot(account: account, calendarID: "calendar")
+        #expect(saved?.syncToken == "s1")
+        #expect(saved?.records.map(\.remoteID) == ["a"])
+    }
+    _ = try await reader.syncCalendar(calendarID: "calendar", store: store)
+    await fixture.append([
+        calendarPage(#"{"items":[{"id":"a","status":"cancelled"}],"nextPageToken":"p2"}"#),
+        .init(data: Data("{}".utf8), status: 503),
+        calendarPage(#"{"items":[{"id":"b","etag":"2"}],"nextSyncToken":"s2"}"#)
+    ])
+    let refreshed = try await reader.syncCalendar(calendarID: "calendar", store: store)
+    #expect(refreshed.syncToken == "s2" && refreshed.records.map(\.remoteID) == ["b"])
+    let queries = await fixture.queries
+    #expect(queries.count == 4 && queries[2] == queries[3])
+    #expect(queries[2]["syncToken"] == "s1" && queries[2]["pageToken"] == "p2")
+}
 private func calendarAccount() -> ConnectedAccount { .init(provider: "google", remoteID: "calendar-fixture", label: "Fictional calendar", scopes: [GoogleScope.calendar]) }
 
 @Test func calendarSyncCommitsPagesAndDeletesOnlyBoundCalendarSources() async throws {

@@ -70,11 +70,11 @@ extension Store {
             }
         }
     }
-    private static func requireConnection(_ account: ConnectedAccount, in db: Database) throws {
+    static func requireConnection(_ account: ConnectedAccount, in db: Database) throws {
         guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM connections WHERE id=?", arguments: [account.id]),
               try JSONDecoder().decode(ConnectedAccount.self, from: data) == account else { throw MochletError.message("Connection or project permissions changed. Refresh before continuing.") }
     }
-    private static func requireSource(_ source: ConnectedSource, account: ConnectedAccount, in db: Database) throws {
+    static func requireSource(_ source: ConnectedSource, account: ConnectedAccount, in db: Database) throws {
         let googleScopes = ["gmail": GoogleScope.mail, "calendar": GoogleScope.calendar, "drive": GoogleScope.drive]
         let scope: String?
         if let team = TeamService(rawValue: source.service), account.provider == team.rawValue { scope = team.readCapability }

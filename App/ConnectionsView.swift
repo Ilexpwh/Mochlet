@@ -36,7 +36,7 @@ import SlimeCore
     }
     func disconnect() {
         guard let account else { return }
-        run { try await self.tokens.disconnect(account); self.source = nil; self.message = "Credentials and cached sources removed locally. Task history and explicit memory copies remain. Revoke the token in the service's settings if needed." }
+        run { try await self.tokens.disconnect(account); self.source = nil; self.message = "Credentials and cached sources removed locally. Task history remains. Connected memories remain for review but are excluded from AI context. Independent copies remain usable. Revoke the token in the service's settings if needed." }
     }
     func bind(_ project: String, enabled: Bool) {
         guard var account else { return }
@@ -69,7 +69,8 @@ import SlimeCore
         run {
             guard account.projectIDs.contains(project.id) else { throw MochletError.message("Bind this account to the selected project first.") }
             let fresh = try await self.fetch(account: account, collection: source.collection, id: source.remoteID)
-            let note = KnowledgeNote(scope: project.id, title: fresh.title, body: fresh.body + "\n" + fresh.warnings.joined(separator: "\n"), source: "\(fresh.url) • \(account.label) • \(fresh.revision) • \(fresh.fetchedAt.ISO8601Format())")
+            var note = KnowledgeNote(scope: project.id, title: fresh.title, body: fresh.body + "\n" + fresh.warnings.joined(separator: "\n"), source: "\(fresh.url) • \(account.label) • \(fresh.revision) • \(fresh.fetchedAt.ISO8601Format())")
+            try note.bind(source: fresh, account: account)
             guard await model.knowledge.save(note) else { throw MochletError.message(model.knowledge.message ?? "Memory could not be saved.") }
             self.message = "Project memory copy saved. Edit or forget it in Knowledge & Memory."
         }

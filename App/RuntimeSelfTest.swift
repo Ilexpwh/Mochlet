@@ -84,10 +84,94 @@ import SlimeCore
         }
         try await connectedDraftRouting(root: root)
         try await githubQueuedRevision(root: root)
+        try await queuedMemory(root: root)
+        try await multipleMemorySources(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
+    }
+    static func multipleMemorySources(root: URL) async throws {
+        let folder = root.appendingPathComponent("multiple-memory")
+        let store = try Store(path: ":memory:")
+        let project = Project(name: "Multiple memory", root: root.path); try await store.save(project)
+        var account = ConnectedAccount(provider: "google", remoteID: "fixture", label: "Fixture", scopes: [GoogleScope.drive])
+        account.projectIDs = [project.id]; try await store.saveConnection(account)
+        let model = AppModel(store: store, folder: folder)
+        guard let vault = model.knowledge.vault else { throw MochletError.message("Missing fixture vault") }
+        var notes: [KnowledgeNote] = []
+        for id in ["A", "B"] {
+            let source = ConnectedSource(accountID: account.id, service: "drive", collection: "files", remoteID: id, title: id, body: "Mint", url: "https://drive.google.com/", revision: "1")
+            try await store.saveSources([source], account: account)
+            var note = KnowledgeNote(scope: project.id, title: id, body: "Mint"); try note.bind(source: source, account: account)
+            try await vault.save(note)
+            notes.append(try await vault.search(id, scope: project.id).first!)
+        }
+        let firstID = notes[0].id, secondID = notes[1].id
+        model.knowledge.validateConnected = { note in
+            if note.id == secondID {
+                try await Task.sleep(for: .milliseconds(10))
+                try await vault.remove(firstID)
+            }
+        }
+        var task = WorkTask(projectID: project.id, title: "Two-source context"); task.state = .queued
+        try await store.enqueue(task, prompt: "Fixture private context", readOnly: true, knowledge: notes.map(KnowledgeEvidence.init))
+        model.projects = [project]; model.selectedProjectID = project.id
+        model.codexPath = folder.appendingPathComponent("must-not-start").path
+        try await model.refresh(); model.queue = try await store.queuedCommands()
+        await model.runNext(); try await wait { !model.isBusy }
+        try require(model.tasks.first?.state == .failed && model.runtime == nil, "Earlier memory invalidated during later validation reached runtime startup")
+        try require(model.errorMessage?.contains("must-not-start") != true, "Two-source validation failed only at executable launch")
+        model.shutdown()
+    }
+    static func queuedMemory(root: URL) async throws {
+        for mode in ["forgotten", "disconnected", "changed-during-prepare"] {
+            let folder = root.appendingPathComponent("memory-" + mode)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let store = try Store(path: folder.appendingPathComponent("store.sqlite").path)
+            let project = Project(name: "Memory fixture", root: folder.path); try await store.save(project)
+            let model = AppModel(store: store, folder: folder)
+            model.projects = [project]; model.selectedProjectID = project.id
+            var note = KnowledgeNote(scope: project.id, title: "Private fixture", body: "Mint")
+            var account = ConnectedAccount(provider: "google", remoteID: "fixture", label: "Fixture", scopes: [GoogleScope.drive])
+            account.projectIDs = [project.id]
+            if mode == "disconnected" {
+                try await store.saveConnection(account)
+                let source = ConnectedSource(accountID: account.id, service: "drive", collection: "files", remoteID: "fixture", title: "Private fixture", body: "Mint", url: "https://drive.google.com/", revision: "1")
+                try await store.saveSources([source], account: account); try note.bind(source: source, account: account)
+            }
+            guard let vault = model.knowledge.vault else { throw MochletError.message("Missing fixture vault") }
+            try await vault.save(note)
+            let saved = try await vault.search("", scope: project.id)[0]
+            var task = WorkTask(projectID: project.id, title: "Memory fixture"); task.state = .queued
+            try await store.enqueue(task, prompt: "Fixture context", readOnly: true, knowledge: [KnowledgeEvidence(saved)])
+            if mode == "forgotten" { try await vault.remove(note.id) }
+            if mode == "disconnected" { try await store.disconnect(account.id) }
+            let fixture = folder.appendingPathComponent("agent")
+            try #"""
+            #!/usr/bin/python3
+            import json,sys,os,glob
+            folder=os.path.dirname(os.path.abspath(__file__))
+            for line in sys.stdin:
+                value=json.loads(line); method=value.get('method','')
+                with open(folder+'/requests','a') as log: log.write(method+'\n')
+                if method=='initialized': continue
+                result={}
+                if method=='thread/start':
+                    for f in glob.glob(folder+'/Knowledge/*.md'): os.remove(f)
+                    result={'thread':{'id':'fixture-thread','cwd':os.getcwd()}}
+                print(json.dumps({'id':value.get('id'),'result':result}),flush=True)
+            """#.write(to: fixture, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
+            model.codexPath = fixture.path; try await model.refresh(); model.queue = try await store.queuedCommands()
+            await model.runNext(); try await wait { !model.isBusy }
+            try require(model.tasks.first?.state == .failed, "Unavailable queued memory did not fail: " + mode)
+            let requests = (try? String(contentsOf: folder.appendingPathComponent("requests"), encoding: .utf8)) ?? ""
+            try require(!requests.contains("turn/start"), "Invalid memory reached agent inference: " + mode)
+            if mode == "changed-during-prepare" { try require(requests.contains("thread/start"), "Final evidence recheck fixture did not reach prepare") }
+            else { try require(requests.isEmpty, "Invalid memory started a runtime: " + mode) }
+            model.shutdown()
+        }
     }
     static func githubQueuedRevision(root: URL) async throws {
         let folder = root.appendingPathComponent("github-revision")

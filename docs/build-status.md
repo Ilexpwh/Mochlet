@@ -159,3 +159,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Added exact-project, bounded read-only session listing/history and optional ten-second refresh. Explicit import rechecks metadata and creates/reuses an interrupted task without dispatch. External client liveness is explicitly unknown; its approvals stay in that client.
 - Full checks pass: 65 fixture declarations, three live tests skipped, native build and AppModel host. Independent review found no Required/Critical issues. Real read-only protocol list/read/history probes pass; native empty-list refresh displays count/freshness. No external session was resumed during validation.
 - [Contract and evidence](codex-sessions.md). Populated native import and external-client overlap remain unverified.
+
+## Connected memory access and queued evidence — 2026-11-01
+
+- Added portable account/source bindings, exclusion after disconnect or changed grants/content, and remote checks before AI use. Retained notes stay reviewable; independent retention creates a separate explicit copy. Queue evidence survives restart and rejects edited/deleted/unavailable notes before dispatch, including changes during runtime preparation.
+- Review caught a two-source validation race; remote checks now finish before final packet validation. Native regression deletes the first source while the second is loading and rejects dispatch.
+- 68 fixture declarations pass, three live tests skipped; native build and AppModel host pass. Isolated native walkthrough verified unavailable status and separate independent retention. [Evidence and limitations](connected-memory.md).

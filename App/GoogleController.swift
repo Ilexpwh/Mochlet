@@ -68,7 +68,7 @@ import SlimeCore
         guard let account else { return }
         run {
             try await self.oauth.disconnect(account); self.sources = []; self.selected = nil; self.answer = nil
-            self.message = "Disconnected locally. Cached sources were deleted. Explicit memory copies and task history remain; revoke remote access in your Google account if desired."
+            self.message = "Disconnected locally. Cached sources were deleted. Connected memories remain for review but are excluded from AI context. Independent copies and task history remain; revoke remote access in your Google account if desired."
         }
     }
     func bind(projectID: String, enabled: Bool) {
@@ -117,8 +117,8 @@ import SlimeCore
             if !calendars.contains(where: { $0["id"].string == self.calendarID }) { self.calendarID = calendars.first?["id"].string ?? "" }
         }
     }
-    func fresh(_ source: ConnectedSource, account: ConnectedAccount) async throws -> ConnectedSource {
-        guard source.accountID == account.id else { throw MochletError.message("Select a source from this account.") }
+    func readSource(_ source: ConnectedSource, account: ConnectedAccount) async throws -> ConnectedSource {
+        guard source.accountID == account.id else { throw MochletError.message("This source belongs to another account.") }
         let result: ConnectedSource
         switch source.service {
         case "gmail": result = try await reader(account, scope: GoogleScope.mail).thread(source.remoteID)
@@ -126,6 +126,11 @@ import SlimeCore
         case "calendar": result = try await reader(account, scope: GoogleScope.calendar).event(calendarID: source.collection, id: source.remoteID)
         default: throw MochletError.message("Unsupported Google source.")
         }
+        return result
+    }
+    func fresh(_ source: ConnectedSource, account: ConnectedAccount) async throws -> ConnectedSource {
+        guard source.accountID == account.id else { throw MochletError.message("Select a source from this account.") }
+        let result = try await readSource(source, account: account)
         try Task.checkCancellation(); try await store.saveSources([result], account: account)
         selected = result; answer = nil
         if let index = sources.firstIndex(where: { $0.id == result.id }) { sources[index] = result }
@@ -168,7 +173,8 @@ import SlimeCore
         run {
             guard account.projectIDs.contains(project.id) else { throw MochletError.message("Bind this account to the project first.") }
             let source = try await self.fresh(selected, account: account)
-            let note = KnowledgeNote(scope: project.id, title: source.title, body: source.body + "\n\n" + source.warnings.joined(separator: "\n"), source: "\(source.url) • account \(account.label) • revision \(source.revision) • retrieved \(source.fetchedAt.ISO8601Format())")
+            var note = KnowledgeNote(scope: project.id, title: source.title, body: source.body + "\n\n" + source.warnings.joined(separator: "\n"), source: "\(source.url) • account \(account.label) • revision \(source.revision) • retrieved \(source.fetchedAt.ISO8601Format())")
+            try note.bind(source: source, account: account)
             guard await model.knowledge.save(note) else { throw MochletError.message(model.knowledge.message ?? "Memory could not be saved.") }
             self.message = "Saved an explicit project memory copy. Edit or forget it in Knowledge & Memory."
         }

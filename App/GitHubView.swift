@@ -7,6 +7,7 @@ struct GitHubView: View {
     @State private var showClosed = false
     @State private var showPublication = false
     @State private var discussionRequest: GitHubDiscussionRequest?
+    @State private var boardRequest: GitHubBoardRequest?
     var body: some View {
         @Bindable var github = model.github
         VStack(alignment: .leading, spacing: 16) {
@@ -28,7 +29,8 @@ struct GitHubView: View {
                         Text("Account: \(binding.account.login)").font(.caption)
                         if let date = binding.syncedAt { Text("Last synced \(date.formatted())").font(.caption).foregroundStyle(.secondary) }
                     }
-                    Spacer(); Button("Review & publish task") { showPublication = true }.disabled(github.busy)
+                      Spacer(); Button("Review & publish task") { showPublication = true }.disabled(github.busy)
+                      Button("Projects board") { boardRequest = .init(binding: binding) }.disabled(github.busy)
                     Button("Sync issues") { Task { await github.sync() } }.disabled(github.busy)
                 }
                 Toggle("Show closed issues", isOn: $showClosed).toggleStyle(.checkbox)
@@ -53,6 +55,7 @@ struct GitHubView: View {
         }.padding(28)
               .sheet(isPresented: $showPublication) { GitHubPublicationView(model: model) }
               .sheet(item: $discussionRequest) { request in GitHubDiscussionView(model: model, request: request) }
+              .sheet(item: $boardRequest) { request in GitHubBoardView(model: model, binding: request.binding) }
             .task(id: model.selectedProjectID) { await github.load(projectID: model.selectedProjectID) }
     }
 }

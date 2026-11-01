@@ -254,3 +254,7 @@ Implemented profile CRUD/archive/restore, palette previews, selected agent/instr
 ## 2026-11-02 — GitHub discussion context
 
 Added selected-issue discussion reader/cache and comment-pinned coding context. Full paging, account checks, atomic cache replacement and content-level dispatch revalidation reject incomplete or changed discussions. Two core regressions cover 101 comments, edited text without issue timestamp changes, account swaps and failure preservation. `scripts/check.sh`: 119 reported tests (three opt-in live skips), Debug build and native host pass; `/tmp/mochlet-discussion-full-check.log`. Live API and interactive reader checks remain pending. [Contract](github-discussions.md).
+
+## 2026-11-02 — Projects V2 board workflow
+
+Implemented explicit board URL binding, nested GraphQL paging, typed issue/PR/draft/redacted cards, archived state, complete-snapshot cache and stale status-mapping detection. Eligible issue preparation checks exact REST/GraphQL identity and persists board provenance for dispatch revalidation. Three core regressions plus full native host checks pass: 122 reported tests, three opt-in live skips; `/tmp/mochlet-boardv2-final-check.log`. Read-only review found no Required findings. Schema introspection passed, but actual query validation is limited by missing `read:project` on existing CLI auth. Native interactive board checks remain pending. [Details](github-projects.md).

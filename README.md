@@ -11,7 +11,7 @@ Implemented native workflows include:
 - Durable project/task history, a recoverable queue, exact agent sessions, project-scoped stored Codex history browsing, approvals/questions and available Codex allowance windows.
 - Personal/project memory, source-linked answers, reviewed OKF folder import/export with lifecycle controls, file feeding, opt-in visual image summaries, local/AI organization proposals and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
-- GitHub account/repository binding, issue synchronization, cached discussions with comment-pinned task context, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
+- GitHub account/repository binding, issue synchronization, cached discussions with comment-pinned task context, bounded Projects V2 board reading/status mapping, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
 - Slack/Lark/Feishu/Linear verified token connections, selected source capture, project-bound task drafts, explicit memory copies and reviewed replies with durable delivery records.
 - Google Desktop OAuth configuration, account/project bindings, Gmail threads with explicit tracked-thread history sync, calendar agenda/availability, durable selected-calendar sync with offline records and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 
@@ -56,7 +56,7 @@ The [interactive HTML blueprint](docs/reference/blueprint.html) remains an earli
 
 One original customizable slime, a responsive native notch panel with a menu-bar fallback, text and push-to-talk input, project-aware Codex start/resume, approvals and questions, persisted history, available usage and an attention inbox. Personal/project knowledge and reviewed memory are now implemented in the development build.
 
-File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include GitHub Projects V2 and additional PR actions, external-client liveness/control, richer team write-back and broader connector workflows. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
+File feeding, summaries, reviewed moves, GitHub issue sync and isolated task workspaces are implemented. Remaining milestones include broader Projects field support and additional PR actions, external-client liveness/control, richer team write-back and broader connector workflows. Account-bound source capture for Slack/Lark/Feishu/Linear and Google Gmail/Calendar/Drive is implemented with fixture evidence; live account validation remains open. Native service reliability and character quality are checked from the first release, not deferred to the end.
 
 ## Working assumptions
 

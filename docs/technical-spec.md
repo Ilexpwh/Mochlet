@@ -90,3 +90,9 @@ Copied Google/team context retains account/provider/remote-user identity, source
 ### Bounded OKF folder interchange
 
 The knowledge implementation now parses frontmatter with pinned Yams 6.1.0. Directory previews capture immutable concept bytes and selected scope; import journals fresh note IDs for rollback after interruption. Each original bundle has a distinct export root and retained relative concept paths. Lifecycle exclusion participates in retrieval before result limits and in final evidence checks. Native lifecycle review is revision-guarded. [Detailed bounds and omissions](okf-bundles.md) are part of the supported contract; arbitrary YAML aliases, copied resources, original bundle logs and attester execution are not supported.
+
+## Implemented ownership additions — 2026-11-02
+
+`SlimeProfile.swift` owns versioned companion preferences and immutable task assignments; native ProfileSettingsView owns editing, while AppModel captures profile context before enqueue. TaskBoardOrder owns persisted project-local visual order independently of execution queue order.
+
+`GitHubDiscussion.swift` owns bounded REST comment snapshots and scoped cache persistence. `GitHubBoard.swift` owns read-only Projects GraphQL paging, typed content and remote selection verification; `GitHubBoardStore.swift` owns atomic board/status records and task board provenance. Native discussion/board sheets are explicit readers; GitHubController composes them into the existing issue/workspace pipeline. No refresh dispatches work or mutates remote board state. See [profiles](companion-profiles.md), [discussions](github-discussions.md) and [Projects](github-projects.md) for bounds and evidence.

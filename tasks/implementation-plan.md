@@ -54,3 +54,7 @@ Gmail history synchronization now refreshes an explicit tracked set with complet
 ### File and task completion evidence
 
 New task attempts retain separate assistant replies with active-run checkpoints, bounded Unicode-safe storage and explicit legacy unavailability. [Task contract](../docs/task-board.md). Files summaries now offer explicit image previews with fresh modality checks, bounded revision-pinned preparation, metadata removal and source-ID citations. [Image contract](../docs/image-analysis.md). Live model quality remains open; no release gate is inferred from fixture success. Manual board ordering and saved companion profiles are now implemented with core/native-host fixture evidence; their interactive UI walkthroughs remain pending. See [profiles](../docs/companion-profiles.md).
+
+### Projects and discussion progress — 2026-11-02
+
+G02/G03/G05 now include selected discussion snapshots and bounded Projects V2 reading, explicit status-field mapping, typed board content, exact issue-node matching and task board provenance revalidated at dispatch. Complete nested paging and partial-failure rollback have fixtures. Current CLI auth lacks `read:project`; live Projects sync remains pending. Complex field content/write-back and full milestone acceptance remain open. [Projects contract](../docs/github-projects.md), [discussion contract](../docs/github-discussions.md).

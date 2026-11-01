@@ -47,17 +47,31 @@ import SlimeCore
         } catch { message = error.localizedDescription }
     }
     func prepare(_ issue: GitHubIssue, model: AppModel) async {
+        await prepareIssue(number: issue.number, expectedID: issue.id, model: model)
+    }
+    func prepareBoardItem(_ item: GitHubBoardItem, snapshot: GitHubBoardSnapshot, model: AppModel) async {
+        guard let number = item.content?.number else { message = "This board card is not a repository issue."; return }
+        await prepareIssue(number: number, expectedID: nil, model: model, board: (item, snapshot))
+    }
+    private func prepareIssue(number: Int, expectedID: Int64?, model: AppModel, board: (GitHubBoardItem, GitHubBoardSnapshot)? = nil) async {
         guard !busy, let binding, let project = model.projects.first(where: { $0.id == binding.projectID }) else { return }
         let revision = model.composerRevision, selectedTaskID = model.selectedTaskID
         busy = true; message = nil; defer { busy = false }
         do {
             guard model.draft.isEmpty, model.connectedDraft == nil, !model.preparingSubmission else { throw MochletError.message("Clear or send your existing composer draft before preparing an issue prompt.") }
+            if let (item, snapshot) = board {
+                guard snapshot.binding.projectID == binding.projectID, snapshot.binding.account == binding.account,
+                      snapshot.binding.repository == binding.repository else { throw MochletError.message("Choose the board's original project and repository before preparing work.") }
+                try await GitHubBoardClient(executable: ghPath).verifyItem(item, snapshot: snapshot)
+            }
             try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
-            let fresh = try await GitHubClient(executable: ghPath).issue(issue.number, binding: binding, includeDiscussion: true)
-            guard fresh.id == issue.id else { throw MochletError.message("Issue identity changed. Sync again.") }
+            let fresh = try await GitHubClient(executable: ghPath).issue(number, binding: binding, includeDiscussion: true)
+            guard expectedID == nil || fresh.id == expectedID,
+                  board == nil || fresh.node_id == board?.0.content?.id else { throw MochletError.message("Issue identity changed. Sync again.") }
             guard try JSONEncoder().encode(fresh).count <= 100_000 else { throw MochletError.message("Issue and comments exceed the 100 KB task context limit. Narrow the request into a separate task with selected references.") }
             try await store.saveGitHubDiscussion(.init(binding: binding, issue: fresh, fetchedAt: Date()))
-            let task = try await store.prepareGitHubTask(fresh, binding: binding)
+            let selection = board.map { GitHubBoardSelection(item: $0.0, snapshot: $0.1) }
+            let task = try await store.prepareGitHubTask(fresh, binding: binding, board: selection)
             guard ![.queued, .running, .waiting].contains(task.state) else { throw MochletError.message("This issue already has queued or active work. Open it in Task history.") }
             let workspace: TaskWorkspace
             if let saved = try await store.workspace(taskID: task.id) { workspace = saved }
@@ -79,6 +93,11 @@ import SlimeCore
             throw MochletError.message("Issue task no longer matches its project or source.")
         }
         try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
+        if let selection = try await store.githubTaskBoard(taskID: taskID) {
+            guard selection.binding.account == binding.account, selection.binding.repository == binding.repository,
+                  selection.binding.projectID == project.id else { throw MochletError.message("Board task destination changed. Prepare it again.") }
+            try await GitHubBoardClient(executable: ghPath).verifySelection(selection)
+        }
         let fresh = try await GitHubClient(executable: ghPath).issue(saved.number, binding: binding, includeDiscussion: saved.discussion != nil)
         guard fresh.matchesReviewedSource(saved) else {
             throw MochletError.message("The GitHub issue changed. Prepare it again to review its latest context before dispatch.")

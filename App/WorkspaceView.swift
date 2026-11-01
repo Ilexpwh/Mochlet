@@ -12,6 +12,7 @@ struct WorkspaceView: View {
                     Label("Companion",systemImage:"bubble.left.and.bubble.right").tag("Companion")
                     Label("Projects",systemImage:"folder").tag("Projects")
                     Label("Task history",systemImage:"clock").tag("History")
+                    Label("Meetings",systemImage:"waveform").tag("Meetings")
                     Label("Files",systemImage:"tray.and.arrow.down").tag("Files")
                     Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
@@ -25,6 +26,7 @@ struct WorkspaceView: View {
                 switch section {
                 case "Projects": projectList
                 case "History": history
+                case "Meetings": MeetingsView(model: model)
                 case "Files": FilesView(model: model)
                 case "Knowledge": KnowledgeView(model: model)
                 case "Appearance": appearance
@@ -96,6 +98,7 @@ struct CompanionView: View {
                 }
                 Spacer();Label("Codex",systemImage:"terminal").font(.caption).foregroundStyle(.secondary)
             }
+            if !compact, model.meetings.active { MeetingStatusView(meetings: model.meetings) }
             if !compact {
                 HStack {
                     Toggle("Use project memory", isOn: $model.includeKnowledge)
@@ -110,7 +113,7 @@ struct CompanionView: View {
                 ScrollView { Text(task.output.isEmpty ? task.title : task.output).frame(maxWidth:.infinity,alignment:.leading).textSelection(.enabled).padding(8) }.background(.quaternary.opacity(0.4),in:RoundedRectangle(cornerRadius:12))
             } else {
                 Spacer(minLength:0)
-                SlimeView(mood:model.slimeMood,tint:model.tint).frame(width:compact ? 72:170,height:compact ? 72:170)
+                SlimeView(mood:model.slimeMood,tint:model.tint).frame(width:compact ? (model.meetings.active || model.speech.active ? 36 : 72):170,height:compact ? (model.meetings.active || model.speech.active ? 36 : 72):170)
                 Text("Hello, I’m \(model.slimeName).").font(compact ? .title3:.title).fontWeight(.semibold)
                 Text(model.status).foregroundStyle(.secondary)
                 Spacer(minLength:0)

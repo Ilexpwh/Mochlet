@@ -6,6 +6,7 @@ import SlimeCore
     let files = FileController()
     let speech = SpeechController()
     let knowledge: KnowledgeController
+    let meetings: MeetingController
     var includeKnowledge = false
     var includePersonalKnowledge = false
     let store: Store
@@ -75,6 +76,7 @@ import SlimeCore
     init(store: Store, folder: URL) {
         self.store = store; self.folder = folder
         self.knowledge = KnowledgeController(folder: folder)
+        self.meetings = MeetingController(folder: folder, speech: speech)
         slimeName = UserDefaults.standard.string(forKey: "slimeName") ?? "Mochlet"
         palette = UserDefaults.standard.string(forKey: "palette") ?? "Mint"
     }
@@ -84,6 +86,7 @@ import SlimeCore
             self.draft += self.draft.isEmpty ? text : "\n" + text
         }
         await speech.load()
+        await meetings.load()
         do {
             try await store.recover()
             try await refresh()

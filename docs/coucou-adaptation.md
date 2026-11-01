@@ -29,3 +29,7 @@ Grok Bot visual direction reference: https://x.ai/news/designing-grok-bot. No Gr
 ## File feeding ports — 2026-11-01
 
 `App/FileDropView.swift` adapts `FileDropNSView` from Coucou revision `b6a85f29719b5291651c092e33b3f9d4004d091e`. It preserves the AppKit drag-destination / click-through arrangement and adds actual-island hit acceptance. `AttachmentChips` adapts `ContextChip` layout from `IslandViewContent.swift`. Mochlet uses semantic colors, accessible removal and actual extraction completion. Coucou's fixed-duration simulated upload handler is not copied. Both adaptations retain the MIT attribution in source and bundled notices.
+
+## Meeting audio ports — 2026-11-01
+
+`Resampler16k` and the microphone tap in `App/MeetingCapture.swift` adapt Coucou's `ParakeetEngine.swift` and `NoteAudio.swift` at b6a85f2. They retain MIT attribution. Mochlet adds conversion error propagation, timestamped bounded buffering and device-change handling. System audio uses ScreenCaptureKit with explicit application/all-system selection, following Apple's capture APIs; Coucou's global Core Audio tap and plaintext recording storage are not copied.

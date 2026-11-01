@@ -49,7 +49,9 @@ struct NotchView: View {
                     SlimeView(mood: model.slimeMood, tint: model.tint)
                         .frame(width: 36, height: 36)
                     if island.edge == .top { Spacer(minLength: island.notchWidth) }
-                    if !model.pendingInputs.isEmpty {
+                    if model.meetings.active {
+                        Circle().fill(model.meetings.recording ? .red : .orange).frame(width: 9, height: 9).accessibilityLabel(model.meetings.recording ? "Meeting recording" : "Meeting paused or processing")
+                    } else if !model.pendingInputs.isEmpty {
                         Text("\(model.pendingInputs.count)").font(.system(size: 11, weight: .semibold, design: .rounded))
                             .foregroundStyle(.black).frame(width: 20, height: 20).background(model.tint, in: Circle())
                     } else {
@@ -80,6 +82,7 @@ struct NotchView: View {
             if count > 0 { island.tab = "Attention" }
             stateChanged()
         }
+        .onChange(of: model.meetings.phase) { _, _ in stateChanged() }
         .onChange(of: model.files.busy) { _, _ in stateChanged() }
         .onChange(of: model.speech.phase) { _, _ in stateChanged() }
         .onChange(of: model.isBusy) { _, _ in stateChanged() }
@@ -117,6 +120,7 @@ struct NotchView: View {
             .buttonStyle(.plain).foregroundStyle(.white.opacity(0.85))
             .padding(.horizontal, 20).padding(.bottom, 6)
             Rectangle().fill(.white.opacity(0.1)).frame(height: 1).padding(.horizontal, 20)
+            if model.meetings.active { MeetingStatusView(meetings: model.meetings).padding(.horizontal, 20).padding(.vertical, 4) }
             if island.tab == "Chat" {
                 CompanionView(model: model, compact: true)
             } else if island.tab == "Attention" {

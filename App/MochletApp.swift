@@ -36,17 +36,19 @@ import SlimeCore
     @objc private func captureInterrupted() {
         if model?.speech.active == true { model?.speech.cancel(); model?.speech.message = "Voice command cancelled on lock or sleep. Start a new recording when ready." }
         model?.speech.stopSpeaking()
+        Task { await model?.meetings.pause(reason: "Paused on lock or sleep. Resume explicitly.") }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let model, model.isBusy || model.speech.active {
+        if let model, model.isBusy || model.speech.active || model.meetings.active {
             let alert = NSAlert(); alert.messageText = "Work is still active"
-            alert.informativeText = "Quitting interrupts active work and discards any voice command in progress. Its history remains available when you return."
+            alert.informativeText = "Quitting interrupts active work, saves meeting segments and discards any voice command in progress. Its history remains available when you return."
             alert.addButton(withTitle: "Keep Mochlet open"); alert.addButton(withTitle: "Quit and interrupt")
             if alert.runModal() != .alertSecondButtonReturn { return .terminateCancel }
         }
         model?.speech.cancel(); model?.speech.stopSpeaking()
         Task { [model] in
+            await model?.meetings.shutdown()
             if let runtime=model?.runtime {await runtime.client.stop()}
             NSApp.reply(toApplicationShouldTerminate:true)
         }

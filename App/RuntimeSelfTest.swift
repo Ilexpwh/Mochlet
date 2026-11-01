@@ -87,13 +87,15 @@ import SlimeCore
         try await queuedMemory(root: root)
         try await multipleMemorySources(root: root)
         try await taskEditDuringSubmission(root: root)
+        try await taskEditDuringSubmission(root: root, projectEdit: true)
+        try await projectInstructions(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
     }
-    static func taskEditDuringSubmission(root: URL) async throws {
-        let folder = root.appendingPathComponent("board-race")
+    static func taskEditDuringSubmission(root: URL, projectEdit: Bool = false) async throws {
+        let folder = root.appendingPathComponent(projectEdit ? "project-race" : "board-race")
         let store = try Store(path: ":memory:")
         let a = Project(name: "Original", root: root.path), b = Project(name: "Destination", root: folder.path)
         try await store.save(a); try await store.save(b)
@@ -109,14 +111,35 @@ import SlimeCore
         let changed = edited
         model.knowledge.validateConnected = { _ in
             try await Task.sleep(for: .milliseconds(10))
-            try await store.editTask(expected: original, updated: changed, details: .init(taskID: original.id))
+            if projectEdit {
+                var settings = a; settings.instructions = "Concurrent project edit"
+                _ = try await store.editProject(settings, expected: a)
+            } else { try await store.editTask(expected: original, updated: changed, details: .init(taskID: original.id)) }
         }
         try await model.refresh(); model.selectedProjectID = a.id; model.selectedTaskID = original.id
         model.includeKnowledge = true; model.draft = "Mint"; model.submit()
         try await wait { !model.preparingSubmission }
-        try require(try await store.tasks().first { $0.id == original.id } == changed, "Submission overwrote a concurrently edited task destination")
+        try require(try await store.tasks().first { $0.id == original.id } == (projectEdit ? original : changed), "Submission overwrote a concurrently edited destination")
         try require(try await store.queuedCommands().isEmpty && model.runtime == nil, "Stale task preparation reached queue/runtime")
         try require(model.errorMessage?.contains("changed") == true, "Concurrent edit was not reported")
+        model.shutdown()
+    }
+    static func projectInstructions(root: URL) async throws {
+        let store = try Store(path: ":memory:")
+        var project = Project(name: "Configured", root: root.path); project.instructions = "Only this project uses mint fixtures."
+        let other = Project(name: "Other", root: root.appendingPathComponent("other").path)
+        try FileManager.default.createDirectory(atPath: other.root, withIntermediateDirectories: true)
+        try await store.save(project); try await store.save(other)
+        let model = AppModel(store: store, folder: root.appendingPathComponent("project-prompts"))
+        try await model.refresh(); model.isBusy = true // Hold dispatch; inspect actual AppModel submission snapshots.
+        model.selectedProjectID = project.id; model.draft = "First request"; model.submit()
+        try await wait { !model.preparingSubmission }
+        model.selectedProjectID = other.id; model.selectedTaskID = nil; model.draft = "Second request"; model.submit()
+        try await wait { !model.preparingSubmission }
+        let queued = try await store.queuedCommands()
+        try require(queued.count == 2 && queued[0].1.contains(project.instructions!) && queued[0].1.contains("First request"), "Project instructions were not included in actual submission")
+        try require(queued[1].1 == "Second request", "Project instructions leaked into another project")
+        try require(queued[0].0.title == "First request" && model.runtime == nil, "Preferences changed the task title or bypassed queue hold")
         model.shutdown()
     }
     static func multipleMemorySources(root: URL) async throws {

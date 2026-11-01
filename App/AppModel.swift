@@ -198,7 +198,7 @@ import SlimeCore
             do {
                 try ProjectResolver.validateRoot(project)
                 var queued=task;queued.state = .queued
-                var contextPrompt = prompt + attachmentContext
+                var contextPrompt = try project.contextPrompt(request: prompt) + attachmentContext
                 var evidence: [KnowledgeEvidence] = []
                 if let sourceDraft {
                     guard task.id == sourceDraft.taskID else { throw MochletError.message("The source task changed before submission.") }
@@ -215,7 +215,7 @@ import SlimeCore
                     }
                 }
                 guard submissionGeneration == queueGeneration else { throw MochletError.message("This submission was cancelled while preparing its context.") }
-                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task)
+                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task, expectedProject: project)
                 try await refresh()
                 guard submissionGeneration == queueGeneration else {
                     try await store.cancelQueuedCommand(taskID: queued.id)

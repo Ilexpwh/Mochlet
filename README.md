@@ -74,3 +74,5 @@ The roadmap remains broader than the development build. Consult the evidence led
 `./scripts/check.sh` runs core fixtures, builds the app and runs native orchestration regressions against disposable CLI processes. Live agent tests are opt-in: `MOCHLET_LIVE_CODEX=1` or `MOCHLET_LIVE_CLAUDE=1` with the corresponding test filter. They use your local CLI authentication. `MOCHLET_LIVE_PI_PATH=/absolute/path/to/pi` with the `livePiGuardPreflightWithoutModelInference` filter runs a real Pi preflight in an isolated empty agent directory without model inference.
 
 [Component research](docs/component-research.md) and [Coucou porting details](docs/coucou-porting-research.md) record pinned upstream sources, licenses and adoption decisions. Coucou code is adapted with its MIT attribution; no proprietary character assets are included.
+
+Project names, exact aliases and per-project coding instructions are editable in Projects. See [project settings](docs/project-settings.md) for routing and relocation limits.

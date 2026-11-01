@@ -7,10 +7,16 @@ public struct Project: Codable, Identifiable, Sendable, FetchableRecord, Persist
     public var name: String
     public var root: String
     public var aliases: String
+    public var instructions: String?
     public init(name: String, root: String, aliases: String = "") {
         id = UUID().uuidString; self.name = name
         self.root = URL(fileURLWithPath: root).resolvingSymlinksInPath().standardizedFileURL.path
         self.aliases = aliases
+    }
+    public func contextPrompt(request: String) throws -> String {
+        guard let instructions, !instructions.isEmpty else { return request }
+        let configuration: JSONValue = .object(["projectID": .string(id), "name": .string(name), "instructions": .string(instructions)])
+        return "USER-CONFIGURED PROJECT PREFERENCES (apply only to this project; the current request takes precedence):\n" + configuration.formatted + "\n\nCURRENT REQUEST:\n" + request
     }
 }
 

@@ -30,7 +30,7 @@ struct WorkspaceView: View {
         } detail: {
             Group {
                 switch section {
-                case "Projects": projectList
+                case "Projects": ProjectsView(model: model) { section = "Companion" }
                 case "History": history
                 case "Board": TaskBoardView(model: model) { section = "Companion" }
                 case "Sessions": CodexSessionsView(model: model) { section = "Companion" }
@@ -49,18 +49,6 @@ struct WorkspaceView: View {
         }
         .tint(colorScheme == .dark ? model.tint : model.tint.mix(with:.black,by:0.35))
         .alert("Mochlet needs your attention",isPresented:Binding(get:{model.errorMessage != nil},set:{if !$0 {model.errorMessage=nil}})) { Button("OK") { model.errorMessage=nil } } message: { Text(model.errorMessage ?? "") }
-    }
-    private var projectList: some View {
-        VStack(alignment:.leading,spacing:20) {
-            HStack { Text("Projects").font(.largeTitle.bold());Spacer();Button("Add folder",systemImage:"plus",action:model.addProject) }
-            Text("Each task stays attached to its working folder and exact agent session.").foregroundStyle(.secondary)
-            if model.projects.isEmpty { ContentUnavailableView("Bring your first project",systemImage:"folder.badge.plus",description:Text("Choose a local folder to give Mochlet a place to work.")) }
-            List(model.projects) { p in
-                VStack(alignment:.leading,spacing:5) { Text(p.name).font(.headline); Text(p.root).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                    .padding(.vertical,6)
-                    .contextMenu { Button("Use this project") { model.selectedProjectID=p.id;section="Companion" } }
-            }
-        }.padding(28)
     }
     private var history: some View {
         VStack(alignment:.leading) {

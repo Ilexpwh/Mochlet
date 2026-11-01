@@ -78,3 +78,7 @@ AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores p
 ### Reviewed team delivery
 
 `TeamDelivery` shares the immutable delivery journal with Google, with provider-specific capability checks. Replies require fresh source revisions, an exact preview and explicit Send. Lost responses remain uncertain; reconciliation only reads matching remote evidence. See [team connector contracts and limitations](team-connectors.md).
+
+### Project configuration snapshots
+
+Optional project instructions are persisted with the registered root and aliases. AppModel captures this record before context preparation; enqueue requires the identical record transactionally. Queued/active tasks lock edits. Each run retains its submitted instruction snapshot. Existing sessions are never retargeted through folder editing. See [project settings](project-settings.md).

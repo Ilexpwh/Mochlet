@@ -61,6 +61,9 @@ public actor Store {
         migrations.registerMigration("task_board") { db in
             try db.execute(sql: "CREATE TABLE task_details(taskID TEXT PRIMARY KEY REFERENCES tasks(id), payload BLOB NOT NULL); CREATE TABLE task_comments(id TEXT PRIMARY KEY,taskID TEXT NOT NULL REFERENCES tasks(id),body TEXT NOT NULL,createdAt DOUBLE NOT NULL); CREATE INDEX task_comments_order ON task_comments(taskID,createdAt);")
         }
+        migrations.registerMigration("project_instructions") { db in
+            try db.execute(sql: "ALTER TABLE projects ADD COLUMN instructions TEXT")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -102,9 +105,14 @@ public actor Store {
 }
 
 extension Store {
-    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = [], expected: WorkTask? = nil) throws {
+    public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool, knowledge: [KnowledgeEvidence] = [], expected: WorkTask? = nil, expectedProject: Project? = nil) throws {
         guard task.state == .queued else { throw MochletError.message("Only queued tasks can be enqueued.") }
         try database.write { db in
+            if let expectedProject {
+                guard expectedProject.id == task.projectID, try Project.fetchOne(db, key: task.projectID) == expectedProject else {
+                    throw MochletError.message("Project settings changed while preparing this task. Review the destination and submit again.")
+                }
+            }
             if let current = try WorkTask.fetchOne(db, key: task.id) {
                 var unchanged = task; unchanged.state = current.state
                 guard current == (expected ?? unchanged), ![.running, .waiting].contains(current.state) else {

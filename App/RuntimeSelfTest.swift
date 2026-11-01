@@ -89,6 +89,7 @@ import SlimeCore
         try await taskEditDuringSubmission(root: root)
         try await taskEditDuringSubmission(root: root, projectEdit: true)
         try await projectInstructions(root: root)
+        try await queuedSourceChanges(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
@@ -141,6 +142,47 @@ import SlimeCore
         try require(queued[1].1 == "Second request", "Project instructions leaked into another project")
         try require(queued[0].0.title == "First request" && model.runtime == nil, "Preferences changed the task title or bypassed queue hold")
         model.shutdown()
+    }
+    static func queuedSourceChanges(root: URL) async throws {
+        for mode in ["changed-before-start", "changed-after-prepare"] {
+            let folder = root.appendingPathComponent(mode)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let store = try Store(path: ":memory:"), project = Project(name: "Source fixture", root: folder.path)
+            try await store.save(project)
+            var account = ConnectedAccount(provider: "slack", remoteID: "fixture:user", label: "Fixture", scopes: [TeamService.slack.readCapability]); account.projectIDs = [project.id]
+            try await store.saveConnection(account)
+            let source = ConnectedSource(accountID: account.id, service: "slack", collection: "C1", remoteID: "1.000001", title: "Source", body: "Original", url: "https://fixture.slack.com/", revision: "1")
+            try await store.saveSources([source], account: account)
+            let original = try await store.captureSource(source, account: account, projectID: project.id, provider: .codex)
+            var queued = original; queued.state = .queued
+            try await store.enqueue(queued, prompt: "Original copied context", readOnly: true, expected: original, sourceEvidence: .init(source: source, account: account))
+            let fixture = folder.appendingPathComponent("agent")
+            try #"""
+            #!/usr/bin/python3
+            import json,sys,os
+            folder=os.path.dirname(os.path.abspath(__file__))
+            for line in sys.stdin:
+                value=json.loads(line); method=value.get('method','')
+                with open(folder+'/requests','a') as log: log.write(method+'\n')
+                if method=='initialized': continue
+                result={'thread':{'id':'fixture-thread','cwd':os.getcwd()}} if method=='thread/start' else {}
+                print(json.dumps({'id':value.get('id'),'result':result}),flush=True)
+            """#.write(to: fixture, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
+            let model = AppModel(store: store, folder: folder); model.codexPath = fixture.path
+            var reads = 0
+            model.sourceReaderFixture = { source, _ in
+                reads += 1; var fresh = source
+                if mode == "changed-before-start" || reads > 1 { fresh.body = "Changed remotely" }
+                return fresh
+            }
+            try await model.refresh(); model.queue = try await store.queuedCommands()
+            await model.runNext(); try await wait { !model.isBusy }
+            let requests = (try? String(contentsOf: folder.appendingPathComponent("requests"), encoding: .utf8)) ?? ""
+            try require(model.tasks.first?.state == .failed && !requests.contains("turn/start"), "Changed source reached agent inference")
+            try require(mode == "changed-before-start" ? requests.isEmpty : requests.contains("thread/start"), "Source fixture did not exercise the expected dispatch boundary")
+            model.shutdown()
+        }
     }
     static func multipleMemorySources(root: URL) async throws {
         let folder = root.appendingPathComponent("multiple-memory")

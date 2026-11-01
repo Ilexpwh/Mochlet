@@ -82,3 +82,7 @@ AppAuth 3.0.0 handles desktop PKCE/loopback OAuth and refresh; Keychain stores p
 ### Project configuration snapshots
 
 Optional project instructions are persisted with the registered root and aliases. AppModel captures this record before context preparation; enqueue requires the identical record transactionally. Queued/active tasks lock edits. Each run retains its submitted instruction snapshot. Existing sessions are never retargeted through folder editing. See [project settings](project-settings.md).
+
+### Queued source evidence
+
+Copied Google/team context retains account/provider/remote-user identity, source ID, revision and content hash in `queued_source`, separate from the mutable retrieval cache. Enqueue binds evidence to the exact task/project/source. Dispatch validates it before starting and after preparing the agent session. A final local check follows other context refreshes. Interrupted legacy queues require a new reviewed source draft; they are not replayed with unverifiable copied text.

@@ -184,3 +184,9 @@ Still pending: full-screen/multiple-display hardware walkthrough, VoiceOver user
 - Transactional edit/enqueue checks reject stale project preparation. Queued/active work locks settings; established task/session or GitHub bindings cannot silently move to another folder. [Behavior and limits](project-settings.md).
 - `scripts/check.sh` passes: 82 reported tests (79 fixture declarations and three opt-in live skips), Debug build and native runtime regressions, including project-edit races and actual AppModel instruction isolation. A later UI-only accessibility fix rebuilt successfully.
 - Native disposable walkthrough saved/reopened preferences and resolved a Chinese alias to the correct project. No live agent dispatch. Natural-language routing inference and established-project relocation remain open.
+
+## Queued connected-source revision guard — 2026-11-01
+
+- Review found that Google/team source tasks rechecked remote access but discarded the fresh body; a queued copied prompt could outlive its source revision. Connected drafts now validate the exact captured body/revision before enqueue and persist immutable source evidence alongside the queued command.
+- Dispatch checks remote content before runtime startup and after session preparation, then rechecks the local snapshot after memory validation. Cache refresh, changed permissions or remote identity cannot replace the queued reference. Legacy copied-source queues without revision evidence become interrupted during migration.
+- `scripts/check.sh` passes: 83 reported tests (80 fixture declarations plus three opt-in live skips), native build and runtime host. New tests cover cache changes with unchanged provider revisions, persistence/relaunch, cancellation cleanup, unbound-task rejection and source changes at both native dispatch boundaries. No stale-source fixture reached `turn/start`.

@@ -44,20 +44,24 @@ extension KnowledgeNote {
 extension Store {
     public func memorySource(_ note: KnowledgeNote) throws -> (ConnectedAccount, ConnectedSource)? {
         guard let ref = try note.connection() else { return nil }
-        return try database.read { db in
-            guard let accountData = try Data.fetchOne(db, sql: "SELECT payload FROM connections WHERE id=?", arguments: [ref.accountID]),
-                  let sourceData = try Data.fetchOne(db, sql: "SELECT payload FROM connected_sources WHERE accountID=? AND sourceID=?", arguments: [ref.accountID, ref.sourceID]) else {
-                throw MochletError.message("This memory's connection or source is unavailable. It is retained for review, but excluded from AI context.")
-            }
-            let account = try JSONDecoder().decode(ConnectedAccount.self, from: accountData)
-            let source = try JSONDecoder().decode(ConnectedSource.self, from: sourceData)
-            guard account.provider == ref.provider, account.remoteID == ref.remoteAccountID,
-                  account.projectIDs.contains(note.scope), ref.matches(source) else {
-                throw MochletError.message("This memory's project permission or source revision changed. Read and save the source again.")
-            }
-            try Self.requireSource(source, account: account, in: db)
-            return (account, source)
+        return try sourceSnapshot(ref, projectID: note.scope)
+    }
+    public func sourceSnapshot(_ ref: ConnectedMemoryReference, projectID: String) throws -> (ConnectedAccount, ConnectedSource) {
+        try database.read { try Self.sourceSnapshot(ref, projectID: projectID, in: $0) }
+    }
+    static func sourceSnapshot(_ ref: ConnectedMemoryReference, projectID: String, in db: Database) throws -> (ConnectedAccount, ConnectedSource) {
+        guard let accountData = try Data.fetchOne(db, sql: "SELECT payload FROM connections WHERE id=?", arguments: [ref.accountID]),
+              let sourceData = try Data.fetchOne(db, sql: "SELECT payload FROM connected_sources WHERE accountID=? AND sourceID=?", arguments: [ref.accountID, ref.sourceID]) else {
+            throw MochletError.message("This connection or source is unavailable. Its retained content cannot be used as current AI context.")
         }
+        let account = try JSONDecoder().decode(ConnectedAccount.self, from: accountData)
+        let source = try JSONDecoder().decode(ConnectedSource.self, from: sourceData)
+        guard account.provider == ref.provider, account.remoteID == ref.remoteAccountID,
+              account.projectIDs.contains(projectID), ref.matches(source) else {
+            throw MochletError.message("The source's project permission or revision changed. Read it again and prepare fresh context.")
+        }
+        try Self.requireSource(source, account: account, in: db)
+        return (account, source)
     }
     public func allowsMemory(_ note: KnowledgeNote) -> Bool {
         do { _ = try memorySource(note); return true } catch { return false }
@@ -72,6 +76,11 @@ extension Store {
         try database.read { db in
             guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM queued_knowledge WHERE taskID=?", arguments: [taskID]) else { return [] }
             return try JSONDecoder().decode([KnowledgeEvidence].self, from: data)
+        }
+    }
+    public func queuedSource(taskID: String) throws -> ConnectedMemoryReference? {
+        try database.read { db in
+            try Data.fetchOne(db, sql: "SELECT payload FROM queued_source WHERE taskID=?", arguments: [taskID]).map { try JSONDecoder().decode(ConnectedMemoryReference.self, from: $0) }
         }
     }
 }

@@ -22,6 +22,10 @@ extension AppModel {
             case let .github(issue, _): "GitHub #\(issue.number) · \(issue.title)"
             }
         }
+        func sourceEvidence() throws -> ConnectedMemoryReference? {
+            if case let .connected(source, account) = content { return try .init(source: source, account: account) }
+            return nil
+        }
         func context() throws -> String {
             switch content {
             case let .connected(source, account): return try source.context(account: account)
@@ -33,10 +37,9 @@ extension AppModel {
         }
         @MainActor func validate(model: AppModel) async throws {
             switch content {
-            case let .connected(_, account):
+            case let .connected(source, account):
                 try await model.store.validateConnectedTask(taskID)
-                try await model.google.validateTask(taskID)
-                try await model.connections.validateTask(taskID)
+                try await model.validateSourceSnapshot(.init(source: source, account: account), projectID: projectID)
                 guard try await model.store.connections().contains(account) else { throw MochletError.message("Source account permissions changed. Prepare this draft again.") }
             case let .github(issue, binding):
                 guard let saved = try await model.store.githubTaskBinding(taskID: taskID), saved == binding,

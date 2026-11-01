@@ -21,6 +21,9 @@ import SlimeCore
     var selectedTaskID: String?
     var connectedDraft: ConnectedDraft?
     var preparingSubmission = false
+    #if DEBUG
+    var sourceReaderFixture: ((ConnectedSource, ConnectedAccount) async throws -> ConnectedSource)?
+    #endif
     var composerRevision = UUID()
     var draft = "" { didSet { composerRevision = UUID() } }
     var errorMessage: String?
@@ -215,7 +218,7 @@ import SlimeCore
                     }
                 }
                 guard submissionGeneration == queueGeneration else { throw MochletError.message("This submission was cancelled while preparing its context.") }
-                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task, expectedProject: project)
+                try await store.enqueue(queued, prompt: contextPrompt, readOnly: runReadOnly, knowledge: evidence, expected: task, expectedProject: project, sourceEvidence: sourceDraft?.sourceEvidence())
                 try await refresh()
                 guard submissionGeneration == queueGeneration else {
                     try await store.cancelQueuedCommand(taskID: queued.id)
@@ -249,11 +252,15 @@ import SlimeCore
         var claimed = false
         do {
             let evidence = try await store.queuedKnowledge(taskID: task.id)
+            let sourceEvidence = try await store.queuedSource(taskID: task.id)
             try await store.begin(task,run:run); claimed = true; try await refresh()
+            if let sourceEvidence { try await validateSourceSnapshot(sourceEvidence, projectID: task.projectID) }
             try await validateQueuedMemory(evidence)
             try await store.validateConnectedTask(task.id)
-            try await google.validateTask(task.id)
-            try await connections.validateTask(task.id)
+            if sourceEvidence == nil {
+                try await google.validateTask(task.id)
+                try await connections.validateTask(task.id)
+            }
             try await github.validateTask(taskID: task.id, project: project)
             if let workspace = try await store.workspace(taskID: task.id) {
                 try await TaskWorkspaces.validate(workspace, project: project)
@@ -271,7 +278,9 @@ import SlimeCore
             task.threadID=thread;task.sessionCWD=project.root;if provider == .codex {task.sessionConfirmed=true};activeThreadID=thread
             try await store.save(task);try await refresh()
             try Task.checkCancellation()
+            if let sourceEvidence { try await validateSourceSnapshot(sourceEvidence, projectID: task.projectID) }
             try await validateQueuedMemory(evidence)
+            if let sourceEvidence { _ = try await store.sourceSnapshot(sourceEvidence, projectID: task.projectID) }
             let turn = try await runtime.send(threadID:thread,text:prompt)
             guard activeRunID == run.id else { return }
             activeTurnID = turn

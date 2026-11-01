@@ -1,0 +1,33 @@
+# macOS and local editor state
+.DS_Store
+xcuserdata/
+*.xcuserstate
+.idea/
+.vscode/
+
+# Build and dependency output
+.build/
+.swiftpm/
+DerivedData/
+build/
+dist/
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Credentials and machine-specific configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.mobileprovision
+
+# Local runtime data and derived indexes (fixtures stay explicit)
+.codebase-memory/
+.codegraph/
+.slime-local/
+*.sqlite-wal
+*.sqlite-shm

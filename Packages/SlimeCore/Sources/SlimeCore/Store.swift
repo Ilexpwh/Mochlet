@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public actor Store {
-    private let database: DatabaseQueue
+    let database: DatabaseQueue
     public init(path: String) throws {
         database = try DatabaseQueue(path: path)
         var migrations = DatabaseMigrator()
@@ -45,6 +45,7 @@ public actor Store {
         migrations.registerMigration("agent_session_route") { db in
             try db.execute(sql: "ALTER TABLE tasks ADD COLUMN provider TEXT NOT NULL DEFAULT 'codex'; ALTER TABLE tasks ADD COLUMN sessionCWD TEXT; ALTER TABLE tasks ADD COLUMN sessionConfirmed BOOLEAN NOT NULL DEFAULT 0;")
         }
+        migrations.registerMigration("connected_sources") { try ConnectionSchema.create($0) }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }

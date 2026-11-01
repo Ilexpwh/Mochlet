@@ -31,6 +31,17 @@ public actor Store {
         migrations.registerMigration("durable_queue") { db in
             try db.execute(sql: "CREATE TABLE queued_commands (sequence INTEGER PRIMARY KEY AUTOINCREMENT, taskID TEXT NOT NULL UNIQUE REFERENCES tasks(id), prompt TEXT NOT NULL, readOnly BOOLEAN NOT NULL)")
         }
+        migrations.registerMigration("github_account_task_identity") { db in
+            try db.execute(sql: """
+                CREATE TABLE github_tasks_v2 (taskID TEXT PRIMARY KEY REFERENCES tasks(id), projectID TEXT NOT NULL REFERENCES projects(id), repositoryID INTEGER NOT NULL, issueID INTEGER NOT NULL, accountID INTEGER NOT NULL, binding BLOB NOT NULL, issue BLOB NOT NULL, UNIQUE(projectID,repositoryID,issueID,accountID));
+                """)
+            for row in try Row.fetchAll(db, sql: "SELECT * FROM github_tasks") {
+                let payload: Data = row["binding"]
+                let binding = try JSONDecoder().decode(GitHubBinding.self, from: payload)
+                try db.execute(sql: "INSERT INTO github_tasks_v2(taskID,projectID,repositoryID,issueID,accountID,binding,issue) VALUES(?,?,?,?,?,?,?)", arguments: [row["taskID"] as String, row["projectID"] as String, row["repositoryID"] as Int64, row["issueID"] as Int64, binding.account.id, payload, row["issue"] as Data])
+            }
+            try db.execute(sql: "DROP TABLE github_tasks; ALTER TABLE github_tasks_v2 RENAME TO github_tasks;")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -39,8 +50,9 @@ public actor Store {
     public func save(_ task: WorkTask) throws { try database.write { try task.save($0) } }
     public func begin(_ task: WorkTask, run: Run) throws {
         try database.write { db in
-            try task.save(db); try run.insert(db)
             try db.execute(sql: "DELETE FROM queued_commands WHERE taskID=?", arguments: [task.id])
+            guard db.changesCount == 1 else { throw MochletError.message("This queued task was cancelled or already started.") }
+            try task.save(db); try run.insert(db)
         }
     }
     public func finish(_ task: WorkTask, runID: String) throws {
@@ -91,6 +103,12 @@ extension Store {
             try db.execute(sql: "DELETE FROM queued_commands")
         }
     }
+    public func cancelQueuedCommand(taskID: String) throws {
+        try database.write { db in
+            try db.execute(sql: "DELETE FROM queued_commands WHERE taskID=?", arguments: [taskID])
+            if db.changesCount == 1 { try db.execute(sql: "UPDATE tasks SET state='cancelled' WHERE id=?", arguments: [taskID]) }
+        }
+    }
     public func workspace(taskID: String) throws -> TaskWorkspace? {
         try database.read { db in try Data.fetchOne(db, sql: "SELECT payload FROM task_workspaces WHERE taskID=?", arguments: [taskID]).map { try JSONDecoder().decode(TaskWorkspace.self, from: $0) } }
     }
@@ -130,12 +148,17 @@ extension Store {
     }
     public func prepareGitHubTask(_ issue: GitHubIssue, binding: GitHubBinding) throws -> WorkTask {
         try database.write { db in
-            if let taskID = try String.fetchOne(db, sql: "SELECT taskID FROM github_tasks WHERE projectID=? AND repositoryID=? AND issueID=?", arguments: [binding.projectID, binding.repository.id, issue.id]),
-               let task = try WorkTask.fetchOne(db, key: taskID) { return task }
+            if let taskID = try String.fetchOne(db, sql: "SELECT taskID FROM github_tasks WHERE projectID=? AND repositoryID=? AND issueID=? AND accountID=?", arguments: [binding.projectID, binding.repository.id, issue.id, binding.account.id]),
+               let task = try WorkTask.fetchOne(db, key: taskID) {
+                // Stable identities match; explicit rebind may have verified a rename.
+                // Refresh metadata without changing the task's workspace or session.
+                try db.execute(sql: "UPDATE github_tasks SET binding=?,issue=? WHERE taskID=?", arguments: [try JSONEncoder().encode(binding), try JSONEncoder().encode(issue), taskID])
+                return task
+            }
             var task = WorkTask(projectID: binding.projectID, title: "#\(issue.number) \(issue.title)")
             task.state = .draft
             try task.insert(db)
-            try db.execute(sql: "INSERT INTO github_tasks(taskID,projectID,repositoryID,issueID,binding,issue) VALUES(?,?,?,?,?,?)", arguments: [task.id, binding.projectID, binding.repository.id, issue.id, try JSONEncoder().encode(binding), try JSONEncoder().encode(issue)])
+            try db.execute(sql: "INSERT INTO github_tasks(taskID,projectID,repositoryID,issueID,accountID,binding,issue) VALUES(?,?,?,?,?,?,?)", arguments: [task.id, binding.projectID, binding.repository.id, issue.id, binding.account.id, try JSONEncoder().encode(binding), try JSONEncoder().encode(issue)])
             return task
         }
     }

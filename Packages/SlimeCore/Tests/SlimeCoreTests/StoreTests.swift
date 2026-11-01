@@ -17,6 +17,7 @@ import Foundation
     let project = Project(name: "Demo", root: "/tmp")
     try await store.save(project)
     var task = WorkTask(projectID: project.id, title: "Test")
+    try await store.enqueue(task, prompt: "Test", readOnly: true)
     task.state = .running; task.threadID = "exact-thread"
     let run = Run(taskID: task.id, prompt: "Test")
     try await store.begin(task, run: run)

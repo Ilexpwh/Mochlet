@@ -27,7 +27,7 @@ import SlimeCore
     var shuttingDown = false
     var selected: MeetingSession? { sessions.first { $0.id == selectedID } }
     var recording: Bool { phase == "recording" }
-    var active: Bool { activeID != nil || phase == "starting" }
+    var active: Bool { activeID != nil || phase != "idle" }
     var applications: [(id: String, name: String)] {
         NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.bundleIdentifier != Bundle.main.bundleIdentifier }.compactMap { app in app.bundleIdentifier.map { ($0, app.localizedName ?? $0) } }.sorted { $0.name < $1.name }
     }
@@ -62,12 +62,18 @@ import SlimeCore
             do {
                 try await prepareKey(); try Task.checkCancellation()
                 let meeting = MeetingSession(title: selectedTitle.isEmpty ? "Meeting · \(Date().formatted(date: .abbreviated, time: .shortened))" : selectedTitle, projectID: projectID, source: selectedSource, modelID: selectedModel)
-                try await store.create(meeting); activeID = meeting.id; selectedID = meeting.id
+                try await store.create(meeting)
+                if Task.isCancelled {
+                    try? await store.update(meeting.id, event: "startup-cancelled") { $0.state = "paused"; $0.notices.append("Startup cancelled before capture. Resume explicitly.") }
+                    throw CancellationError()
+                }
+                activeID = meeting.id; selectedID = meeting.id
                 try await beginCapture(meeting)
             } catch { await captureFailed(error) }
         }
     }
     func beginCapture(_ meeting: MeetingSession) async throws {
+        try Task.checkCancellation()
         speech.meetingActive = true
         let capture = MeetingCapture(offset: max(0, Date().timeIntervalSince(meeting.startedAt))); self.capture = capture
         try await capture.start(applicationID: meeting.source == "microphone" ? nil : meeting.source)
@@ -89,9 +95,10 @@ import SlimeCore
         }
     }
     func captureFailed(_ error: Error) async {
-        message = error.localizedDescription; await capture?.stop(); speech.meetingActive = false; phase = "paused"
+        let pausing = phase == "pausing"
+        message = error.localizedDescription; await capture?.stop(); speech.meetingActive = false
+        phase = pausing ? "pausing" : activeID == nil ? "idle" : "paused"
         if let id = activeID { try? await store?.update(id, event: "capture-failed") { $0.state = "paused"; $0.notices.append(error.localizedDescription) } }
-        else { phase = "idle" }
         try? await refresh()
     }
     func resume(_ meeting: MeetingSession) {
@@ -100,11 +107,15 @@ import SlimeCore
         operation = Task { do { try await prepareKey(); try await beginCapture(meeting) } catch { await captureFailed(error) } }
     }
     func pause(reason: String = "Paused by you. Resume explicitly when ready.") async {
-        guard activeID != nil, ["recording", "starting"].contains(phase) else { return }
+        guard ["recording", "starting"].contains(phase) else { return }
         operation?.cancel(); timer?.cancel(); phase = "pausing"
+        await capture?.stop()
+        // Await the cancelled startup before allowing another start. Keychain and
+        // database awaits may finish even after cancellation; neither may start capture.
+        await operation?.value
         await capture?.stop(); await flush(); capture = nil; microphoneLevel = 0; systemLevel = 0; speech.meetingActive = false
         if let id = activeID { try? await store?.update(id, event: "paused") { $0.state = "paused"; $0.notices.append(reason) } }
-        phase = "paused"; try? await refresh()
+        phase = activeID == nil ? "idle" : "paused"; try? await refresh()
     }
     func flush() async {
         while let flushJob { await flushJob.value }
@@ -147,8 +158,7 @@ import SlimeCore
     func cancelOperation() {
         operation?.cancel(); pendingSegments = []; transcriptionJob?.cancel()
         if phase == "starting" {
-            if activeID == nil { phase = "idle" }
-            else { Task { await pause(reason: "Recording startup cancelled.") } }
+            Task { await pause(reason: "Recording startup cancelled.") }
         }
     }
     func deleteMeeting(_ meeting: MeetingSession) async {

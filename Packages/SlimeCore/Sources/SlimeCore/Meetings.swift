@@ -100,10 +100,13 @@ public actor MeetingStore {
         return try AES.GCM.open(AES.GCM.SealedBox(combined: data), using: key, authenticating: Data("\(meetingID):\(segmentID)".utf8))
     }
     public func deleteAudio(_ id: String) throws {
-        guard let meeting = try all().first(where: { $0.id == id }) else { return }
-        for segment in meeting.segments {
-            let url = try audioURL(meetingID: id, segmentID: segment.id)
-            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+        guard UUID(uuidString: id) != nil else { throw MochletError.message("Invalid recording identity.") }
+        guard try all().contains(where: { $0.id == id }) else { return }
+        // Delete the whole validated session directory, including ciphertext written
+        // immediately before a crash prevented its manifest transaction.
+        let audioDirectory = directory.appendingPathComponent(id, isDirectory: true)
+        if (try? FileManager.default.attributesOfItem(atPath: audioDirectory.path)) != nil {
+            try FileManager.default.removeItem(at: audioDirectory)
         }
         try update(id, event: "audio-deleted") { value in for index in value.segments.indices { value.segments[index].audioAvailable = false } }
     }
@@ -147,6 +150,20 @@ public actor MeetingStore {
             try update(meeting.id, event: "recovered") { $0.state = "interrupted"; $0.notices.append("Recording or processing was interrupted. Saved segments are recoverable; resume and reprocessing require an explicit action.") }
         }
         try sweep()
+    }
+}
+
+public enum MeetingAudioPlan {
+    public static func finalSegments(_ meeting: MeetingSession) throws -> [MeetingSegment] {
+        // Source tracks are authoritative. A crash may have saved them before the
+        // derivative mix; final assembly must not omit those recoverable samples.
+        let originals = meeting.segments.filter { $0.source != "mix" }
+        let segments = (originals.isEmpty ? meeting.segments : originals).sorted { $0.offset < $1.offset }
+        guard !segments.isEmpty else { throw MochletError.message("No recoverable audio was recorded.") }
+        guard segments.allSatisfy(\.audioAvailable) else {
+            throw MochletError.message("Some recording audio has expired or been deleted. Provisional text remains available; finalization cannot recreate missing audio.")
+        }
+        return segments
     }
 }
 

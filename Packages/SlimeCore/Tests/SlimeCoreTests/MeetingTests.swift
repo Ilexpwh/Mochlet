@@ -74,3 +74,39 @@ import Testing
     try await store.sweep()
     #expect(!FileManager.default.fileExists(atPath: orphan.path))
 }
+
+@Test func explicitAudioDeletionRemovesFreshOrphansEvenWhenKept() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try MeetingStore(directory: root)
+    for deleteMeeting in [false, true] {
+        var meeting = MeetingSession(title: "Orphan fixture", projectID: nil, source: "microphone", modelID: "fixture")
+        meeting.keepAudio = true; try await store.create(meeting)
+        let folder = root.appendingPathComponent(meeting.id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let orphan = folder.appendingPathComponent(UUID().uuidString + ".aesgcm")
+        try Data([1,2,3]).write(to: orphan)
+        if deleteMeeting { try await store.delete(meeting.id) }
+        else { try await store.deleteAudio(meeting.id) }
+        #expect(!FileManager.default.fileExists(atPath: orphan.path))
+    }
+}
+
+@Test func finalAudioUsesPersistedSourcesWhenMixWriteWasInterrupted() async throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try MeetingStore(directory: root, keyData: Data(repeating: 9, count: 32))
+    let meeting = MeetingSession(title: "Source recovery", projectID: nil, source: "system", modelID: "fixture")
+    try await store.create(meeting)
+    let mic = try await store.appendAudio(meetingID: meeting.id, source: "microphone", offset: 0, duration: 1, wav: PCM16WAV.encode([Float](repeating: 0.25, count: 16000)))
+    let system = try await store.appendAudio(meetingID: meeting.id, source: "system", offset: 0, duration: 1, wav: PCM16WAV.encode([Float](repeating: 0.5, count: 16000)))
+    try await store.recover()
+    let recovered = try #require(try await store.all().first)
+    #expect(Set(try MeetingAudioPlan.finalSegments(recovered).map(\.id)) == Set([mic.id, system.id]))
+    _ = try await store.appendAudio(meetingID: meeting.id, source: "mix", offset: 0, duration: 1, wav: PCM16WAV.encode([0]))
+    let withMix = try #require(try await store.all().first)
+    #expect(try MeetingAudioPlan.finalSegments(withMix).count == 2)
+    try await store.deleteAudio(meeting.id)
+    let deleted = try #require(try await store.all().first)
+    #expect(throws: (any Error).self) { try MeetingAudioPlan.finalSegments(deleted) }
+}

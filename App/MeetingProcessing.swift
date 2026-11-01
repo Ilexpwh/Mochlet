@@ -35,9 +35,7 @@ extension MeetingController {
         do {
             try await prepareKey()
             guard let meeting = try await store.all().first(where: { $0.id == id }) else { return }
-            let segments = meeting.segments.filter { $0.source == "mix" }.sorted { $0.offset < $1.offset }
-            guard !segments.isEmpty else { throw MochletError.message("No recoverable audio was recorded.") }
-            guard segments.allSatisfy(\.audioAvailable) else { throw MochletError.message("Some recording audio has expired or been deleted. Provisional text remains available; finalization cannot recreate missing audio.") }
+            let segments = try MeetingAudioPlan.finalSegments(meeting)
             let catalog = try await speech.service.models(transcription: true)
             guard catalog.contains(where: { $0.id == meeting.modelID && $0.inputModalities.contains("audio") }) else { throw MochletError.message("The meeting model is no longer available in the transcription catalog.") }
             let end = segments.map { $0.offset + $0.duration }.max() ?? 0

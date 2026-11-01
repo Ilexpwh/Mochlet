@@ -24,6 +24,8 @@ import Testing
     #expect(try await store.queuedCommands().map { $0.0.id } == [second.id])
     #expect(try await store.tasks().first { $0.id == first.id }?.state == .interrupted)
     try await store.cancelQueuedCommands()
+    var cancelled = second; cancelled.state = .running
+    await #expect(throws: (any Error).self) { try await store.begin(cancelled, run: Run(taskID: second.id, prompt: "must not run")) }
     #expect(try await store.queuedCommands().isEmpty)
     #expect(try await store.tasks().first { $0.id == second.id }?.state == .cancelled)
 }

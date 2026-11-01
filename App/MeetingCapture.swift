@@ -93,6 +93,7 @@ private final class SystemAudioOutput: NSObject, SCStreamOutput, SCStreamDelegat
         try Task.checkCancellation()
         if let applicationID {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            try Task.checkCancellation()
             guard let display = content.displays.first else { throw MochletError.message("No display is available for system audio capture.") }
             let filter: SCContentFilter
             if applicationID == "all" { filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: []) }

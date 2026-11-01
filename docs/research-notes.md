@@ -1,4 +1,4 @@
-# Research notes: memory, project routing and GitHub
+# Research notes: memory, project routing and connectors
 
 Research date: 2026-11-01. Sources informed the plan; none of the reference implementations was installed, connected to an account or copied into application code.
 
@@ -33,6 +33,17 @@ No live Codex session, GitHub account, remote issue write or OpenViking server w
 
 ## Revision impact
 
-Knowledge/memory and deterministic project routing are now required core features. GitHub is the first coding-work connector, covering repositories and Projects v2. Existing T01–T33 IDs remain stable; R01–R03, K01–K06, G01–G07 and Q01–Q05 extend the checklist to 54 tasks. Q tasks cover the newly requested native service, interaction and animation quality. The revised dependency order in the build plan supersedes numeric order.
+Knowledge/memory and deterministic project routing are now required core features. GitHub is the first coding-work connector, covering repositories and Projects v2. Existing T01–T33 IDs remain stable; R01–R03, K01–K06, G01–G07 and Q01–Q05 originally extended the checklist to 54 tasks. Google U01–U07 now bring it to 61 tasks. Q tasks cover the newly requested native service, interaction and animation quality. The revised dependency order in the build plan supersedes numeric order.
 
 The current naming proposal is Mochlet; naming checks and Apple design references are recorded in the [native quality contract](native-quality.md).
+
+## Google scope extension — 2026-11-01
+
+Required scope now includes multiple Google accounts, Gmail, Calendar and selected Drive/Docs/Sheets/Slides evidence. Context7 was used for current Workspace consent guidance; official Google pages were consulted for desktop authentication, Drive scopes and service synchronization. These sources support design constraints, not implemented or tested capability claims.
+
+- [Desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app): use a supported installed-app flow with PKCE and validate redirects during the authentication spike.
+- [Workspace consent](https://developers.google.com/workspace/guides/configure-oauth-consent): request feature-specific minimum scopes and resolve audience-dependent verification requirements.
+- [Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth): per-file access is the preferred initial boundary where it supports the feature; broad Drive access is a separate capability decision.
+- [Gmail sync](https://developers.google.com/workspace/gmail/api/guides/sync) and [Calendar sync](https://developers.google.com/workspace/calendar/api/guides/sync): preserve service-specific state and recover invalid cursors; do not treat all Google services as one sync protocol.
+
+The [Google design](google-integration.md) defines workflows, data boundaries and later extensions. Authentication, export formats, write preconditions and service capabilities must be verified against current docs in U01–U07. No Google account was connected during this planning update.

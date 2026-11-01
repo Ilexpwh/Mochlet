@@ -16,6 +16,7 @@ Make a friendly, customizable slime the front door to agent work on a Mac. The s
 | Project-aware sessions | Resolve project aliases/repository bindings, choose exact cwd, start or resume a task-specific Codex session | M1a core |
 | GitHub | Repository/issue/Projects v2 sync, issue-to-task dispatch, worktrees, diff/PR review and authorized write-back | M2g, before other connectors |
 | Native interaction quality | Original character, interruptible motion, stable focus/display behavior and measured resource use | M1a onward; Q01–Q05 |
+| Google | Multiple accounts; Gmail search/summaries/drafts/replies, Calendar agenda/scheduling, selected Drive/Docs/Sheets/Slides knowledge sources | M4g |
 | Connected tools | Lark/Slack context, Linear issues, capture into tasks and authorized updates | M4 |
 | File feeding | Drop files/folders, chewing progress, supported-format extraction, analysis and cited summaries | M2 text/PDF/images; additional formats later |
 | File organization | Preview rename/move/copy plan, validate, apply, recover and conditionally undo | M2 |
@@ -41,6 +42,10 @@ Describe the desired destination and organization → inspect concrete source/de
 ### Work from a connected conversation
 
 Choose an authorized message or issue → create/link a task with its source ID → run work in a selected local project → prepare an update → publish when authorized. A remote message is context; it does not automatically authorize access to local folders or execution.
+
+### Work with Google
+
+Ask for a mail or meeting briefing → select the intended account and authorized sources → receive cited context → link a relevant email/document to the right project → start/resume its agent task when requested. Prepare replies and calendar changes with concrete targets and execute within user authorization. See [Google integration](google-integration.md) for scope and delivery.
 
 ## Product rules
 

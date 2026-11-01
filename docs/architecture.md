@@ -17,7 +17,9 @@ flowchart LR
   D --> U
   R --> F[File intake + plan executor]
   R --> G[Connector tool gateway]
-  G --> X[GitHub / Lark / Slack / Linear]
+  G --> X[GitHub / Lark / Slack / Linear / Google]
+  GC[Google account-scoped refresh] --> D
+  GC --> K
   GS[GitHub metadata sync] --> D
   GS --> PR
   K --> KB[(OKF vault + derived SQLite index)]
@@ -92,6 +94,7 @@ slime-app/
 | FileManifest | Selection/root, items, hashes, size, type, extraction/skipped/failure state |
 | FilePlan + Operation | Run, allowed roots, source/destination, preconditions, authorization, operation/result journal |
 | Connection + ExternalLink | Service/account metadata, Keychain reference, granted actions, stable remote IDs and revisions |
+| GoogleResourceBinding + SyncState | Connection/service/collection/object IDs, project scope, selection/filter, revision, per-collection cursor, freshness and permission state |
 
 Account snapshots must be deduplicated by provider/account/bucket. Per-run token counts and account quotas are different records. Deleting a runtime configuration must not erase historical runs.
 
@@ -145,6 +148,7 @@ Provider research was performed on 2026-11-01. Recheck protocols against install
 - [Project routing](project-routing.md) resolves a stable destination before retrieval or dispatch and validates the provider-returned cwd. A project may have many task-specific sessions; selection is never “latest session globally.”
 - [Knowledge/memory](knowledge-memory.md) keeps personal and project scopes separate, adds citation/freshness/conflict handling, and makes the local search index rebuildable from portable documents.
 - [GitHub integration](github-integration.md) separates work-metadata sync, source-code checkout operations and knowledge refresh. It owns cursors and write reconciliation independently of agent tools.
+- [Google integration](google-integration.md) adds account-isolated Gmail/Calendar/Drive adapters, selected document evidence and authorized outbound actions. App-owned refresh, temporary caches and durable memory remain separate.
 - [Native quality](native-quality.md) owns animation, input responsiveness, display/focus behavior and service-lifetime/resource budgets from the first milestone.
 
 This revision retains the native Swift architecture and does not introduce a mandatory OpenViking server, remote memory database or always-on cloud relay.

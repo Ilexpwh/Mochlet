@@ -2,7 +2,7 @@
 
 Status: not started. All application tasks remain unchecked. Updated 2026-11-01 for knowledge/memory, project-aware Codex sessions, GitHub and native experience quality.
 
-Existing T01–T33 IDs and acceptance criteria are retained, with dependencies strengthened where necessary. New R/K/G/Q tasks extend the same plan. **The order below, not numeric ID order, is the default delivery sequence.** Project context and connector foundations are deliberately pulled forward.
+Existing T01–T33 IDs and acceptance criteria are retained, with dependencies strengthened where necessary. New R/K/G/Q/U tasks extend the same plan. **The order below, not numeric ID order, is the default delivery sequence.** Project context and connector foundations are deliberately pulled forward.
 
 All paths describe intended responsibilities, not an existing implementation. Existing T-task paths use the proposed project tree. New shortened `Knowledge/`, `Projects/`, `Runtime/`, `Providers/` and `Connectors/` paths mean modules under `Packages/SlimeCore/Sources/SlimeCore/`; `Tests/` means core/native tests as applicable; `Surfaces/` means `App/Surfaces/`. `App/`, `Design/`, `docs/` and `scripts/` paths are project-relative. Keep patches focused and split an oversized task further.
 
@@ -888,13 +888,140 @@ All paths describe intended responsibilities, not an existing implementation. Ex
 - [ ] Demonstrate the completed path, including unsupported/error states, and record remaining limitations.
 - [ ] Check scope, native quality and evidence/isolation requirements before the next slice; ask only for decisions that actually need user input.
 
+## M4g: Google workflows
+
+See [Google integration design](../docs/google-integration.md). All tasks are planned; no connection or live write is implied.
+
+### U01: Connect and isolate Google accounts
+
+- [ ] Complete U01.
+
+**Dependencies:** T26, R01.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/GoogleAccount.swift`, `Connectors/GoogleOAuth.swift`, `Surfaces/GoogleAccountsView.swift`, `Tests/GoogleAccountTests.swift`, `docs/connectors/google.md`.
+
+**Acceptance criteria:**
+- [ ] Validate the supported desktop OAuth/redirect flow, PKCE/state, intended audience, required scope categories and distribution verification requirements before implementing dependent features.
+- [ ] Store tokens in Keychain; show account identity and actual granted capabilities, with project bindings and partial-consent handling.
+- [ ] Support disconnect/revocation and prevent wrong-account or disabled-scope calls without placing secrets in prompts or logs.
+
+**Verification:** Use fake OAuth/grant fixtures for callback mismatch, partial consent, token refresh and account switching; record a live test-account sign-in separately.
+
+### U02: Read Gmail context into project tasks
+
+- [ ] Complete U02.
+
+**Dependencies:** U01, T14, R03.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/GmailReader.swift`, `Surfaces/MailContextView.swift`, `Projects/MailTaskCapture.swift`, `Tests/GmailReaderTests.swift`.
+
+**Acceptance criteria:**
+- [ ] Search and paginate authorized mail; show account, thread/message identities and source links with bounded MIME/attachment handling.
+- [ ] Summarize selected threads with evidence and create/link one task in an explicitly resolved project; do not mark mail read or dispatch solely on refresh.
+- [ ] Keep untrusted message content from changing tool permissions or routing, and prevent duplicate capture across refreshes.
+
+**Verification:** Replay MIME, attachments, pagination, prompt-injection and ambiguous-project fixtures; demonstrate a selected email becoming a correctly routed task.
+
+### U03: Read calendars and prepare meeting context
+
+- [ ] Complete U03.
+
+**Dependencies:** U01, K06.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/CalendarReader.swift`, `Surfaces/AgendaView.swift`, `Knowledge/MeetingContext.swift`, `Tests/CalendarReaderTests.swift`.
+
+**Acceptance criteria:**
+- [ ] Select accounts/calendars and display agenda plus available free/busy information with source links and freshness.
+- [ ] Handle time zones, all-day events, recurring instances, cancellations and daylight-saving boundaries without duplicate agenda entries.
+- [ ] Prepare a meeting brief only from selected accessible event/project sources; distinguish missing visibility from a genuinely free time slot.
+
+**Verification:** Use multi-calendar fixtures with DST, overlapping events, recurrence exceptions and restricted visibility; verify no write call occurs.
+
+#### Checkpoint after U03
+
+- [ ] Focused checks pass and the native app builds.
+- [ ] Demonstrate the completed workflow with account identity, partial permissions and failure states visible.
+- [ ] Record evidence for source scope, authorization and recovery before the next slice.
+
+### U04: Ingest selected Google files as scoped evidence
+
+- [ ] Complete U04.
+
+**Dependencies:** U01, K06, T18.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/GoogleDocumentReader.swift`, `Knowledge/GoogleSource.swift`, `Surfaces/GoogleFileSelection.swift`, `Tests/GoogleSourceTests.swift`.
+
+**Acceptance criteria:**
+- [ ] Select accessible Drive files and extract supported Docs/Sheets/Slides content with bounded size, explicit partial/unsupported states and verifiable source locators.
+- [ ] Record account/object identity, revision or hash and selected knowledge scope; separate temporary reads from user-selected durable ingestion.
+- [ ] Validate per-file grants, invalidate revoked-source retrieval, and pass requirements to the existing project resolver before a requested coding task.
+
+**Verification:** Use selected-file fixtures for exports, ranges/slides, permission loss, changed revisions and cross-project isolation; do not claim whole-folder access from one selection.
+
+### U05: Prepare and deliver Gmail replies
+
+- [ ] Complete U05.
+
+**Dependencies:** U02, T30.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/GmailWriter.swift`, `Surfaces/MailDraftPreview.swift`, `Connectors/DeliveryLedger.swift`, `Tests/GmailDeliveryTests.swift`.
+
+**Acceptance criteria:**
+- [ ] Show sender/account, recipients including Cc/Bcc, thread, body and attachments; distinguish local drafts, remote draft saves and send actions.
+- [ ] Enable only granted capabilities and execute the concrete action within existing user authorization; persist remote identifiers and delivery results.
+- [ ] Reconcile uncertain send results when supported and surface unresolved outcomes without blind retries or duplicate messages.
+
+**Verification:** Exercise wrong-account, changed-recipient, denied-scope, expired-authorization and lost-response fixtures; live sends target only authorized test recipients.
+
+#### Checkpoint after U05
+
+- [ ] Focused checks pass and the native app builds.
+- [ ] Demonstrate the completed workflow with account identity, partial permissions and failure states visible.
+- [ ] Record evidence for source scope, authorization and recovery before the next slice.
+
+### U06: Schedule and update calendar events
+
+- [ ] Complete U06.
+
+**Dependencies:** U03, T30.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/CalendarWriter.swift`, `Surfaces/EventPreview.swift`, `Connectors/DeliveryLedger.swift`, `Tests/CalendarDeliveryTests.swift`.
+
+**Acceptance criteria:**
+- [ ] Prepare create/reschedule/cancel actions with calendar/account, time zone, attendees, notification behavior and occurrence-versus-series scope.
+- [ ] Revalidate current availability and supported revision preconditions before an authorized write; surface conflicts and permission changes.
+- [ ] Reconcile uncertain writes through supported remote evidence and retain an inspectable result; never infer authorization from an event description.
+
+**Verification:** Use fixtures for DST changes, series exceptions, moved events, lost responses and attendee notifications; verify only authorized test events in live checks.
+
+### U07: Recover Google refresh and revoked-source state
+
+- [ ] Complete U07.
+
+**Dependencies:** U02, U03, U04, U05, U06.
+**Scope:** Medium; one focused implementation slice.
+**Likely files:** `Connectors/GoogleRefresh.swift`, `Connectors/GoogleSyncStore.swift`, `Knowledge/GoogleRevocation.swift`, `Tests/GoogleRecoveryTests.swift`, `docs/connectors/google.md`.
+
+**Acceptance criteria:**
+- [ ] Persist independent Gmail history/Calendar sync state per account and collection only after complete paging; use bounded rebuilds for invalid state and on-demand refresh for selected Drive files.
+- [ ] Handle rate limits, offline/sleep/relaunch and partial failures with backoff and visible freshness; refresh never autonomously dispatches an agent or sends messages.
+- [ ] On disconnect or revoked access, stop new calls, block queued writes and exclude affected cached evidence; expose imported-memory retention/deletion choices and pass GOOGLE-01–GOOGLE-10.
+
+**Verification:** Replay expired cursors, partial pages, revocation and crash-after-write fixtures; run a native mixed-workload check for responsiveness and absence of duplicate effects.
+
+#### Checkpoint after U07 — milestone exit
+
+- [ ] Focused checks pass and the native app builds.
+- [ ] Demonstrate the completed workflow with account identity, partial permissions and failure states visible.
+- [ ] Record evidence for source scope, authorization and recovery before the next slice.
+
 ## M5: Release readiness
 
 ### T31: Finish native accessibility and display behavior
 
 - [ ] Complete T31.
 
-**Dependencies:** T12, T18, T25, T30, R03, K06, G07, Q04.
+**Dependencies:** T12, T18, T25, T30, R03, K06, G07, Q04, U07.
 **Scope:** Medium; one focused implementation slice.
 **Likely files:** `App/Surfaces/NotchController.swift`, `App/Surfaces/WorkspaceView.swift`, `App/Character/SlimeView.swift`, `docs/native-validation.md`.
 

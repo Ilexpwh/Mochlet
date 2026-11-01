@@ -1,6 +1,6 @@
 # Implementation plan: Mochlet
 
-Status: proposed plan, created 2026-11-01. Planning is complete; application implementation has not started. Revised 2026-11-01 for required knowledge/memory, project-aware Codex sessions, GitHub synchronization and native quality. Task completion is tracked only in [todo.md](todo.md). Existing task IDs are preserved; execution follows dependencies and the release order below.
+Status: proposed plan, created 2026-11-01. Planning is complete; application implementation has not started. Revised 2026-11-01 for required knowledge/memory, project-aware Codex sessions, GitHub synchronization, native quality and Google integrations. Task completion is tracked only in [todo.md](todo.md). Existing task IDs are preserved; execution follows dependencies and the release order below.
 
 ## Outcome
 
@@ -25,6 +25,7 @@ The new app lives in `/Users/ilexpoon/Mac-notch-ai-project/slime-app`. Reference
 13. **GitHub is the first coding connector.** Repository metadata, Projects v2 items, local code operations and knowledge refresh remain separate.
 14. **Native quality starts early.** Q01–Q05 establish original motion, responsive input, reliable lifecycle and measured budgets; the HTML demo is not the release bar.
 15. **Working brand: Mochlet.** Keep the development folder name stable; public-name availability remains to be checked.
+16. **Google is required connector scope.** Multiple accounts, Gmail, Calendar and selected Drive/Docs/Sheets/Slides sources; bounded retrieval and explicit project bindings reuse the existing runtime and memory contracts.
 
 ## Release sequence
 
@@ -37,9 +38,10 @@ The new app lives in `/Users/ilexpoon/Mac-notch-ai-project/slime-app`. Reference
 | M2g: GitHub-driven work | T26; G01–G07 | Repository/issues/Projects sync → verified workspace → exact Codex task → review/authorized write-back |
 | M3: multiple agents | T22–T25 | Claude/Pi and opt-in observers with honest capabilities and isolated input routing |
 | M4: additional connectors | T27–T30 | Initial Slack/Lark/Linear capture and authorized delivery, reusing the connector ledger |
+| M4g: Google workflows | U01–U07 | Account selection → mail/agenda/document context → correct project task → authorized replies/event changes, with recovery and isolation evidence |
 | M5: release readiness | T31–T32; Q05; T33 | Accessibility, robustness and measured native quality on the packaged build |
 
-Knowledge/memory, GitHub and native quality are now required scope. T13 (project context) and T26 (connector foundation) are deliberately pulled forward. The 33 existing task IDs remain unchanged; R/K/G/Q tasks extend them. Numeric task order alone is no longer the execution order. Optional recipes, advanced cosmetics, cloud teams and unbounded autonomous issue processing remain outside these milestones.
+Knowledge/memory, GitHub, Google integrations and native quality are required scope. T13 (project context) and T26 (connector foundation) are deliberately pulled forward. The 33 existing task IDs remain unchanged; R/K/G/Q/U tasks extend them. Numeric task order alone is no longer the execution order. Optional recipes, advanced cosmetics, cloud teams and unbounded autonomous issue processing remain outside these milestones.
 
 ## Dependency map
 
@@ -55,7 +57,8 @@ flowchart TD
   F --> G[T26 + G01–07 GitHub sync / workspaces / dispatch / review]
   G --> M[T22–25 Other agents / observers]
   M --> I[T27–30 Additional connectors]
-  I --> Z[T31–32 + Q05 + T33 Release verification]
+  I --> W[U01–07 Google workflows]
+  W --> Z[T31–32 + Q05 + T33 Release verification]
   Q --> Z
 ```
 
@@ -105,6 +108,7 @@ Its acceptance criteria are met; the focused checks pass; the native app still b
 | Stale/contradictory memory | Confident but unsupported answers | Source revisions, corrections, scope filters, abstention and evidence evaluation |
 | Knowledge leakage between projects | Private context reaches an unrelated run | Pre-retrieval and pre-delivery scope checks, explicit shared scopes and forgetting tests |
 | GitHub board spans repos or drafts | Incorrect issue dispatch | Distinguish board item identity from repository identity; require verified workspace mapping |
+| Google account/scope confusion or consent restrictions | Wrong-account actions or unavailable features | Account-specific grants and project bindings, early OAuth/verification spike, partial-grant and revocation fixtures |
 | Attractive but disruptive animation | Input delay, battery drain and poor accessibility | Q01–Q05 motion/lifecycle gates and native profiling from M1 |
 
 ## Decisions to settle before dependent work
@@ -115,7 +119,7 @@ These do not block the planning deliverable. Use the stated defaults until the c
 - Personal-only versus future public release: assume personal first; distribution/auth choices must support the intended audience before packaging.
 - Minimum macOS and Intel support: provisional macOS 15+, Apple Silicon first.
 - Voice languages and offline requirement: benchmark desired language support in T10; never claim offline behavior without confirming the chosen engine.
-- Connector priority: GitHub first for the coding workflow; Slack, Lark and Linear remain required later connectors.
+- Connector priority: GitHub first for the coding workflow; Slack, Lark, Linear and Google remain required later connectors; Google starts with Gmail/Calendar and selected Drive knowledge sources.
 - File storage policy: preserve originals during analysis; default artifacts stay in the selected project output folder.
 
 ## Follow-on backlog
@@ -128,6 +132,7 @@ Before implementing one of these epics, split it into acceptance-driven tasks us
 ## Expansion specifications and evidence
 
 - [Knowledge/memory](../docs/knowledge-memory.md), [project routing](../docs/project-routing.md), [GitHub workflows](../docs/github-integration.md).
+- [Google integrations](../docs/google-integration.md): Gmail, Calendar and selected Workspace knowledge sources.
 - [Native quality and Mochlet identity](../docs/native-quality.md).
 - [Acceptance scenarios](../docs/acceptance-scenarios.md) and [research notes](../docs/research-notes.md).
 

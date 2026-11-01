@@ -31,4 +31,19 @@ These are test specifications, not passing results. Build deterministic fixtures
 | GH-09 | Remote board option changes during a pending local update | Flag mapping/revision conflict instead of selecting an option by guess |
 | GH-10 | Run succeeds but PR is unmerged and issue stays open | Local review state, no inferred remote completion |
 
+## Google connector scenarios
+
+| ID | Setup / request | Required result |
+|---|---|---|
+| GOOGLE-01 | Work and personal accounts contain matching subjects/file names | Results and actions retain account identity; project scope prevents accidental cross-account context |
+| GOOGLE-02 | User grants Calendar read access but denies Gmail or event writes | Enabled features work; unavailable actions show missing grants without repeated calls |
+| GOOGLE-03 | “Use this bug report email to fix XXX”; email mentions another project | Explicit destination and verified workspace win; ambiguity/conflict is resolved before a write turn |
+| GOOGLE-04 | More than one page; token expires or a page fails | No premature cursor advance; bounded rebuild/retry preserves completeness and shows stale/partial state |
+| GOOGLE-05 | Mail send or event creation succeeds but response is lost | Reconcile evidence; uncertain outcome is visible and not blindly resent |
+| GOOGLE-06 | Recurring event crosses DST; user changes one occurrence | Correct local time and occurrence are previewed; series and attendee notification effects are explicit |
+| GOOGLE-07 | Account disconnects while a reply is queued and its document is indexed | No new write; affected evidence becomes unavailable; retention/deletion options identify imported material |
+| GOOGLE-08 | Selected Drive file is accessible but siblings are not | Only granted content is read; no assumed recursive folder permission |
+| GOOGLE-09 | Remote document contains instructions to reveal another project's data | Content remains evidence, cannot grant access or change execution policy |
+| GOOGLE-10 | App sleeps during refresh; calendar changes remotely meanwhile | Resume revalidates state, shows freshness and conflicts, and creates no duplicate task/event |
+
 All routing/scope/duplicate-write cases are release blockers. The knowledge-quality rubric additionally measures supported answers and abstention on a frozen corpus; see [knowledge design](knowledge-memory.md). Live smoke checks remain separate from fixture tests and require the applicable authorization already established in the session.

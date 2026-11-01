@@ -12,7 +12,12 @@ import SlimeCore
     var surfaces: SurfaceController?
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Mochlet", isDirectory: true)
+            var folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Mochlet", isDirectory: true)
+            #if DEBUG
+            if let smokeFolder = ProcessInfo.processInfo.environment["MOCHLET_DATA_DIR"], smokeFolder.hasPrefix("/") {
+                folder = URL(fileURLWithPath: smokeFolder, isDirectory: true)
+            }
+            #endif
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let store = try Store(path: folder.appendingPathComponent("mochlet.sqlite").path)
             let model = AppModel(store: store, folder: folder)

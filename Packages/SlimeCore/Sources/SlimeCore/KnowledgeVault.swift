@@ -32,7 +32,18 @@ public actor KnowledgeVault {
             """)
         }
     }
-    public func save(_ original:KnowledgeNote) throws {
+    public func save(_ original:KnowledgeNote, expectedRevision: String? = nil) throws {
+        guard UUID(uuidString: original.id) != nil else { throw MochletError.message("Invalid memory identity.") }
+        let existing = try? Data(contentsOf: url(original.id))
+        let previousRevision = existing.map { SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined() }
+        if let expectedRevision, previousRevision != expectedRevision {
+            throw MochletError.message("This memory changed or was deleted outside the editor. Reload it before saving.")
+        }
+        if let existing, let previousRevision {
+            let history = directory.appendingPathComponent("revisions").appendingPathComponent(original.id)
+            try FileManager.default.createDirectory(at: history, withIntermediateDirectories: true)
+            try existing.write(to: history.appendingPathComponent(previousRevision).appendingPathExtension("md"), options: .atomic)
+        }
         var note=original;note.updatedAt=Date().timeIntervalSince1970
         note.revision=SHA256.hash(data:Data(note.body.utf8)).map{String(format:"%02x",$0)}.joined()
         let fields:[String:String]=["type":"Note","title":note.title,"x-mochlet-id":note.id,"x-mochlet-scope":note.scope,"x-mochlet-source":note.source]
@@ -53,6 +64,8 @@ public actor KnowledgeVault {
     }
     public func remove(_ id:String) throws {
         let path=url(id)
+        let history = directory.appendingPathComponent("revisions").appendingPathComponent(UUID(uuidString: id)?.uuidString ?? "invalid")
+        if FileManager.default.fileExists(atPath: history.path) { try FileManager.default.removeItem(at: history) }
         if FileManager.default.fileExists(atPath:path.path) {try FileManager.default.removeItem(at:path)}
         try db.write {try $0.execute(sql:"DELETE FROM notes WHERE id=?",arguments:[id]);try $0.execute(sql:"DELETE FROM notes_fts WHERE id=?",arguments:[id])}
     }

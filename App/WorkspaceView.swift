@@ -12,6 +12,7 @@ struct WorkspaceView: View {
                     Label("Companion",systemImage:"bubble.left.and.bubble.right").tag("Companion")
                     Label("Projects",systemImage:"folder").tag("Projects")
                     Label("Task history",systemImage:"clock").tag("History")
+                    Label("Knowledge & Memory",systemImage:"books.vertical").tag("Knowledge")
                     Label("Appearance",systemImage:"paintpalette").tag("Appearance")
                     Label("Speech & Models",systemImage:"waveform").tag("Speech")
                     Label("Agent settings",systemImage:"slider.horizontal.3").tag("Agent")
@@ -23,6 +24,7 @@ struct WorkspaceView: View {
                 switch section {
                 case "Projects": projectList
                 case "History": history
+                case "Knowledge": KnowledgeView(model: model)
                 case "Appearance": appearance
                 case "Speech": SpeechSettingsView(speech: model.speech)
                 case "Agent": RuntimeSettings(model:model)
@@ -84,7 +86,20 @@ struct CompanionView: View {
             HStack {
                 if model.projects.isEmpty { Button("Add project",systemImage:"folder.badge.plus",action:model.addProject) }
                 else { Picker("Project",selection:$model.selectedProjectID) { ForEach(model.projects) { Text($0.name).tag($0.id) } }.labelsHidden().frame(maxWidth:220) }
+                if compact {
+                    Menu(model.includeKnowledge ? "Memory on" : "Memory") {
+                        Toggle("Use project memory", isOn: $model.includeKnowledge)
+                        Toggle("Include personal memory", isOn: $model.includePersonalKnowledge).disabled(!model.includeKnowledge)
+                    }.font(.caption).fixedSize()
+                }
                 Spacer();Label("Codex",systemImage:"terminal").font(.caption).foregroundStyle(.secondary)
+            }
+            if !compact {
+                HStack {
+                    Toggle("Use project memory", isOn: $model.includeKnowledge)
+                    if model.includeKnowledge { Toggle("Include personal memory", isOn: $model.includePersonalKnowledge) }
+                    Spacer()
+                }.font(.caption)
             }
             if !compact, let pending=model.pendingInputs.first { AttentionView(input:pending,model:model).id(pending.id) }
             if model.isBusy { HStack {ProgressView().controlSize(.small);Text(model.activity).font(.caption);Spacer();Button("Stop",action:model.cancelRun)} }

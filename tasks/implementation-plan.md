@@ -42,3 +42,7 @@ The user requested close Coucou UI/UX and motion parity and authorized reuse of 
 ## Stage G provider progress — 2026-11-01
 
 Codex, Claude Code and Pi now have separate transports behind AgentRuntime. Pi's native/process fixture workflows and real no-inference guard preflight pass; live authenticated execution remains a separate gate. [Pi evidence](../docs/pi-compatibility.md) records exact compatibility. Google account/source readers and native task/memory capture are now implemented with fixture and setup evidence; live Google and outbound/sync gates remain open. Slack/Lark/Feishu/Linear now support verified token connections and selected source capture; live access, automatic renewal and outbound writes remain open. External-session observation remains planned. Existing unchecked release criteria are retained.
+
+### GitHub publication evidence
+
+G06 now has committed-workspace review, explicit push/draft-PR publication, immutable commit identities and crash reconciliation. G07 has read-only PR lifecycle refresh independent of local task state. [Publication contract](../docs/github-publication.md) records fixture/native evidence and remaining live/Projects/write-back limitations. The full milestone remains open.

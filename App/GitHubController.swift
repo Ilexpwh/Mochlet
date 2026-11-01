@@ -8,6 +8,7 @@ import SlimeCore
     var selectedProjectID = ""
     var message: String?
     var busy = false
+    var publicationTask: Task<Void, Never>?
     var ghPath = UserDefaults.standard.string(forKey: "ghPath") ?? "/opt/homebrew/bin/gh" {
         didSet { UserDefaults.standard.set(ghPath, forKey: "ghPath") }
     }
@@ -47,9 +48,10 @@ import SlimeCore
     }
     func prepare(_ issue: GitHubIssue, model: AppModel) async {
         guard !busy, let binding, let project = model.projects.first(where: { $0.id == binding.projectID }) else { return }
+        let revision = model.composerRevision, selectedTaskID = model.selectedTaskID
         busy = true; message = nil; defer { busy = false }
         do {
-            guard model.draft.isEmpty else { throw MochletError.message("Clear or send your existing composer draft before preparing an issue prompt.") }
+            guard model.draft.isEmpty, model.connectedDraft == nil, !model.preparingSubmission else { throw MochletError.message("Clear or send your existing composer draft before preparing an issue prompt.") }
             try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
             let fresh = try await GitHubClient(executable: ghPath).issue(issue.number, binding: binding)
             guard fresh.id == issue.id else { throw MochletError.message("Issue identity changed. Sync again.") }
@@ -63,10 +65,22 @@ import SlimeCore
             }
             try await TaskWorkspaces.materialize(workspace, project: project)
             try await model.refresh()
-            guard model.draft.isEmpty else { throw MochletError.message("The issue task is saved. Clear or send your existing composer draft before preparing its prompt.") }
-            model.selectedProjectID = project.id; model.selectedTaskID = task.id
-            model.draft = fresh.taskPrompt
+            try model.installConnectedDraft(.init(taskID: task.id, projectID: project.id, issue: fresh, binding: binding),
+                instruction: "Investigate this issue, implement a fix, and validate the changes in this task workspace.",
+                expectedRevision: revision, expectedTaskID: selectedTaskID)
             message = "Task prepared in an isolated workspace for \(project.name), based on its current committed HEAD. Open Companion to review and send. Uncommitted primary-folder changes stay in place."
         } catch { message = error.localizedDescription }
     }
+    func validateTask(taskID: String, project: Project?) async throws {
+        guard let binding = try await store.githubTaskBinding(taskID: taskID) else { return }
+        guard let project, binding.projectID == project.id, let saved = try await store.githubTaskIssue(taskID: taskID) else {
+            throw MochletError.message("Issue task no longer matches its project or source.")
+        }
+        try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
+        let fresh = try await GitHubClient(executable: ghPath).issue(saved.number, binding: binding)
+        guard fresh.id == saved.id, fresh.updated_at == saved.updated_at, fresh.body == saved.body, fresh.title == saved.title else {
+            throw MochletError.message("The GitHub issue changed. Prepare it again to review its latest context before dispatch.")
+        }
+    }
+
 }

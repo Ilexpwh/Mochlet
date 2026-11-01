@@ -49,6 +49,9 @@ public actor Store {
         migrations.registerMigration("deliveries") { db in
             try db.execute(sql: "CREATE TABLE deliveries(id TEXT PRIMARY KEY,accountID TEXT NOT NULL,payload BLOB NOT NULL,state TEXT NOT NULL,receipt BLOB NOT NULL)")
         }
+        migrations.registerMigration("github_publications") { db in
+            try db.execute(sql: "CREATE TABLE github_publications(id TEXT PRIMARY KEY, taskID TEXT NOT NULL UNIQUE REFERENCES tasks(id), payload BLOB NOT NULL, state TEXT NOT NULL, receipt BLOB)")
+        }
         try migrations.migrate(database)
     }
     public func projects() throws -> [Project] { try database.read { try Project.order(Column("name")).fetchAll($0) } }
@@ -92,6 +95,9 @@ extension Store {
     public func enqueue(_ task: WorkTask, prompt: String, readOnly: Bool) throws {
         guard task.state == .queued else { throw MochletError.message("Only queued tasks can be enqueued.") }
         try database.write { db in
+            guard try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM github_publications WHERE taskID=? AND state IN ('pushing','ready','creating')", arguments: [task.id]) == 0 else {
+                throw MochletError.message("Resolve this task's pending GitHub publication before resuming coding.")
+            }
             try task.save(db)
             try db.execute(sql: "INSERT INTO queued_commands(taskID,prompt,readOnly) VALUES(?,?,?)", arguments: [task.id, prompt, readOnly])
         }
@@ -157,6 +163,9 @@ extension Store {
         try database.write { db in
             if let taskID = try String.fetchOne(db, sql: "SELECT taskID FROM github_tasks WHERE projectID=? AND repositoryID=? AND issueID=? AND accountID=?", arguments: [binding.projectID, binding.repository.id, issue.id, binding.account.id]),
                let task = try WorkTask.fetchOne(db, key: taskID) {
+                guard ![.queued, .running, .waiting].contains(task.state) else {
+                    throw MochletError.message("This issue has queued or active work. Its submitted source snapshot cannot be replaced.")
+                }
                 // Stable identities match; explicit rebind may have verified a rename.
                 // Refresh metadata without changing the task's workspace or session.
                 try db.execute(sql: "UPDATE github_tasks SET binding=?,issue=? WHERE taskID=?", arguments: [try JSONEncoder().encode(binding), try JSONEncoder().encode(issue), taskID])
@@ -174,4 +183,10 @@ extension Store {
             try Data.fetchOne(db, sql: "SELECT binding FROM github_tasks WHERE taskID=?", arguments: [taskID]).map { try JSONDecoder().decode(GitHubBinding.self, from: $0) }
         }
     }
+    public func githubTaskIssue(taskID: String) throws -> GitHubIssue? {
+        try database.read { db in
+            try Data.fetchOne(db, sql: "SELECT issue FROM github_tasks WHERE taskID=?", arguments: [taskID]).map { try JSONDecoder().decode(GitHubIssue.self, from: $0) }
+        }
+    }
+
 }

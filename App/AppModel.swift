@@ -19,12 +19,6 @@ import SlimeCore
     var tasks: [WorkTask] = []
     var selectedProjectID = ""
     var selectedTaskID: String?
-    struct ConnectedDraft {
-        let taskID: String
-        let projectID: String
-        let source: ConnectedSource
-        let account: ConnectedAccount
-    }
     var connectedDraft: ConnectedDraft?
     var preparingSubmission = false
     var composerRevision = UUID()
@@ -204,11 +198,8 @@ import SlimeCore
                 var contextPrompt = prompt + attachmentContext
                 if let sourceDraft {
                     guard task.id == sourceDraft.taskID else { throw MochletError.message("The source task changed before submission.") }
-                    try await store.validateConnectedTask(task.id)
-            try await google.validateTask(task.id)
-            try await connections.validateTask(task.id)
-                    guard try await store.connections().contains(sourceDraft.account) else { throw MochletError.message("Source account permissions changed. Prepare this draft again.") }
-                    contextPrompt += "\n\n" + (try sourceDraft.source.context(account: sourceDraft.account))
+                    try await sourceDraft.validate(model: self)
+                    contextPrompt += "\n\n" + (try sourceDraft.context())
                 }
                 if useKnowledge, let vault = knowledge.vault {
                     let notes = try await vault.search(prompt, scope: project.id, includePersonal: usePersonal, limit: 6)
@@ -255,11 +246,7 @@ import SlimeCore
             try await store.validateConnectedTask(task.id)
             try await google.validateTask(task.id)
             try await connections.validateTask(task.id)
-            if let binding = try await store.githubTaskBinding(taskID: task.id) {
-                guard binding.projectID == project.id else { throw MochletError.message("Issue task project does not match its repository binding.") }
-                try await GitHubClient.verifyRemote(project: project, repository: binding.repository)
-                try await GitHubClient(executable: github.ghPath).verify(binding)
-            }
+            try await github.validateTask(taskID: task.id, project: project)
             if let workspace = try await store.workspace(taskID: task.id) {
                 try await TaskWorkspaces.validate(workspace, project: project)
                 project.root = workspace.root

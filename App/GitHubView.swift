@@ -5,6 +5,7 @@ struct GitHubView: View {
     @Bindable var model: AppModel
     @State private var slug = ""
     @State private var showClosed = false
+    @State private var showPublication = false
     var body: some View {
         @Bindable var github = model.github
         VStack(alignment: .leading, spacing: 16) {
@@ -26,7 +27,8 @@ struct GitHubView: View {
                         Text("Account: \(binding.account.login)").font(.caption)
                         if let date = binding.syncedAt { Text("Last synced \(date.formatted())").font(.caption).foregroundStyle(.secondary) }
                     }
-                    Spacer(); Button("Sync issues") { Task { await github.sync() } }.disabled(github.busy)
+                    Spacer(); Button("Review & publish task") { showPublication = true }.disabled(github.busy)
+                    Button("Sync issues") { Task { await github.sync() } }.disabled(github.busy)
                 }
                 Toggle("Show closed issues", isOn: $showClosed).toggleStyle(.checkbox)
                 List(github.issues.filter { showClosed || $0.state == "open" }) { issue in
@@ -47,6 +49,7 @@ struct GitHubView: View {
             DisclosureGroup("GitHub CLI") { TextField("Executable", text: $github.ghPath).textFieldStyle(.roundedBorder) }
             Text("Preparing an issue does not start coding. Review the destination and prompt in Companion, then Send. No issue comments, commits or pull requests are published by synchronization.").font(.caption).foregroundStyle(.secondary)
         }.padding(28)
+            .sheet(isPresented: $showPublication) { GitHubPublicationView(model: model) }
             .task(id: model.selectedProjectID) { await github.load(projectID: model.selectedProjectID) }
     }
 }

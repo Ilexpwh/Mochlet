@@ -167,7 +167,7 @@ struct CompanionView: View {
             VStack(spacing:10) {
                 if let source = model.connectedDraft {
                     HStack {
-                        Label(source.source.title, systemImage: "link").font(.caption).lineLimit(1)
+                        Label(source.title, systemImage: "link").font(.caption).lineLimit(1)
                         Button("Discard source draft") { model.draft = ""; model.connectedDraft = nil }.disabled(model.preparingSubmission)
                     }
                 }

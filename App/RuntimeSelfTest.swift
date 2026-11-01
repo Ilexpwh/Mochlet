@@ -83,10 +83,47 @@ import SlimeCore
             model.shutdown()
         }
         try await connectedDraftRouting(root: root)
+        try await githubQueuedRevision(root: root)
         if let executable = ProcessInfo.processInfo.environment["MOCHLET_PI_FIXTURE_PATH"] {
             try await piWorkflow(root: root.appendingPathComponent("pi"), executable: executable)
         }
         print("Native runtime fixtures passed: cancelled startup, paused disconnect queue, explicit resume.")
+    }
+    static func githubQueuedRevision(root: URL) async throws {
+        let folder = root.appendingPathComponent("github-revision")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        for args in [["init", folder.path], ["-C", folder.path, "remote", "add", "origin", "https://github.com/owner/repo.git"]] {
+            let result = try await CommandProcess().run(executable: "/usr/bin/git", arguments: args)
+            try require(result.status == 0, "Could not prepare local GitHub routing fixture")
+        }
+        let fixture = folder.appendingPathComponent("gh-fixture")
+        try #"""
+        #!/usr/bin/python3
+        import sys,json
+        path=sys.argv[-1]
+        if path=='user': value={'id':1,'login':'owner'}
+        elif path=='repos/owner/repo': value={'id':2,'full_name':'owner/repo','html_url':'https://github.com/owner/repo'}
+        else: value={'id':1,'number':1,'title':'Issue','body':'Changed source','state':'open','html_url':'https://github.com/owner/repo/issues/1','updated_at':'2'}
+        print(json.dumps(value))
+        """#.write(to: fixture, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.path)
+        let oldPath = UserDefaults.standard.object(forKey: "ghPath")
+        defer { if let oldPath { UserDefaults.standard.set(oldPath, forKey: "ghPath") } else { UserDefaults.standard.removeObject(forKey: "ghPath") } }
+        let store = try Store(path: ":memory:")
+        let project = Project(name: "Fixture", root: folder.path); try await store.save(project)
+        let account = try JSONDecoder().decode(GitHubAccount.self, from: Data(#"{"id":1,"login":"owner"}"#.utf8))
+        let repo = try JSONDecoder().decode(GitHubRepository.self, from: Data(#"{"id":2,"full_name":"owner/repo","html_url":"https://github.com/owner/repo"}"#.utf8))
+        let issue = try JSONDecoder().decode(GitHubIssue.self, from: Data(#"{"id":1,"number":1,"title":"Issue","body":"Original source","state":"open","html_url":"https://github.com/owner/repo/issues/1","updated_at":"1"}"#.utf8))
+        let binding = GitHubBinding(projectID: project.id, account: account, repository: repo)
+        try await store.bindGitHub(binding)
+        var task = try await store.prepareGitHubTask(issue, binding: binding); task.state = .queued
+        try await store.enqueue(task, prompt: "Original source", readOnly: true)
+        let model = AppModel(store: store, folder: folder); model.github.ghPath = fixture.path
+        try await model.refresh(); model.queue = try await store.queuedCommands()
+        await model.runNext()
+        try require(model.runtime == nil && model.tasks.first?.state == .failed, "Changed GitHub source reached an agent")
+        try require(model.errorMessage?.contains("GitHub issue changed") == true, "Unexpected source validation failure")
+        model.shutdown()
     }
     static func connectedDraftRouting(root: URL) async throws {
         let store = try Store(path: ":memory:")
@@ -128,7 +165,21 @@ import SlimeCore
         }
         try await cancelled.value
         try require(model.draft.isEmpty && model.connectedDraft == nil, "Cancellation changed the composer")
-        print("Native source routing fixtures passed: changed project, new conversation, active-task fork.")
+        let issue = try JSONDecoder().decode(GitHubIssue.self, from: Data(#"{"id":1,"number":1,"title":"Issue","body":"Reference","state":"open","html_url":"https://github.com/owner/repo/issues/1","updated_at":"1"}"#.utf8))
+        let githubAccount = try JSONDecoder().decode(GitHubAccount.self, from: Data(#"{"id":1,"login":"owner"}"#.utf8))
+        let repository = try JSONDecoder().decode(GitHubRepository.self, from: Data(#"{"id":2,"full_name":"owner/repo","html_url":"https://github.com/owner/repo"}"#.utf8))
+        let binding = GitHubBinding(projectID: a.id, account: githubAccount, repository: repository)
+        model.connectedDraft = .init(taskID: task.id, projectID: a.id, issue: issue, binding: binding)
+        model.draft = "Fix this issue"; model.selectedProjectID = b.id; model.selectedTaskID = task.id; model.errorMessage = nil
+        model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission, "GitHub draft escaped into another project")
+        model.selectedProjectID = a.id; model.selectedTaskID = nil; model.errorMessage = nil; model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission, "GitHub draft lost its task binding")
+        model.selectedTaskID = task.id; model.activeTaskID = task.id; model.errorMessage = nil; model.submit()
+        try require(model.errorMessage != nil && !model.preparingSubmission, "GitHub draft forked active work")
+        let githubQueued = try await store.queuedCommands()
+        try require(githubQueued.isEmpty, "GitHub routing rejection still queued work")
+        print("Native source routing fixtures passed: Google and GitHub changed project, new conversation, active-task fork.")
     }
     static func piWorkflow(root: URL, executable: String) async throws {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

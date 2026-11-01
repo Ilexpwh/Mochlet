@@ -78,4 +78,10 @@ private actor GitHubFixture {
     let renamedTask = try await store.prepareGitHubTask(issue, binding: renamedBinding)
     #expect(renamedTask.id == otherTask.id)
     #expect(try await store.githubTaskBinding(taskID: otherTask.id)?.repository.full_name == "person/renamed")
+    var queuedTask = renamedTask; queuedTask.state = .queued
+    try await store.enqueue(queuedTask, prompt: "Original issue version", readOnly: false)
+    let changedIssue = try JSONDecoder().decode(GitHubIssue.self, from: Data(String(decoding: issueData(1), as: UTF8.self).replacingOccurrences(of: "Investigate", with: "Changed instruction").utf8))
+    await #expect(throws: (any Error).self) { try await store.prepareGitHubTask(changedIssue, binding: renamedBinding) }
+    #expect(try await store.githubTaskIssue(taskID: queuedTask.id) == issue)
+    #expect(try await store.queuedCommands().first?.1 == "Original issue version")
 }

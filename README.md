@@ -10,10 +10,11 @@ Implemented native workflows include:
 - Durable project/task history, a recoverable queue, exact agent sessions, approvals/questions and available Codex allowance windows.
 - Personal/project memory, source-linked answers, portable Markdown import/export, file feeding and reviewed moves with undo.
 - Voice controls and configurable OpenRouter speech/analysis profiles; explicit encrypted microphone/system meeting capture, transcript revisions and speaker editing.
-- GitHub account/repository binding, issue synchronization, isolated task worktrees and local diff review.
+- GitHub account/repository binding, issue synchronization, isolated task worktrees, exact-commit draft PR previews and durable publication reconciliation.
+- Slack/Lark/Feishu/Linear verified token connections, selected source capture, project-bound task drafts and explicit memory copies.
 - Google Desktop OAuth configuration, account/project bindings, Gmail threads, calendar agenda/availability and selected Drive text; reviewed source task drafts and explicit memory copies. Separate Gmail and Calendar write previews use a durable delivery ledger and uncertain-result reconciliation.
 
-Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Google incremental sync/live validation, PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
+Voice and meetings require your own API configuration and further live validation. Google requires your own Desktop OAuth client and is fixture/native-setup verified; live account workflows remain unverified. Live Slack/Lark/Linear access, Google incremental sync/live validation, live PR publishing, full OKF bundle compatibility and distribution gates remain unfinished. See the [evidence ledger](docs/build-status.md) for precise limits.
 
 ## Implementation
 

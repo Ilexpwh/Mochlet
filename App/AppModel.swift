@@ -129,8 +129,13 @@ import SlimeCore
     var dockFraction = UserDefaults.standard.object(forKey: "dockFraction") as? Double ?? 0.5 {
         didSet { UserDefaults.standard.set(dockFraction, forKey: "dockFraction") }
     }
-    var dockDisplayID = UserDefaults.standard.integer(forKey: "dockDisplayID") {
-        didSet { UserDefaults.standard.set(dockDisplayID, forKey: "dockDisplayID") }
+    var availableDisplays: [CompanionDisplay] = []
+    var dockDisplayKey: String = {
+        if let key = UserDefaults.standard.string(forKey: "dockDisplayKey") { return key }
+        let legacyID = UserDefaults.standard.integer(forKey: "dockDisplayID")
+        return legacyID == 0 ? "" : "legacy:\(legacyID)"
+    }() {
+        didSet { UserDefaults.standard.set(dockDisplayKey, forKey: "dockDisplayKey") }
     }
     var openOnHover = UserDefaults.standard.bool(forKey: "openOnHover") {
         didSet { UserDefaults.standard.set(openOnHover, forKey: "openOnHover") }

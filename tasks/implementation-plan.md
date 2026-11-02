@@ -15,7 +15,7 @@ This is the approved execution map. Preserve T01–T33, R01–R03, K01–K06, G0
 
 ## Additional task IDs
 
-- [ ] U08: Drag the companion to top/left/right edges, expand inward and restore its position. Geometry fixtures and native setting/relaunch checks pass; physical drag, multi-display, full-screen and interrupted-drag walkthroughs remain required.
+- [ ] U08: Drag the companion to top/left/right edges, expand inward and restore its position. Geometry/cancellation/display-selection fixtures and native setting/relaunch checks pass. UUID display selection and missing-display fallback are implemented; physical drag, multi-display, full-screen and interrupted-drag walkthroughs remain required. See [docking](../docs/docking.md).
 - [ ] V01: Implement Keychain-backed API profiles and capability-aware OpenRouter STT discovery. Verify denied credentials and unsupported modalities.
 - [ ] V02: Record a command and return editable text through the selected STT profile. Verify cancellation, silence, failures and no duplicate task.
 - [ ] V03: Add optional system spoken replies, voice selection and suppression during meetings. Verify explicit playback/stop and missing voices.

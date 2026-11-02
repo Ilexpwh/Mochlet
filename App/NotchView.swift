@@ -29,8 +29,12 @@ struct NotchView: View {
     let placementChanged: () -> Void
     let dragChanged: (CGSize) -> Void
     let dragEnded: () -> Void
+    let dragCancelled: () -> Void
+    @GestureState private var dragActive = false
     private var dockingGesture: some Gesture {
-        DragGesture(minimumDistance: 8).onChanged { dragChanged($0.translation) }.onEnded { _ in dragEnded() }
+        DragGesture(minimumDistance: 8)
+            .updating($dragActive) { _, active, _ in active = true }
+            .onChanged { dragChanged($0.translation) }.onEnded { _ in dragEnded() }
     }
 
     private var shape: IslandShape {
@@ -88,7 +92,9 @@ struct NotchView: View {
         .onChange(of: model.isBusy) { _, _ in stateChanged() }
         .onChange(of: model.draft.isEmpty) { _, _ in stateChanged() }
         .onChange(of: model.dockEdge) { _, _ in placementChanged() }
-        .onChange(of: model.dockFraction) { _, _ in placementChanged() }
+          .onChange(of: model.dockFraction) { _, _ in placementChanged() }
+          .onChange(of: model.dockDisplayKey) { _, _ in placementChanged() }
+          .onChange(of: dragActive) { _, active in if !active { dragCancelled() } }
         .onChange(of: model.hideWhenIdle) { _, _ in stateChanged() }
     }
 

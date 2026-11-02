@@ -62,6 +62,7 @@ struct WorkspaceView: View {
         Form {
             Section("Your companion") { ProfileSettingsView(model: model) }
             Section("Notch behavior") {
+                CompanionDisplaySettings(model: model)
                 Picker("Screen edge", selection: $model.dockEdge) {
                     ForEach(DockEdge.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
                 }

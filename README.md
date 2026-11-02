@@ -36,6 +36,8 @@ Coucou's island geometry and motion code are adapted under MIT; see [attribution
 
 Drag the compact slime or the expanded island's name/character to dock at the top, left or right screen edge. Side panels expand inward. Mochlet remembers the display and position; Appearance → Screen edge provides the same placement choices without dragging.
 
+Appearance → Companion display selects a specific display or Automatic. Saved display UUIDs survive numeric-ID changes where macOS preserves their identity; disconnected choices retain their preference while the panel uses an available screen. [Docking and recovery](docs/docking.md) records cancellation behavior and verification limits.
+
 ## Start here
 
 1. [Build plan](tasks/plan.md) — scope, architecture choices, milestones, dependencies and risks.

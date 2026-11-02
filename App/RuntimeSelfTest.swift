@@ -16,6 +16,7 @@ import SlimeCore
         throw MochletError.message("Native runtime fixture timed out")
     }
     static func run() async throws {
+        try companionDisplayFixtures()
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("mochlet-runtime-test-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -19,7 +19,7 @@ final class CompanionPanel: NSPanel {
     private var dismissal: Task<Void, Never>?
     private var screen: NSScreen?
     private var pointerMonitor: Any?
-    private var dragStart: (origin: CGPoint, pointer: CGPoint)?
+    private var dockDrag = DockDrag()
 
     init(model: AppModel) {
         self.model = model
@@ -46,7 +46,8 @@ final class CompanionPanel: NSPanel {
             stateChanged: { [weak self] in self?.workChanged() },
             placementChanged: { [weak self] in self?.reposition() },
             dragChanged: { [weak self] in self?.drag($0) },
-            dragEnded: { [weak self] in self?.endDrag() }))
+            dragEnded: { [weak self] in self?.endDrag() },
+            dragCancelled: { [weak self] in self?.gestureReset() }))
         // Coucou's fixed transparent host avoids resizing AppKit around an animating
         // SwiftUI tree. Only the island shape changes size; empty space passes clicks.
         let container = NSView(frame: .init(origin: .zero, size: panel.frame.size))
@@ -71,7 +72,10 @@ final class CompanionPanel: NSPanel {
         panel.contentView = container
         panel.ignoresMouseEvents = true
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .mouseMoved, .leftMouseDragged]) { [weak self] event in
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(cancelDrag), name: NSWorkspace.willSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(reposition), name: NSWorkspace.didWakeNotification, object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(cancelDrag), name: NSNotification.Name("com.apple.screenIsLocked"), object: nil)
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .leftMouseUp, .mouseMoved, .leftMouseDragged]) { [weak self] event in
             let handled = MainActor.assumeIsolated {
                 guard let self else { return false }
                 self.updateHitRegion()
@@ -80,16 +84,19 @@ final class CompanionPanel: NSPanel {
                     else { self.outsideClick() }
                 }
                 if event.type == .keyDown {
+                    if event.keyCode == 53, self.dockDrag.isActive { self.cancelDrag(); return true }
                     if event.keyCode == 53, self.panel.isKeyWindow { self.collapse(); return true }
                     if event.modifierFlags.contains([.command, .shift]), event.keyCode == 49 { self.togglePanel(); return true }
                     if event.window === self.panel { self.interact() }
                 }
+                if event.type == .leftMouseUp { self.endDrag() }
                 return false
             }
             return handled ? nil : event
         }
-        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            Task { @MainActor in self?.outsideClick() }
+        outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp]) { [weak self] event in
+            let released = event.type == .leftMouseUp
+            Task { @MainActor in if released { self?.endDrag() } else { self?.outsideClick() } }
         }
         pointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated { self?.updateHitRegion() }
@@ -175,11 +182,16 @@ final class CompanionPanel: NSPanel {
         hover(inside)
     }
     @objc func reposition() {
-        guard !island.dragging else { return }
-        screen = NSScreen.screens.first(where: { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue == model.dockDisplayID })
-            ?? NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 }) ?? NSScreen.main ?? NSScreen.screens.first
+        dockDrag.cancel(); island.dragging = false
+        let screens = NSScreen.screens
+        model.availableDisplays = CompanionDisplay.current(screens)
+        let selected = CompanionDisplay.preferred(model.dockDisplayKey, in: model.availableDisplays)
+        if model.dockDisplayKey.hasPrefix("legacy:"), let selected, selected.matches(model.dockDisplayKey) {
+            model.dockDisplayKey = selected.id
+        }
+        screen = screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue == selected?.runtimeID }
         island.edge = model.dockEdge
-        guard let screen else { return }
+        guard let screen else { panel.orderOut(nil); return }
         island.hasNotch = screen.safeAreaInsets.top > 0
         island.notchHeight = island.hasNotch ? screen.safeAreaInsets.top : 26
         if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
@@ -187,25 +199,33 @@ final class CompanionPanel: NSPanel {
         } else { island.notchWidth = 170 }
         render(animated: false)
         panel.setFrameOrigin(DockPlacement(edge: model.dockEdge, fraction: model.dockFraction).panelOrigin(in: screen.frame, size: panel.frame.size))
+        panel.orderFrontRegardless()
         updateHitRegion()
+        scheduleDismissal()
     }
     private func drag(_ translation: CGSize) {
-        let pointer = NSEvent.mouseLocation
-        if dragStart == nil {
-            dragStart = (panel.frame.origin, .init(x: pointer.x - translation.width, y: pointer.y + translation.height))
-            island.dragging = true; dismissal?.cancel()
-        }
-        guard let start = dragStart else { return }
+        guard let origin = dockDrag.update(origin: panel.frame.origin, pointer: NSEvent.mouseLocation, translation: translation) else { return }
+        island.dragging = true; dismissal?.cancel()
         panel.ignoresMouseEvents = false
-        panel.setFrameOrigin(.init(x: start.origin.x + pointer.x - start.pointer.x, y: start.origin.y + pointer.y - start.pointer.y))
+        panel.setFrameOrigin(origin)
+    }
+    @objc private func cancelDrag() {
+        guard dockDrag.cancel() else { return }
+        island.dragging = false
+        reposition()
+    }
+    private func gestureReset() {
+        cancelDrag()
+        dockDrag.finish()
     }
     private func endDrag() {
-        guard dragStart != nil else { return }
-        dragStart = nil; island.dragging = false
+        guard dockDrag.finish() else { return }
+        island.dragging = false
         let pointer = NSEvent.mouseLocation
         guard let destination = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? screen else { return }
         let placement = DockPlacement.nearest(to: pointer, in: destination.frame)
-        model.dockDisplayID = (destination.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue ?? 0
+        let destinationID = (destination.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.intValue
+        if let choice = CompanionDisplay.current(NSScreen.screens).first(where: { $0.runtimeID == destinationID }) { model.dockDisplayKey = choice.id }
         model.dockEdge = placement.edge; model.dockFraction = placement.fraction
         reposition(); scheduleDismissal()
     }

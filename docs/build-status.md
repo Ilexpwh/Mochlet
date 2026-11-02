@@ -272,3 +272,9 @@ Google GET retrieval now retries transient rate/service errors and connection lo
 `scripts/check.sh` passes: 127 reported tests, three opt-in live skips, Debug build and native runtime/source/profile/Pi fixtures; `/tmp/mochlet-readretry-full-check.log`. Five new tests cover retry/cancellation boundaries and calendar cursor atomicity. An existing calendar fixture's fixed request-count assumption was updated to represent an explicit longer outage; no sync acceptance assertion was removed. Read-only review found no Required/Critical implementation issues. Live Google validation remains pending.
 
 The [HTML system map](system-map.html) now documents functions, architecture, native evidence and remaining gates with an embedded native screenshot. Static inspection verifies its image MIME/signature, accessible labels and local links. Browser rendering was unavailable because the browser tool disallows local file URLs; no browser walkthrough is claimed.
+
+## 2026-11-02 — Display choice and interrupted-drag recovery
+
+Added UUID-backed display selection with numeric-ID migration, explicit missing-display state and non-destructive fallback. Drag cancellation now restores placement on Escape, gesture cancellation, display change, sleep or lock, and suppresses late updates until release/reset. Local/global mouse-up paths prevent abandoned drag state. [Contract](docking.md).
+
+`scripts/check.sh` passes: 128 reported tests (three opt-in live skips), Debug build and native display/source/profile/Pi/runtime fixtures; `/tmp/mochlet-dock-full-check.log`. Native isolated QA verified display selection/relaunch persistence, right-edge expansion and Escape folding. Independent read-only review found no Required/Critical findings. Physical drag, actual display reconfiguration and lock/sleep interaction remain open.

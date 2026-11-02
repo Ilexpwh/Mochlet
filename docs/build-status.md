@@ -278,3 +278,9 @@ The [HTML system map](system-map.html) now documents functions, architecture, na
 Added UUID-backed display selection with numeric-ID migration, explicit missing-display state and non-destructive fallback. Drag cancellation now restores placement on Escape, gesture cancellation, display change, sleep or lock, and suppresses late updates until release/reset. Local/global mouse-up paths prevent abandoned drag state. [Contract](docking.md).
 
 `scripts/check.sh` passes: 128 reported tests (three opt-in live skips), Debug build and native display/source/profile/Pi/runtime fixtures; `/tmp/mochlet-dock-full-check.log`. Native isolated QA verified display selection/relaunch persistence, right-edge expansion and Escape folding. Independent read-only review found no Required/Critical findings. Physical drag, actual display reconfiguration and lock/sleep interaction remain open.
+
+## 2026-11-02 — Five-minute Release idle measurement
+
+Packaged and launched Release `d0bc945` from clean source; preserved the existing unsent draft without submission. The 300.019-second compact-idle sample averaged 0.7566% of one core with sampled resident memory 105.7–105.8 MiB. This passes the specified five-minute idle CPU target for the recorded workload. [Baseline](performance-baseline.md), [raw evidence](evidence/release-idle-2026-11-02.json).
+
+Current verified archive: `dist/Mochlet-0.1.0-arm64-oNOOvq/Mochlet.zip`, arm64, ad-hoc signed, not notarized. CRC, SHA-256, signature and clean revision verified. Warm visible acknowledgement, hitches, two-hour mixed soak, live audio/connectors, physical drag, full-screen/multiple displays and macOS15 execution remain open. No complete-release claim is made.

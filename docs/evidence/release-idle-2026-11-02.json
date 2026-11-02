@@ -1,0 +1,320 @@
+{
+  "recordedAt": "2026-11-02T02:51:51.013790+00:00",
+  "label": "Release d0bc945; right-edge compact companion; workspace closed; unsent draft retained; no agent run, recording or sync; native UI established before sampling",
+  "executable": "/Users/ilexpoon/Mac-notch-ai-project/slime-app/build/Build/Products/Release/Mochlet.app/Contents/MacOS/Mochlet",
+  "system": "macOS-27.0-arm64-arm-64bit",
+  "durationSeconds": 300.019230917,
+  "cpuSeconds": 2.2699999999999996,
+  "averageCPUPercentOfOneCore": 0.7566181651295522,
+  "residentKiBStart": 108304,
+  "residentKiBEnd": 108368,
+  "residentKiBPeakSampled": 108368,
+  "samples": [
+    {
+      "elapsedSeconds": 0.005166374999999997,
+      "cpuSeconds": 0.78,
+      "residentKiB": 108304
+    },
+    {
+      "elapsedSeconds": 5.024788292,
+      "cpuSeconds": 0.82,
+      "residentKiB": 108304
+    },
+    {
+      "elapsedSeconds": 10.047817833,
+      "cpuSeconds": 0.85,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 15.072839167,
+      "cpuSeconds": 0.89,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 20.095860083,
+      "cpuSeconds": 0.93,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 25.120342042,
+      "cpuSeconds": 0.96,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 30.147388667,
+      "cpuSeconds": 1.0,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 35.173307333000004,
+      "cpuSeconds": 1.03,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 40.193236500000005,
+      "cpuSeconds": 1.07,
+      "residentKiB": 108224
+    },
+    {
+      "elapsedSeconds": 45.217269333000004,
+      "cpuSeconds": 1.11,
+      "residentKiB": 108240
+    },
+    {
+      "elapsedSeconds": 50.243869667,
+      "cpuSeconds": 1.15,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 55.270778875,
+      "cpuSeconds": 1.18,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 60.292999875,
+      "cpuSeconds": 1.22,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 65.318134875,
+      "cpuSeconds": 1.26,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 70.345582833,
+      "cpuSeconds": 1.29,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 75.3728795,
+      "cpuSeconds": 1.33,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 80.397442375,
+      "cpuSeconds": 1.37,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 85.421747042,
+      "cpuSeconds": 1.41,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 90.443095542,
+      "cpuSeconds": 1.44,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 95.468286792,
+      "cpuSeconds": 1.48,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 100.49102941700001,
+      "cpuSeconds": 1.51,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 105.513915333,
+      "cpuSeconds": 1.55,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 110.539502583,
+      "cpuSeconds": 1.59,
+      "residentKiB": 108256
+    },
+    {
+      "elapsedSeconds": 115.564787667,
+      "cpuSeconds": 1.62,
+      "residentKiB": 108272
+    },
+    {
+      "elapsedSeconds": 120.5926265,
+      "cpuSeconds": 1.66,
+      "residentKiB": 108272
+    },
+    {
+      "elapsedSeconds": 125.616926042,
+      "cpuSeconds": 1.7,
+      "residentKiB": 108288
+    },
+    {
+      "elapsedSeconds": 130.63744295799998,
+      "cpuSeconds": 1.74,
+      "residentKiB": 108304
+    },
+    {
+      "elapsedSeconds": 135.659894542,
+      "cpuSeconds": 1.77,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 140.68121275,
+      "cpuSeconds": 1.81,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 145.703514542,
+      "cpuSeconds": 1.85,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 150.72325825,
+      "cpuSeconds": 1.89,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 155.74695104199998,
+      "cpuSeconds": 1.93,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 160.768018458,
+      "cpuSeconds": 1.97,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 165.792258708,
+      "cpuSeconds": 2.01,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 170.817511833,
+      "cpuSeconds": 2.04,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 175.84262116699998,
+      "cpuSeconds": 2.08,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 180.865902958,
+      "cpuSeconds": 2.12,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 185.89145937499998,
+      "cpuSeconds": 2.16,
+      "residentKiB": 108320
+    },
+    {
+      "elapsedSeconds": 190.914484833,
+      "cpuSeconds": 2.2,
+      "residentKiB": 108336
+    },
+    {
+      "elapsedSeconds": 195.93958229199998,
+      "cpuSeconds": 2.24,
+      "residentKiB": 108336
+    },
+    {
+      "elapsedSeconds": 200.96417449999998,
+      "cpuSeconds": 2.27,
+      "residentKiB": 108336
+    },
+    {
+      "elapsedSeconds": 205.98790774999998,
+      "cpuSeconds": 2.31,
+      "residentKiB": 108336
+    },
+    {
+      "elapsedSeconds": 211.01423816699997,
+      "cpuSeconds": 2.35,
+      "residentKiB": 108336
+    },
+    {
+      "elapsedSeconds": 216.03866070799998,
+      "cpuSeconds": 2.39,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 221.064433792,
+      "cpuSeconds": 2.43,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 226.09120324999998,
+      "cpuSeconds": 2.47,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 231.11764262499997,
+      "cpuSeconds": 2.51,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 236.142982083,
+      "cpuSeconds": 2.55,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 241.166809458,
+      "cpuSeconds": 2.59,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 246.189523708,
+      "cpuSeconds": 2.63,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 251.21422454199998,
+      "cpuSeconds": 2.67,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 256.24099008300004,
+      "cpuSeconds": 2.71,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 261.26644325,
+      "cpuSeconds": 2.75,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 266.28428779200004,
+      "cpuSeconds": 2.78,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 271.299824042,
+      "cpuSeconds": 2.82,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 276.323937458,
+      "cpuSeconds": 2.86,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 281.349878792,
+      "cpuSeconds": 2.9,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 286.372911917,
+      "cpuSeconds": 2.94,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 291.404687917,
+      "cpuSeconds": 2.97,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 296.429451625,
+      "cpuSeconds": 3.01,
+      "residentKiB": 108368
+    },
+    {
+      "elapsedSeconds": 300.024397292,
+      "cpuSeconds": 3.05,
+      "residentKiB": 108368
+    }
+  ],
+  "limitations": "Single-process cumulative CPU/RSS sample; excludes child processes, GPU, energy, latency and mixed-workload stability."
+}

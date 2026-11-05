@@ -406,6 +406,12 @@ final class NotchWindowController: NSWindowController {
         let previously = wasInIsland
         wasInIsland = inIsland
         if app.notch.pointerInside != inIsland { app.notch.pointerInside = inIsland }
+        // The mini under the pointer takes over the ticker.
+        let hovered: String? = inIsland && app.notch.miniCount > 0 ? { if case .mini(let id) = app.hitSlime(atIsland: toIsland(local)) { return id } else { return nil } }() : nil
+        if app.notch.hoveredMiniID != hovered {
+            app.notch.hoveredMiniID = hovered
+            app.sessions?.publish()
+        }
         if inIsland, !previously, dragOut == nil { send(.pointerEntered) }
         if !inIsland, previously { send(.pointerLeft) }
 

@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     products: [
         .executable(name: "Mochlet", targets: ["Mochlet"]),
+        .executable(name: "mochlet-hook", targets: ["mochlet-hook"]),
     ],
     dependencies: [
         .package(path: "Packages/SlimeKit"),
@@ -26,6 +27,8 @@ let package = Package(
             path: "App",
             swiftSettings: [.unsafeFlags(["-Xfrontend", "-warn-long-expression-type-checking=400"])]
         ),
+        // The hook relay: Foundation only, so it starts in a few milliseconds.
+        .executableTarget(name: "mochlet-hook", path: "Helpers/mochlet-hook"),
         .testTarget(name: "MochletAppTests", dependencies: ["Mochlet"], path: "Tests/App"),
     ],
     swiftLanguageModes: [.v6]

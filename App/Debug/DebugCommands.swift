@@ -189,6 +189,59 @@ enum DebugCommands {
             } else {
                 app.desktop.flyOut(to: app.desktop.savedCenter() ?? app.desktop.defaultCenter(), from: app.window.mainSlimeScreenRect())
             }
+        case "hook":
+            // hook?line=<url-encoded JSON>   inject one relay line (blocking lines get a reply that logs to result.txt)
+            if let line = arg("line") {
+                let data = Data(line.utf8)
+                if HookSocketServer.wantsReply(data) {
+                    let reply = LoggingReply(dir: dir)
+                    app.hooks.inject(data, reply: reply.handle)
+                } else {
+                    app.hooks.inject(data)
+                }
+                result = "ok hook \(app.hooks.lineCount) lines, \(app.sessions.live.count) live"
+            }
+        case "hookfile":
+            // hookfile?path=<jsonl>&delay=0.4   replay a fixture, one line per `delay` seconds
+            if let path = arg("path"), let text = try? String(contentsOfFile: path, encoding: .utf8) {
+                let delay = num("delay") ?? 0.4
+                let lines = text.split(separator: "\n").map(String.init).filter { !$0.hasPrefix("#") && !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                for (i, l) in lines.enumerated() {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + delay * Double(i)) {
+                        MainActor.assumeIsolated { AppCoordinator.shared.hooks.inject(Data(l.utf8)) }
+                    }
+                }
+                result = "ok replaying \(lines.count) lines"
+            }
+        case "approve":
+            if let d = arg("decision").flatMap(ApprovalDecision.init(rawValue:)) { app.approvals.decide(d) }
+            result = "ok approvals pending \(app.approvals.count)"
+        case "answer":
+            // answer?pick=Label | answer?other=text | answer?action=next|back|terminal
+            if let pick = arg("pick") { app.questions.toggle(pick) }
+            if let other = arg("other") { app.questions.setOther(other); app.questions.submitOther() }
+            switch arg("action") {
+            case "next": app.questions.advance()
+            case "back": app.questions.back()
+            case "terminal": app.questions.handBack()
+            default: break
+            }
+            result = "ok question pending \(app.questions.pending != nil)"
+        case "session":
+            if let id = arg("id") { app.openSession(id) } else { app.openSession(nil) }
+        case "jump":
+            result = app.terminal.jump(to: app.sessions.card(arg("id")) ?? app.sessions.focused) ? "ok jumped: \(app.terminal.lastResult)" : "no terminal"
+        case "settings":
+            // settings?tab=agents[&shot=1]   open the Settings window on a tab; shot writes settings.png
+            app.openSettings()
+            if let tab = arg("tab") { app.settingsWindow?.show(tab: tab) }
+            if arg("shot") != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    MainActor.assumeIsolated {
+                        if let png = AppCoordinator.shared.settingsWindow?.snapshot() { try? png.write(to: dir.appendingPathComponent("settings.png")) }
+                    }
+                }
+            }
         case "quit":
             NSApp.terminate(nil)
         default:
@@ -244,10 +297,52 @@ enum DebugCommands {
         d["mouse"] = ["x": NSEvent.mouseLocation.x, "y": NSEvent.mouseLocation.y]
         d["ignoresMouse"] = w.window!.ignoresMouseEvents
         d["toast"] = n.toast?.text ?? ""
+        d["ticker"] = n.tickerText
+        d["cardNote"] = n.cardNote ?? ""
+        d["focusedSession"] = n.focusedSessionID ?? ""
+        d["sessions"] = app.sessions.cards.map { c in
+            ["id": c.id, "agent": c.agent.id, "project": c.label, "state": c.state.rawValue, "steps": c.steps.map(\.text), "diffs": c.diffs.count,
+             "finalLine": c.finalLine ?? "", "cwd": c.cwd, "terminal": c.terminal.terminalName ?? "", "tty": c.terminal.tty ?? ""] as [String: Any]
+        }
+        d["approvals"] = app.approvals.queue.items.map { ["id": $0.id.uuidString, "tool": $0.tool, "command": $0.command, "session": $0.sessionID] }
+        d["question"] = app.questions.pending.map { ["index": $0.index, "questions": $0.question.questions.map(\.text), "selections": $0.selections] as [String: Any] } ?? "nil"
+        d["hooks"] = ["lines": app.hooks.lineCount, "invalid": app.hooks.invalidCount, "running": app.hooks.isRunning, "socket": app.hooks.socketPath, "relay": app.hooks.relayPath?.path ?? ""]
+        d["plans"] = ["claude": app.plans.claude.map { "\($0.dominantPercent(now: Date()))" } ?? "nil", "codex": app.plans.codex.map { "\($0.dominantPercent(now: Date()))" } ?? "nil"]
         d["time"] = ISO8601DateFormatter().string(from: Date())
         guard let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) else { return "state failed" }
         try? data.write(to: dir.appendingPathComponent("state.json"))
         return "state written"
+    }
+
+    /// A reply handle over a socket pair: whatever the app writes lands in debug/reply.txt.
+    final class LoggingReply {
+        let handle: HookReply
+        private let reader: DispatchSourceRead
+        private let readFD: Int32
+
+        init(dir: URL) {
+            var fds: [Int32] = [0, 0]
+            _ = socketpair(AF_UNIX, SOCK_STREAM, 0, &fds)
+            handle = HookReply(fd: fds[0])
+            readFD = fds[1]
+            let url = dir.appendingPathComponent("reply.txt")
+            try? "".write(to: url, atomically: true, encoding: .utf8)
+            let fd = fds[1]
+            reader = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .global(qos: .utility))
+            reader.setEventHandler {
+                var buf = [UInt8](repeating: 0, count: 4096)
+                let n = read(fd, &buf, buf.count)
+                if n > 0, let h = try? FileHandle(forWritingTo: url) {
+                    h.seekToEndOfFile()
+                    h.write(Data(buf[0..<n]))
+                    try? h.close()
+                }
+            }
+            reader.resume()
+            Self.live.append(self)
+        }
+
+        nonisolated(unsafe) static var live: [LoggingReply] = []
     }
 
     private static func rect(_ r: CGRect) -> [String: Double] {

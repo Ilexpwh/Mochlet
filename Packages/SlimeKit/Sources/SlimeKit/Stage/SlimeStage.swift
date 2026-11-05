@@ -37,6 +37,7 @@ public final class MiniSlime: Identifiable {
     public internal(set) var phase: Phase = .pinching
     public let spawnedAt: Double
     var phaseSince: Double
+    var perRow = SlimeStage.slotsPerRow
 
     init(id: String, engine: SlimeEngine, slot: Int, at time: Double) {
         self.id = id
@@ -46,19 +47,56 @@ public final class MiniSlime: Identifiable {
         self.phaseSince = time
     }
 
-    public var row: Int { slot / SlimeStage.slotsPerRow }
-    public var column: Int { slot % SlimeStage.slotsPerRow }
+    public var row: Int { slot / perRow }
+    public var column: Int { slot % perRow }
 }
 
 /// The whole cast: main slime, one mini per session, split droplets and the drag-out ghost.
 /// Choreography (split, pinch-off, merge-back, ghost spring) runs on engine time in 1/240 s steps.
 @MainActor
 public final class SlimeStage {
+    /// Defaults of `MiniLayout.compact`.
     public static let miniScale = 0.45
     public static let slotsPerRow = 4
     /// Mini slot k sits at x = side·(firstSlot + column·slotPitch) in main R units.
     public static let firstSlot = 2.1
     public static let slotPitch = 1.15
+
+    /// Where minis sit and how big they are, relative to the main slime (R = 1).
+    public struct MiniLayout: Sendable, Equatable {
+        public var scale: Double
+        public var firstSlot: Double
+        public var pitch: Double
+        public var perRow: Int
+        public init(scale: Double, firstSlot: Double, pitch: Double, perRow: Int) {
+            self.scale = scale
+            self.firstSlot = firstSlot
+            self.pitch = pitch
+            self.perRow = perRow
+        }
+        /// Next to the main slime in the compact strip.
+        public static let compact = MiniLayout(scale: 0.45, firstSlot: 2.1, pitch: 1.15, perRow: 4)
+    }
+
+    /// Changing it re-seats the live minis (a hop) and eases their size over 0.35 s.
+    public var miniLayout: MiniLayout = .compact {
+        didSet {
+            guard miniLayout != oldValue else { return }
+            scaleFrom = liveScale
+            scaleStart = time
+            for m in minis { m.perRow = miniLayout.perRow }
+            for m in minis where m.phase == .live { placeAtSlot(m, animated: true) }
+        }
+    }
+    private var scaleFrom = SlimeStage.miniScale
+    private var scaleStart = -10.0
+    /// Drawn mini scale: eases toward `miniLayout.scale` after a layout change.
+    public var liveScale: Double {
+        let u = clamp((time - scaleStart) / 0.35, 0, 1)
+        return scaleFrom + (miniLayout.scale - scaleFrom) * Ease.inOutSine.apply(u)
+    }
+    /// Scale used for placement and choreography (the target, not the eased value).
+    private var miniScale: Double { miniLayout.scale }
     /// Where the pinch-off bulge breaks away (main R units).
     public static let pinchReach = 1.3
     public static let rowLift = 0.8
@@ -200,7 +238,7 @@ public final class SlimeStage {
         var out: [PlacedSlime] = [PlacedSlime(id: nil, frame: main.frame(), scale: 1, offset: .zero)]
         for m in minis where m.phase != .pinching {
             if m.phase == .live, m.slot >= maxVisibleMinis { continue }
-            out.append(PlacedSlime(id: m.id, frame: m.engine.frame(), scale: Self.miniScale, offset: SIMD2(0, -Double(m.row) * Self.rowLift)))
+            out.append(PlacedSlime(id: m.id, frame: m.engine.frame(), scale: liveScale, offset: SIMD2(0, -Double(m.row) * Self.rowLift)))
         }
         if let g = ghost {
             out.append(PlacedSlime(id: "ghost", frame: g.frame(), scale: 1, offset: .zero))
@@ -229,7 +267,7 @@ public final class SlimeStage {
         main.pointer(p)
         for m in minis {
             guard let p else { m.engine.pointer(nil); continue }
-            let local = (p - SIMD2(0, -Double(m.row) * Self.rowLift)) / Self.miniScale
+            let local = (p - SIMD2(0, -Double(m.row) * Self.rowLift)) / liveScale
             m.engine.pointer(local)
         }
     }
@@ -238,8 +276,8 @@ public final class SlimeStage {
         let mc = main.body.centroid
         if simd_distance(p, mc) < 1.15 * main.body.sizeScale { return .main }
         for m in minis where m.phase == .live && m.slot < maxVisibleMinis {
-            let c = m.engine.body.centroid * Self.miniScale + SIMD2(0, -Double(m.row) * Self.rowLift)
-            if simd_distance(p, c) < 1.2 * Self.miniScale { return .mini(m.id) }
+            let c = m.engine.body.centroid * liveScale + SIMD2(0, -Double(m.row) * Self.rowLift)
+            if simd_distance(p, c) < 1.2 * liveScale { return .mini(m.id) }
         }
         return .none
     }
@@ -260,6 +298,7 @@ public final class SlimeStage {
         engine.reduceMotion = reduceMotion
         let slot = minis.filter { $0.phase != .merging }.count
         let m = MiniSlime(id: id, engine: engine, slot: slot, at: time)
+        m.perRow = miniLayout.perRow
         engine.onEvent = { [weak self, weak m] e in
             guard let self, let m else { return }
             self.handleMini(m, e)
@@ -301,7 +340,7 @@ public final class SlimeStage {
             } else {
                 m.phase = .merging
                 m.phaseSince = time
-                let target = main.body.centroid / Self.miniScale
+                let target = main.body.centroid / miniScale
                 let root = m.engine.body.root
                 let t = hopTime(abs(target.x - root.x))
                 let vx = (target.x - root.x) / t
@@ -315,7 +354,7 @@ public final class SlimeStage {
     }
 
     private func slotX(_ slot: Int) -> Double {
-        side * (Self.firstSlot + slotOffset + Double(slot % Self.slotsPerRow) * Self.slotPitch)
+        side * (miniLayout.firstSlot + slotOffset + Double(slot % miniLayout.perRow) * miniLayout.pitch)
     }
 
     /// Flight time for a hop of `distance` (mini R units): longer hops take a little longer.
@@ -324,7 +363,7 @@ public final class SlimeStage {
     }
 
     private func placeAtSlot(_ m: MiniSlime, animated: Bool) {
-        let tx = slotX(m.slot) / Self.miniScale
+        let tx = slotX(m.slot) / miniScale
         if !animated || reduceMotion {
             m.engine.teleport(to: SIMD2(tx, 0))
             m.engine.rest()
@@ -443,10 +482,10 @@ public final class SlimeStage {
                     // Neck breaks: recoil, then the droplet flies to its slot.
                     main.pinchRecoil(side: side)
                     main.setLean(0, duration: 0.3)
-                    let centre = SIMD2(Self.pinchReach * side, -0.45) / Self.miniScale
+                    let centre = SIMD2(Self.pinchReach * side, -0.45) / miniScale
                     let root = centre + SIMD2(0, 0.86)
                     m.engine.teleport(to: root)
-                    let tx = slotX(m.slot) / Self.miniScale
+                    let tx = slotX(m.slot) / miniScale
                     let tf = hopTime(abs(tx - root.x))
                     let vx = (tx - root.x) / tf
                     let vy = -0.5 * m.engine.body.params.rootGravity * tf - root.y / tf
@@ -462,11 +501,11 @@ public final class SlimeStage {
                     m.engine.setFaceOpacity(1, duration: 0.2)
                 }
             case .merging:
-                let centre = m.engine.body.centroid * Self.miniScale + SIMD2(0, -Double(m.row) * Self.rowLift)
+                let centre = m.engine.body.centroid * miniScale + SIMD2(0, -Double(m.row) * Self.rowLift)
                 let c = main.body.centroid
                 if simd_distance(centre, c) < 1.2 || time - m.phaseSince > 1.8 {
-                    absorbs.append(Absorb(position: centre, velocity: m.engine.body.rootVelocity * Self.miniScale,
-                                          radius: Self.miniScale * m.engine.body.sizeScale, startedAt: time))
+                    absorbs.append(Absorb(position: centre, velocity: m.engine.body.rootVelocity * miniScale,
+                                          radius: miniScale * m.engine.body.sizeScale, startedAt: time))
                     minis.removeAll { $0 === m }
                     reslot()
                     updateMainShrink()
@@ -482,7 +521,7 @@ public final class SlimeStage {
             let u = clamp((time - a.startedAt) / 0.25, 0, 1)
             a.velocity += (c - a.position) * 60 * h - a.velocity * 10 * h
             a.position += a.velocity * h
-            a.radius = Self.miniScale * (1 - Ease.inQuad.apply(u))
+            a.radius = miniScale * (1 - Ease.inQuad.apply(u))
             absorbs[i] = a
             if u >= 1 { done.append(i) }
         }
@@ -498,12 +537,12 @@ public final class SlimeStage {
             let t = time - m.phaseSince
             let root = main.body.root
             if t < 0.3 {
-                let r = Self.miniScale * Ease.outCubic.apply(t / 0.3)
+                let r = miniScale * Ease.outCubic.apply(t / 0.3)
                 out.append(Blob(position: root + SIMD2(0.55 * side, -0.45), radius: r))
             } else {
                 let u = Ease.inOutSine.apply(min(1, (t - 0.3) / 0.22))
                 let x = 0.55 + (Self.pinchReach - 0.55) * u
-                out.append(Blob(position: root + SIMD2(x * side, -0.45), radius: Self.miniScale, stretch: 1 + 0.15 * sin(u * .pi), heading: 0))
+                out.append(Blob(position: root + SIMD2(x * side, -0.45), radius: miniScale, stretch: 1 + 0.15 * sin(u * .pi), heading: 0))
             }
         }
         return out

@@ -54,10 +54,17 @@ final class AppCoordinator {
     let settings = SettingsStore()
     let notch = NotchStore()
     let slime = SlimeBridge()
+    let plans = PlanStore()
+    private(set) var sessions: SessionStore!
+    private(set) var approvals: ApprovalCenter!
+    private(set) var questions: QuestionCenter!
+    private(set) var hooks: HookCenter!
+    private(set) var installers: AgentInstallerController!
+    private(set) var terminal: TerminalJumper!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
-    private var settingsWindow: SettingsWindowController?
+    private(set) var settingsWindow: SettingsWindowController?
     private var toastWork: DispatchWorkItem?
     private var pushToTalkActive = false
     private var chewWork: DispatchWorkItem?
@@ -78,8 +85,20 @@ final class AppCoordinator {
         slime.onMiniEvent = { [weak self] id, e in self?.handleMini(id, e) }
         window = NotchWindowController(app: self)
         desktop = DesktopSlimeController(app: self)
+        sessions = SessionStore(app: self)
+        approvals = ApprovalCenter(app: self)
+        questions = QuestionCenter(app: self)
+        terminal = TerminalJumper(app: self)
+        installers = AgentInstallerController(app: self)
+        hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
         statusItem.install()
+        sessions.start()
+        hooks.start()
+        installers.refresh()
+        #if DEBUG
+        _ = DebugCommands.token
+        #endif
         HotKeyCenter.shared.start(enabled: settings.hotkeysEnabled) { [weak self] key, down in
             self?.hotKey(key, down: down)
         }
@@ -98,10 +117,38 @@ final class AppCoordinator {
     }
 
     func stop() {
+        hooks?.stop()
         HotKeyCenter.shared.stop()
     }
 
+    /// Expanded views that belong to a session.
+    func openSession(_ id: String?) {
+        if let id { notch.focusedSessionID = id }
+        window.send(.openExternally(.sessionDetail))
+    }
+
+    func openDiff(_ id: String) {
+        notch.focusedDiffID = id
+        window.send(.openExternally(.diff))
+    }
+
+    /// ⌃⌥A: the card that needs the user, else the most recent session.
+    func goToPending() {
+        if approvals.count > 0 { window.send(.openExternally(.approval)); return }
+        if questions.pending != nil { window.send(.openExternally(.question)); return }
+        if let c = sessions.pending.first ?? sessions.mostRecent { openSession(c.id) } else { toast("Nothing is waiting for you.", symbol: "checkmark.circle") }
+    }
+
+    /// How many plan pills the compact strip shows (its width reserves room for them).
+    func updatePills() {
+        var n = 0
+        if settings.showClaudePlan, plans.claude != nil { n += 1 }
+        if settings.showCodexPlan, plans.codex != nil { n += 1 }
+        if notch.pillCount != n { notch.pillCount = n }
+    }
+
     func applySettings() {
+        updatePills()
         slime.apply(settings: settings)
         window?.applySettings()
         HotKeyCenter.shared.setEnabled(settings.hotkeysEnabled)
@@ -152,7 +199,11 @@ final class AppCoordinator {
     }
 
     private func askSuggestions() -> [String] {
-        ["What needs my approval?", "Summarise what my sessions are doing", "Ask the knowledge base…"]
+        var out: [String] = []
+        if approvals.count > 0 || questions.pending != nil { out.append("What needs my approval?") }
+        if let c = sessions.mostRecent { out.append("Summarise what \(c.label) is doing") }
+        out.append("Ask the knowledge base…")
+        return Array(out.prefix(3))
     }
 
     func submitAsk() {
@@ -175,6 +226,11 @@ final class AppCoordinator {
             openSettings()
         case .pauseObservation:
             settings.observationPaused.toggle()
+            if settings.observationPaused {
+                approvals.releaseAll()
+                questions.handBack(note: "Observation paused.")
+                sessions.endAll()
+            }
             statusItem.refresh()
             toast(settings.observationPaused ? "Observation paused" : "Observation resumed", symbol: action.symbol)
         case .quit:
@@ -186,8 +242,11 @@ final class AppCoordinator {
                 window.send(.collapse)
                 desktop.flyOut(to: desktop.savedCenter() ?? desktop.defaultCenter(), from: window.mainSlimeScreenRect())
             }
-        case .jumpToTerminal, .newSession:
-            toast("\(action.title) arrives with milestone 4 (agent observation).", symbol: action.symbol)
+        case .jumpToTerminal:
+            window.send(.collapse)
+            if !terminal.jump(to: sessions.focused) { toast("No agent session to jump to yet.", symbol: "terminal") }
+        case .newSession:
+            toast("New sessions from the notch arrive with milestone 5 (projects).", symbol: action.symbol)
         case .projects, .attachWindow:
             toast("\(action.title) arrives with milestone 5 (projects and chat).", symbol: action.symbol)
         case .knowledge:
@@ -225,7 +284,13 @@ final class AppCoordinator {
     }
 
     private func handleMini(_ id: String, _ e: SlimeEvent) {
-        if case .clickClassified = e { toast("Session \(id)", symbol: "terminal") }
+        guard case .clickClassified(let n) = e else { return }
+        window.send(.userInteracted)
+        if n >= 2 {
+            terminal.jump(to: sessions.card(id))
+        } else {
+            openSession(id)
+        }
     }
 
     private func beginPushToTalk() {
@@ -266,9 +331,9 @@ final class AppCoordinator {
                 endPushToTalk()
             }
         case .jumpToTerminal:
-            if down { toast("Jump to terminal arrives with milestone 4.", symbol: "terminal") }
+            if down, !terminal.jump(to: sessions.focused) { toast("No agent session to jump to yet.", symbol: "terminal") }
         case .pendingAlert:
-            if down { toast("Nothing is waiting for you.", symbol: "checkmark.circle") }
+            if down { goToPending() }
         }
     }
 
@@ -286,8 +351,7 @@ final class AppCoordinator {
         case .main:
             slime.stage.main.pressBegan(at: local)
         case .mini(let id):
-            slime.stage.mini(id)?.engine.impulse(.wobble(angle: -.pi / 2, strength: 0.3))
-            toast("Session \(id) · details arrive with milestone 4.", symbol: "terminal")
+            slime.stage.mini(id)?.engine.pressBegan(at: SIMD2(0, -0.9))
         case .none:
             break
         }

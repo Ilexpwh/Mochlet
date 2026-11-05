@@ -10,3 +10,4 @@ if [ "${USE_XCODE:-0}" = "1" ]; then
 else
   swift test 2>&1 | tail -3
 fi
+scripts/test-hook.sh | tail -1

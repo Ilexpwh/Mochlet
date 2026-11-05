@@ -84,6 +84,7 @@ public struct PlanUsage: Sendable, Equatable, Codable {
         if s <= 0 { return "Resetting…" }
         let h = Int(s) / 3600
         let m = (Int(s) % 3600) / 60
+        if h >= 48 { return "in \(h / 24) d \(h % 24) h" }
         return h > 0 ? String(format: "in %d h %02d", h, m) : "in \(m) min"
     }
 }

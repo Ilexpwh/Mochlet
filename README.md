@@ -27,6 +27,15 @@ Everything starts from the character, not from forms:
 
 The desktop position is remembered across launches ("Let me out" / "Back to the notch" in the menu).
 
+## Watching your coding agents
+
+Install the hooks from Settings → Agents (Claude Code, Codex, Gemini CLI; any other agent can call
+the relay, see `docs/AGENTS.md`). Every session you run in a terminal, Cursor or Claude Desktop
+becomes a mini slime next to the notch with a one-line ticker; edits become diff chips; permission
+requests and AskUserQuestion prompts become cards you answer from the notch (or hand back to the
+terminal); the finished turn makes the slime jump; `⌃⌥T` jumps to the exact terminal tab or tmux
+pane; plan-usage pills show how much of your Claude and Codex subscription is used.
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -41,7 +50,8 @@ The desktop position is remembered across launches ("Let me out" / "Back to the 
 - `App/` – the notch app shell: `Notch/` (panel, window controller, SwiftUI island),
   `Desktop/` (the slime loose on the desktop), `Interaction/` (hit view, drag-out, drops),
   `Slime/` (the only caller of SlimeKit), `Settings/`, `Debug/` (debug URL channel).
-- `Helpers/` – `mochlet-hook`, `mochlet-mcp`, `mochlet-cli`.
+- `Helpers/mochlet-hook` – the hook relay (Foundation only, embedded in the app bundle, copied to
+  `~/Library/Application Support/Mochlet/bin/` on launch). `mochlet-mcp` and `mochlet-cli` follow.
 
 ## Developing
 
@@ -79,7 +89,13 @@ open "mochlet://debug/hold?seconds=1.2&$T"
 open "mochlet://debug/drag?sx=1400&sy=60&$T"       # drag the slime out (or back onto the notch)
 open "mochlet://debug/desktop?sx=1400&sy=60&$T"    # fly out / move; on=0 flies home
 open "mochlet://debug/emote?name=love&$T"          # agent?state=working · mini?id=a&state=waiting · split
+open "mochlet://debug/hookfile?path=$PWD/Tests/Fixtures/hooks/claude-session.jsonl&$T"   # replay hook events
+open "mochlet://debug/approve?decision=allow&$T"   # answer?pick=Label · answer?other=text · session?id= · jump
+open "mochlet://debug/settings?tab=agents&shot=1&$T"
 ```
+
+`scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay
+and socket; `scripts/test-hook.sh` checks the relay against a fake socket (`scripts/fake-socket.py`).
 
 Rendering is one CoreGraphics path driven by a display link; it only redraws frames that
 visibly differ, and it pauses entirely while the island is hidden.

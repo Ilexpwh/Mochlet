@@ -25,6 +25,14 @@ public struct NotchLayout: Sendable, Equatable {
     public static let expandedContentLeadingAway: Double = 28
     /// Main slime radius while the island is expanded.
     public static let expandedSlimeRadius: Double = 56
+    /// Bottom strip of the expanded island where the mini slimes line up.
+    public static let trayHeight: Double = 30
+    /// Mini radius in the tray, in points, and the pitch between minis.
+    public static let trayMiniRadius: Double = 14.5
+    public static let trayPitch: Double = 36
+    /// Room the compact strip reserves for the one-line ticker.
+    public static let tickerWidth: Double = 200
+    public static let pillWidth: Double = 64
 
     public var geometry: NotchGeometry
 
@@ -51,21 +59,41 @@ public struct NotchLayout: Sendable, Equatable {
         }
     }
 
-    /// Right wing of the compact strip grows with the number of visible minis.
-    public func compactRightWing(miniCount: Int) -> Double {
-        max(Self.compactWing, 24 + Double(miniCount) * Self.miniPitchPoints + 12)
+    /// Width of the mini row in the compact strip.
+    public static func miniRowWidth(miniCount: Int) -> Double {
+        miniCount == 0 ? 0 : 24 + Double(miniCount) * Self.miniPitchPoints
+    }
+
+    /// Right wing of the compact strip: the mini row, then the ticker and plan pills.
+    public func compactRightWing(miniCount: Int, ticker: Bool = false, pills: Int = 0) -> Double {
+        let extra = (ticker ? Self.tickerWidth + 6 : 0) + Double(pills) * Self.pillWidth
+        return max(Self.compactWing, Self.miniRowWidth(miniCount: miniCount) + 12 + extra)
     }
 
     /// `mainAway`: the main slime lives on the desktop, so the island keeps no room for it.
-    public func size(mode: NotchMode, view: NotchView, miniCount: Int = 0, measuredHeight: Double? = nil, mainAway: Bool = false) -> (width: Double, height: Double) {
+    /// `measuredHeight` already includes paddings and the tray.
+    public func size(mode: NotchMode, view: NotchView, miniCount: Int = 0, measuredHeight: Double? = nil, mainAway: Bool = false,
+                     ticker: Bool = false, pills: Int = 0) -> (width: Double, height: Double) {
         switch mode {
         case .hidden:
             return (geometry.width, geometry.height)
         case .compact:
             let left = mainAway ? 0 : Self.compactWing
-            return (geometry.width + left + compactRightWing(miniCount: miniCount), geometry.height)
+            return (geometry.width + left + compactRightWing(miniCount: miniCount, ticker: ticker, pills: pills), geometry.height)
         case .expanded:
-            return (Self.expandedWidth, measuredHeight ?? Self.viewHeight(view))
+            return (Self.expandedWidth, measuredHeight ?? (Self.viewHeight(view) + (miniCount > 0 ? Self.trayHeight : 0)))
+        }
+    }
+
+    /// Mini layout in main-R units for each mode: beside the main slime when compact, a tray under
+    /// the content when expanded (`firstSlot` measured from the main contact point).
+    public func miniLayout(mode: NotchMode) -> (scale: Double, firstSlot: Double, pitch: Double, perRow: Int) {
+        switch mode {
+        case .hidden, .compact:
+            return (0.45, 2.1, 1.15, 4)
+        case .expanded:
+            let r = Self.expandedSlimeRadius
+            return (Self.trayMiniRadius / r, (Self.expandedContentLeading + 16 - 104) / r, Self.trayPitch / r, 12)
         }
     }
 

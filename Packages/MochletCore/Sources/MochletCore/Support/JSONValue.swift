@@ -12,10 +12,10 @@ public enum JSONValue: Sendable, Equatable, Hashable, Codable {
     public init(any: Any?) {
         switch any {
         case nil, is NSNull: self = .null
-        case let b as Bool: self = .bool(b)
+        // NSNumber first: a Swift `as Bool` would also match the numbers 0 and 1.
         case let n as NSNumber:
-            // NSNumber bools are handled above only when bridged as Bool; CFBoolean check:
             if CFGetTypeID(n) == CFBooleanGetTypeID() { self = .bool(n.boolValue) } else { self = .number(n.doubleValue) }
+        case let b as Bool: self = .bool(b)
         case let i as Int: self = .number(Double(i))
         case let d as Double: self = .number(d)
         case let s as String: self = .string(s)

@@ -42,6 +42,8 @@ final class SlimeBridge {
         targetRadius = CGFloat(layout.slimeRadius(mode: mode))
         let offsetPoints = layout.miniSlotOffset(mode: mode)
         stage.slotOffset = offsetPoints / Double(targetRadius)
+        let m = layout.miniLayout(mode: mode)
+        stage.miniLayout = SlimeStage.MiniLayout(scale: m.scale, firstSlot: m.firstSlot, pitch: m.pitch, perRow: m.perRow)
     }
 
     /// Island-local point (points, y down) → main R units relative to the main contact point.

@@ -44,14 +44,13 @@ struct IslandContainer: View {
     }
 }
 
-/// Over the compact strip: the ticker of the focused session (milestone 4) and small badges.
+/// Over the compact strip, right of the mini row: the ticker of the focused session and the plan pills.
 struct CompactOverlay: View {
     let app: AppCoordinator
 
     var body: some View {
         let store = app.notch
         HStack(spacing: 6) {
-            Spacer()
             if store.overflowCount > 0 {
                 Text("+\(store.overflowCount)")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
@@ -65,13 +64,15 @@ struct CompactOverlay: View {
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.75))
                     .lineLimit(1)
+                    .frame(width: NotchLayout.tickerWidth, alignment: .leading)
             }
+            PlanPills(app: app)
             if !app.settings.soundEnabled {
                 Image(systemName: "speaker.slash.fill").font(.system(size: 8)).foregroundStyle(.white.opacity(0.4))
             }
         }
-        .padding(.trailing, 10)
-        .frame(maxHeight: .infinity)
+        .padding(.leading, store.tickerLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .allowsHitTesting(false)
     }
 }
@@ -90,7 +91,7 @@ struct ExpandedContent: View {
         .padding(.leading, store.contentLeading)
         .padding(.trailing, 18)
         .padding(.top, store.geometry.height + 4)
-        .padding(.bottom, 12)
+        .padding(.bottom, store.contentBottom)
     }
 
     @ViewBuilder
@@ -101,6 +102,10 @@ struct ExpandedContent: View {
         case .ask: AskBubbleView(app: app)
         case .menu: QuickMenuView(app: app)
         case .toast: ToastView(toast: app.notch.toast)
+        case .sessionDetail: SessionDetailView(app: app)
+        case .diff: DiffView(app: app)
+        case .approval: ApprovalView(app: app)
+        case .question: QuestionView(app: app)
         default: PlaceholderView(view: view)
         }
     }
@@ -125,18 +130,39 @@ struct HomeView: View {
     let app: AppCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(app.settings.observationPaused ? "Observation paused." : "Quiet for now. No agent sessions yet.")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-            Text("click · ask     double-click · menu     hold · talk")
-                .font(.system(size: 10.5, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
-            Text("drag · take me anywhere     ⌥ drag · attach a window     right-click · everything")
-                .font(.system(size: 10.5, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
+        let live = app.sessions.live
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 7) {
+                if live.isEmpty {
+                    Text(app.settings.observationPaused ? "Observation paused." : "Quiet for now. No agent sessions yet.")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("click · ask     double-click · menu     hold · talk")
+                        .font(.system(size: 10.5, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.55))
+                    Text("drag · take me anywhere     ⌥ drag · attach a window     right-click · everything")
+                        .font(.system(size: 10.5, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.55))
+                    if app.installers.rows.allSatisfy({ $0.status == .notInstalled }) {
+                        Button { app.openSettings() } label: {
+                            Text("Connect Claude Code, Codex or Gemini in Settings → Agents")
+                                .font(.system(size: 10.5, weight: .medium, design: .rounded)).foregroundStyle(Color(red: 0.5, green: 0.83, blue: 1.0))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    Text(live.count == 1 ? "One session" : "\(live.count) sessions")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
+                    SessionListView(app: app)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if app.plans.claude != nil || app.plans.codex != nil || app.settings.showCodexPlan {
+                PlanRows(app: app).frame(width: 176, alignment: .topLeading)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

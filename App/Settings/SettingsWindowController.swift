@@ -20,9 +20,17 @@ final class SettingsWindowController: NSWindowController {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func show() {
+    func show(tab: String? = nil) {
+        if let tab { app.notch.settingsTab = tab }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate()
+    }
+
+    /// PNG of the settings content (debug channel).
+    func snapshot() -> Data? {
+        guard let view = window?.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return rep.representation(using: .png, properties: [:])
     }
 }
 
@@ -30,23 +38,171 @@ struct SettingsView: View {
     let app: AppCoordinator
 
     var body: some View {
-        TabView {
-            GeneralSettingsView(app: app).tabItem { Label("General", systemImage: "slider.horizontal.3") }
-            ComingView(title: "Agents", text: "Hook installers for Claude Code, Codex, Gemini and friends arrive with milestone 4.")
-                .tabItem { Label("Agents", systemImage: "terminal") }
+        TabView(selection: Binding(get: { app.notch.settingsTab }, set: { app.notch.settingsTab = $0 })) {
+            GeneralSettingsView(app: app).tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag("general")
+            AgentsSettingsView(app: app).tabItem { Label("Agents", systemImage: "terminal") }.tag("agents")
             ComingView(title: "Chat", text: "Providers, API keys and CLI subscriptions arrive with milestone 5.")
-                .tabItem { Label("Chat", systemImage: "bubble.left") }
+                .tabItem { Label("Chat", systemImage: "bubble.left") }.tag("chat")
             ComingView(title: "Projects", text: "The project registry arrives with milestone 5.")
-                .tabItem { Label("Projects", systemImage: "folder") }
+                .tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
             ComingView(title: "Knowledge", text: "The OKF knowledge base and its MCP server arrive with milestone 6.")
-                .tabItem { Label("Knowledge", systemImage: "books.vertical") }
+                .tabItem { Label("Knowledge", systemImage: "books.vertical") }.tag("knowledge")
             ComingView(title: "Voice & Meetings", text: "Speech, the decision engine and the note-taker arrive with milestones 8 and 9.")
-                .tabItem { Label("Voice & Meetings", systemImage: "waveform") }
+                .tabItem { Label("Voice & Meetings", systemImage: "waveform") }.tag("voice")
             ComingView(title: "Signals", text: "The AI signals engine arrives with milestone 10.")
-                .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }
+                .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }.tag("signals")
         }
-        .frame(width: 560, height: 440)
+        .frame(width: 620, height: 500)
         .padding()
+    }
+}
+
+struct AgentsSettingsView: View {
+    let app: AppCoordinator
+
+    var body: some View {
+        Form {
+            hooksSection
+            cardsSection
+            statusSection
+        }
+        .formStyle(.grouped)
+        .onAppear { app.installers.refresh() }
+        .sheet(item: Binding(get: { app.installers.preview }, set: { if $0 == nil { app.installers.cancelPreview() } })) { p in
+            InstallPreviewSheet(app: app, preview: p)
+        }
+    }
+
+    private var homePath: String { FileManager.default.homeDirectoryForCurrentUser.path }
+
+    private var hooksSection: some View {
+        let inst = app.installers!
+        return Section {
+            ForEach(inst.rows) { row in
+                AgentRow(app: app, row: row)
+            }
+            if let m = inst.lastMessage { Text(m).font(.caption).foregroundStyle(.secondary) }
+        } header: {
+            Text("Hooks")
+        } footer: {
+            Text("Mochlet watches your real sessions through each agent's hook system. Installing shows the whole new file first and keeps a dated backup. The relay is \(inst.relayPath.replacingOccurrences(of: homePath, with: "~")).")
+        }
+    }
+
+    private var cardsSection: some View {
+        @Bindable var s = app.settings
+        return Section("Cards") {
+            Toggle("Answer approvals and questions from the notch for terminal sessions", isOn: $s.terminalCardsEnabled)
+            Toggle("Show the Claude plan pill", isOn: $s.showClaudePlan)
+            Toggle("Show the Codex plan pill", isOn: $s.showCodexPlan)
+                .onChange(of: s.showCodexPlan) { _, on in if on { app.plans.refreshCodex(force: true) } }
+            HStack {
+                Slider(value: $s.finishedLinger, in: 2...30, step: 1) { Text("Finished slimes linger") }
+                Text("\(Int(s.finishedLinger)) s").monospacedDigit().frame(width: 36)
+            }
+            Toggle("Pause observation", isOn: Binding(get: { s.observationPaused }, set: { _ in app.menu(.pauseObservation) }))
+        }
+    }
+
+    private var statusSection: some View {
+        Section("Status") {
+            LabeledContent("Socket") {
+                Text(app.hooks.isRunning ? "listening" : (app.hooks.lastError ?? "stopped")).font(.caption).foregroundStyle(app.hooks.isRunning ? Color.secondary : Color.red)
+            }
+            LabeledContent("Events received") { Text("\(app.sessions.eventCount)").font(.caption).foregroundStyle(.secondary) }
+            LabeledContent("Live sessions") { Text("\(app.sessions.live.count)").font(.caption).foregroundStyle(.secondary) }
+            LabeledContent("Other agents") {
+                Text("Antigravity, Copilot, Muse, OpenCode, Amp, Hermes and any agent that can run a command: see docs/AGENTS.md. Cursor and Claude Desktop ride on the Claude Code hooks.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct AgentRow: View {
+    let app: AppCoordinator
+    let row: AgentInstallerController.Row
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(row.agent.kind.displayName).font(.body.weight(.semibold))
+                    StatusChip(status: row.status)
+                    if !row.cliFound { Text("CLI not found").font(.caption2).foregroundStyle(.secondary) }
+                }
+                Text(row.agent.file.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
+                    .font(.caption.monospaced()).foregroundStyle(.secondary)
+                if let n = row.note { Text(n).font(.caption).foregroundStyle(n == "Trusted." ? Color.secondary : Color.orange) }
+                if let e = row.error { Text(e).font(.caption).foregroundStyle(.red) }
+            }
+            Spacer()
+            buttons
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        switch row.status {
+        case .notInstalled:
+            Button("Install…") { app.installers.prepareInstall(row.agent) }
+        case .outdated:
+            Button("Update…") { app.installers.prepareInstall(row.agent) }
+            Button("Remove") { app.installers.uninstall(row.agent) }
+        case .installed:
+            Button("Remove") { app.installers.uninstall(row.agent) }
+        }
+    }
+}
+
+struct StatusChip: View {
+    let status: HookInstallStatus
+
+    var body: some View {
+        let text: String
+        let color: Color
+        switch status {
+        case .installed: text = "installed"; color = .green
+        case .outdated: text = "update available"; color = .orange
+        case .notInstalled: text = "not installed"; color = .secondary
+        }
+        return Text(text).font(.caption2.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(color.opacity(0.15)))
+    }
+}
+
+struct InstallPreviewSheet: View {
+    let app: AppCoordinator
+    let preview: AgentInstallerController.Preview
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Install Mochlet hooks for \(preview.agent.kind.displayName)").font(.title3.weight(.semibold))
+            Text("This is the whole file Mochlet will write to \(preview.path.path). The current file is backed up next to it first.").font(.caption).foregroundStyle(.secondary)
+            if preview.previousStatusLine != nil {
+                Text("Your existing statusLine command keeps running: Mochlet's relay forwards the plan usage and then runs it unchanged.").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Before").font(.caption.weight(.semibold))
+                    ScrollView { Text(preview.before).font(.system(size: 10, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                        .background(Color.secondary.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("After").font(.caption.weight(.semibold))
+                    ScrollView { Text(preview.after).font(.system(size: 10, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                        .background(Color.secondary.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { app.installers.cancelPreview() }.keyboardShortcut(.cancelAction)
+                Button("Write file") { app.installers.confirmInstall() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 760, height: 520)
     }
 }
 

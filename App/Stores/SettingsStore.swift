@@ -26,6 +26,12 @@ final class SettingsStore {
     var desktopSlime: Bool { didSet { defaults.set(desktopSlime, forKey: "desktopSlime") } }
     var desktopSlimeX: Double { didSet { defaults.set(desktopSlimeX, forKey: "desktopSlimeX") } }
     var desktopSlimeY: Double { didSet { defaults.set(desktopSlimeY, forKey: "desktopSlimeY") } }
+    /// Approval and question cards for sessions running in a terminal (the agent waits for the notch).
+    var terminalCardsEnabled: Bool { didSet { defaults.set(terminalCardsEnabled, forKey: "terminalCardsEnabled") } }
+    var showClaudePlan: Bool { didSet { defaults.set(showClaudePlan, forKey: "showClaudePlan") } }
+    var showCodexPlan: Bool { didSet { defaults.set(showCodexPlan, forKey: "showCodexPlan") } }
+    /// Mini slimes that finished go back to idle after this many seconds.
+    var finishedLinger: Double { didSet { defaults.set(finishedLinger, forKey: "finishedLinger") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -48,6 +54,10 @@ final class SettingsStore {
         desktopSlime = defaults.bool(forKey: "desktopSlime")
         desktopSlimeX = defaults.object(forKey: "desktopSlimeX") as? Double ?? -1
         desktopSlimeY = defaults.object(forKey: "desktopSlimeY") as? Double ?? -1
+        terminalCardsEnabled = defaults.object(forKey: "terminalCardsEnabled") as? Bool ?? true
+        showClaudePlan = defaults.object(forKey: "showClaudePlan") as? Bool ?? true
+        showCodexPlan = defaults.object(forKey: "showCodexPlan") as? Bool ?? true
+        finishedLinger = defaults.object(forKey: "finishedLinger") as? Double ?? 6
     }
 
     // MARK: Login item

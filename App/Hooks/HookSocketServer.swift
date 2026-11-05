@@ -16,20 +16,36 @@ final class HookReply: @unchecked Sendable {
     private let lock = NSLock()
     private var closed = false
     private var hangupSource: DispatchSourceRead?
-    var onHangup: (@Sendable () -> Void)?
+    private var hungUpEarly = false
+    /// Set by the card that owns the request. If the agent had already hung up before the
+    /// handler was set, it fires right away (the hang-up is never lost).
+    var onHangup: (@Sendable () -> Void)? {
+        didSet {
+            lock.lock()
+            let early = hungUpEarly
+            lock.unlock()
+            if early, let h = onHangup { h() }
+        }
+    }
 
     init(fd: Int32) {
         self.fd = fd
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue.global(qos: .utility))
         src.setEventHandler { [weak self] in
             guard let self else { return }
-            var byte: UInt8 = 0
-            let n = recv(self.fd, &byte, 1, MSG_PEEK | MSG_DONTWAIT)
+            var buf = [UInt8](repeating: 0, count: 256)
+            // Anything the agent sends after its line is noise: drain it so the source stays quiet.
+            let n = recv(self.fd, &buf, buf.count, MSG_DONTWAIT)
             if n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
                 self.hangupSource?.cancel()
                 self.hangupSource = nil
                 let hangup = self.closeIfNeeded()
-                if hangup { self.onHangup?() }
+                guard hangup else { return }
+                self.lock.lock()
+                let handler = self.onHangup
+                if handler == nil { self.hungUpEarly = true }
+                self.lock.unlock()
+                handler?()
             }
         }
         src.resume()

@@ -1138,9 +1138,11 @@ public final class SlimeEngine {
             acc.append(AccessoryFrame(kind: a.kind, anchor: bf.transform(local), pop: pop, phase: age, levels: a.kind == .micBars ? micLevels : []))
         }
         let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty
-            || !blobs.isEmpty || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
+            || blobs.contains(where: { $0.radius > 1e-3 }) || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
+        // A resting pointer is not activity: the gaze counts only while it is still turning.
+        let gazeMoving = abs(gaze.yaw - gaze.target.x) > 0.003 || abs(gaze.pitch - gaze.target.y) > 0.003
         let lively = blink.isBlinking || lean.isAnimating || opacityAnim.isAnimating || faceOpacityAnim.isAnimating || eyeScale.isAnimating || blush.isAnimating || mouthOpen.isAnimating
-            || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || isHovering || pointer != nil
+            || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || gazeMoving
         activity = moving ? 2 : (lively ? 1 : 0)
         return SlimeFrame(
             profile: profile.kind, state: state, emote: emote, ring: ring, root: body.root, body: bf,

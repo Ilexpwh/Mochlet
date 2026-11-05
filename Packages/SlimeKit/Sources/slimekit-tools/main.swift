@@ -134,6 +134,47 @@ func bench(_ args: Args) {
     print(String(format: "engine: %.2f ms cpu per simulated second of idle stage (%.3f%% of a core)", engineMs, engineMs / 10))
 }
 
+/// Renders the app icon set (happy slime on a dark rounded square) into an .appiconset folder.
+@MainActor
+func renderIcon(_ args: Args) throws {
+    let outDir = URL(fileURLWithPath: args.string("out", "./out/AppIcon.appiconset"))
+    try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
+    let engine = SlimeEngine(profile: .main, seed: 7)
+    engine.theme = SlimeTheme.named(args.string("theme", "rimuru"))
+    engine.simulate(0.8)
+    engine.trigger(.happy)
+    engine.simulate(0.42)
+    engine.pointer(SIMD2(0.6, -1.4))
+    engine.simulate(0.3)
+    let frame = engine.frame()
+    let sizes: [(Int, Int)] = [(16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2), (256, 1), (256, 2), (512, 1), (512, 2)]
+    var entries: [[String: String]] = []
+    for (pt, scale) in sizes {
+        let px = pt * scale
+        let size = CGSize(width: px, height: px)
+        let R = CGFloat(px) * 0.30
+        let origin = CGPoint(x: size.width * 0.5, y: size.height * 0.80)
+        let view = ZStack {
+            RoundedRectangle(cornerRadius: CGFloat(px) * 0.22, style: .continuous)
+                .fill(LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.20), Color(red: 0.03, green: 0.04, blue: 0.08)], startPoint: .top, endPoint: .bottom))
+                .padding(CGFloat(px) * 0.02)
+            SlimeFrameView(frame: frame, theme: engine.theme, radius: R, size: size, origin: origin, background: .clear)
+        }
+        .frame(width: size.width, height: size.height)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 1
+        renderer.proposedSize = ProposedViewSize(size)
+        guard let cg = renderer.cgImage else { continue }
+        let name = "icon_\(pt)x\(pt)@\(scale)x.png"
+        try Filmstrip.writePNG(cg, to: outDir.appendingPathComponent(name))
+        entries.append(["filename": name, "idiom": "mac", "scale": "\(scale)x", "size": "\(pt)x\(pt)"])
+    }
+    let contents: [String: Any] = ["images": entries, "info": ["author": "xcode", "version": 1]]
+    let data = try JSONSerialization.data(withJSONObject: contents, options: [.prettyPrinted, .sortedKeys])
+    try data.write(to: outDir.appendingPathComponent("Contents.json"))
+    print("wrote \(entries.count) icon images to \(outDir.path)")
+}
+
 let argv = Array(CommandLine.arguments.dropFirst())
 let args = Args(argv)
 let command = args.positional.first ?? "help"
@@ -149,6 +190,8 @@ do {
         playSound(args.positional.count > 1 ? args.positional[1] : "greet")
     case "bench":
         bench(args)
+    case "icon":
+        try renderIcon(args)
     default:
         print("""
         slimekit-tools render-filmstrip --state <state|emote|pinch|sessions|ghost|ghostdrop> | --script "t:action,…"
@@ -158,6 +201,7 @@ do {
         slimekit-tools lab
         slimekit-tools play <sound>
         slimekit-tools bench [--seconds 20]
+        slimekit-tools icon --out <AppIcon.appiconset>
         actions:
         \(Filmstrip.actionHelp)
         """)

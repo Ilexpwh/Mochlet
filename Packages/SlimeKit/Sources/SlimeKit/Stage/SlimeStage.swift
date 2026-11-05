@@ -70,6 +70,14 @@ public final class SlimeStage {
     public var side: Double = 1
     /// Minis beyond this count are not drawn (the host shows a badge instead).
     public var maxVisibleMinis = 4
+    /// Extra distance (main R units) the mini row is pushed away from the main slime, e.g. to
+    /// clear the physical notch while the island is compact. Live minis hop to the new slots.
+    public var slotOffset: Double = 0 {
+        didSet {
+            guard slotOffset != oldValue else { return }
+            for m in minis where m.phase == .live { placeAtSlot(m, animated: true) }
+        }
+    }
     /// 1 = real time; 0.25 = slow motion (Emote Lab).
     public var timeScale: Double = 1
     public var onEvent: ((SlimeEvent) -> Void)?
@@ -295,7 +303,7 @@ public final class SlimeStage {
                 m.phaseSince = time
                 let target = main.body.centroid / Self.miniScale
                 let root = m.engine.body.root
-                let t = 0.4
+                let t = hopTime(abs(target.x - root.x))
                 let vx = (target.x - root.x) / t
                 let vy = -0.5 * m.engine.body.params.rootGravity * t + (target.y + 0.86 - root.y) / t
                 m.engine.launch(velocity: SIMD2(vx, vy))
@@ -307,7 +315,12 @@ public final class SlimeStage {
     }
 
     private func slotX(_ slot: Int) -> Double {
-        side * (Self.firstSlot + Double(slot % Self.slotsPerRow) * Self.slotPitch)
+        side * (Self.firstSlot + slotOffset + Double(slot % Self.slotsPerRow) * Self.slotPitch)
+    }
+
+    /// Flight time for a hop of `distance` (mini R units): longer hops take a little longer.
+    private func hopTime(_ distance: Double) -> Double {
+        clamp(0.3 + distance / 40, 0.3, 0.6)
     }
 
     private func placeAtSlot(_ m: MiniSlime, animated: Bool) {
@@ -318,7 +331,7 @@ public final class SlimeStage {
             return
         }
         let root = m.engine.body.root
-        let t = 0.3
+        let t = hopTime(abs(tx - root.x))
         let vx = (tx - root.x) / t
         let vy = -0.5 * m.engine.body.params.rootGravity * t - root.y / t
         m.engine.launch(velocity: SIMD2(vx, vy))
@@ -434,7 +447,7 @@ public final class SlimeStage {
                     let root = centre + SIMD2(0, 0.86)
                     m.engine.teleport(to: root)
                     let tx = slotX(m.slot) / Self.miniScale
-                    let tf = 0.4
+                    let tf = hopTime(abs(tx - root.x))
                     let vx = (tx - root.x) / tf
                     let vy = -0.5 * m.engine.body.params.rootGravity * tf - root.y / tf
                     m.engine.launch(velocity: SIMD2(vx, vy))
@@ -442,7 +455,7 @@ public final class SlimeStage {
                     m.phaseSince = time
                 }
             case .flying:
-                if time - m.phaseSince > 1.2 {
+                if time - m.phaseSince > 1.5 {
                     m.phase = .live
                     m.phaseSince = time
                     placeAtSlot(m, animated: false)
@@ -451,7 +464,7 @@ public final class SlimeStage {
             case .merging:
                 let centre = m.engine.body.centroid * Self.miniScale + SIMD2(0, -Double(m.row) * Self.rowLift)
                 let c = main.body.centroid
-                if simd_distance(centre, c) < 1.2 || time - m.phaseSince > 1.5 {
+                if simd_distance(centre, c) < 1.2 || time - m.phaseSince > 1.8 {
                     absorbs.append(Absorb(position: centre, velocity: m.engine.body.rootVelocity * Self.miniScale,
                                           radius: Self.miniScale * m.engine.body.sizeScale, startedAt: time))
                     minis.removeAll { $0 === m }

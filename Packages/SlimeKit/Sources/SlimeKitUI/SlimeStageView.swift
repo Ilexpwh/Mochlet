@@ -12,6 +12,10 @@ public struct SlimeStageView: View {
     public var probe: PerfProbe?
     /// Set false on secondary views of the same stage so they do not overwrite the pointer.
     public var updatesPointer = true
+    /// Live radius (the host animates it between island modes); overrides `radius` when set.
+    public var radiusProvider: (@MainActor () -> CGFloat)?
+    /// The drag-out ghost is drawn by its own panel in the app.
+    public var drawsGhost = true
     /// Pixel position of the main contact point for a given canvas size.
     public var origin: @MainActor (CGSize) -> CGPoint
     /// Pointer in canvas coordinates, nil when away.
@@ -20,7 +24,8 @@ public struct SlimeStageView: View {
     @State private var interval: TimeInterval? = 1.0 / 30.0
 
     public init(stage: SlimeStage, radius: CGFloat, paused: Bool = false, sink: SoundSink? = nil, probe: PerfProbe? = nil,
-                updatesPointer: Bool = true,
+                updatesPointer: Bool = true, drawsGhost: Bool = true,
+                radiusProvider: (@MainActor () -> CGFloat)? = nil,
                 origin: @escaping @MainActor (CGSize) -> CGPoint,
                 pointer: @escaping @MainActor () -> CGPoint? = { nil }) {
         self.stage = stage
@@ -29,6 +34,8 @@ public struct SlimeStageView: View {
         self.sink = sink
         self.probe = probe
         self.updatesPointer = updatesPointer
+        self.drawsGhost = drawsGhost
+        self.radiusProvider = radiusProvider
         self.origin = origin
         self.pointer = pointer
     }
@@ -38,6 +45,7 @@ public struct SlimeStageView: View {
             let date = timeline.date
             Canvas(rendersAsynchronously: false) { ctx, size in
                 probe?.begin()
+                let radius = radiusProvider?() ?? radius
                 let o = origin(size)
                 if updatesPointer {
                     if let p = pointer() {
@@ -47,7 +55,8 @@ public struct SlimeStageView: View {
                     }
                 }
                 stage.advance(to: date.timeIntervalSinceReferenceDate)
-                Self.draw(stage.frames(), theme: stage.theme, in: &ctx, origin: o, radius: radius)
+                let placed = drawsGhost ? stage.frames() : stage.frames().filter { $0.id != "ghost" }
+                Self.draw(placed, theme: stage.theme, in: &ctx, origin: o, radius: radius)
                 if let sink { sink.play(stage.drainCues()) } else { _ = stage.drainCues() }
                 let desired = stage.frameInterval
                 if desired != interval {

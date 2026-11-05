@@ -275,7 +275,9 @@ enum StaticFetcher {
         var req = URLRequest(url: url)
         if let accept { req.setValue(accept, forHTTPHeaderField: "Accept") }
         if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
-        let (data, resp) = try await session.data(for: req, delegate: publicOnly ? RedirectGuard.shared : nil)
+        let guardian = publicOnly ? RedirectGuard() : nil
+        let (data, resp) = try await session.data(for: req, delegate: guardian)
+        if guardian?.sawPrivateAddress == true { throw WebReaderError.privateHost(url.host ?? "") }
         guard let http = resp as? HTTPURLResponse else { throw WebReaderError.failed("No HTTP response from \(url.host ?? "server")") }
         guard (200..<300).contains(http.statusCode) else { throw WebReaderError.failed("\(url.host ?? "server") answered \(http.statusCode)") }
         guard data.count <= maxBytes else { throw WebReaderError.tooLarge }
@@ -304,7 +306,9 @@ enum StaticFetcher {
         var req = URLRequest(url: url)
         req.setValue("application/pdf,*/*", forHTTPHeaderField: "Accept")
         if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
-        let (tmp, resp) = try await session.download(for: req, delegate: publicOnly ? RedirectGuard.shared : nil)
+        let guardian = publicOnly ? RedirectGuard() : nil
+        let (tmp, resp) = try await session.download(for: req, delegate: guardian)
+        if guardian?.sawPrivateAddress == true { try? FileManager.default.removeItem(at: tmp); throw WebReaderError.privateHost(url.host ?? "") }
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             try? FileManager.default.removeItem(at: tmp)
             throw WebReaderError.failed("\(url.host ?? "server") answered \((resp as? HTTPURLResponse)?.statusCode ?? 0)")

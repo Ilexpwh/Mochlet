@@ -87,6 +87,9 @@ enum URLIngestor {
         case .page(let u):
             progress(.reading, 0.1)
             do {
+                // Agent-requested reads (MCP) stay on the static fetcher: its redirect and connection
+                // checks are enforceable, a JavaScript page's sub-requests are not.
+                if options.publicHostsOnly { throw WebReaderError.failed("agent read: static fetch only") }
                 let page = try await WebReader.shared.read(u, publicOnly: options.publicHostsOnly)
                 progress(.extracting, 0.5)
                 var md = HTMLToMarkdown.convert(page.article.contentHTML, baseURL: page.finalURL)
@@ -130,7 +133,7 @@ enum URLIngestor {
                 let html = StaticFetcher.decode(data, charset: http.textEncodingName)
                 var c = HTMLExtractor.extract(html: html, label: u.host ?? "page", baseURL: u)
                 c.extractors = ["web", "static"]
-                c.warnings.append("Read without JavaScript (\(OneLine.collapse(ErrorText.describe(error), limit: 80))).")
+                if !options.publicHostsOnly { c.warnings.append("Read without JavaScript (\(OneLine.collapse(ErrorText.describe(error), limit: 80))).") }
                 let snapshot = c.mirrorText
                 c.mirrorText = nil
                 c.mirrorExtension = nil

@@ -16,14 +16,21 @@ enum HostPolicy {
         let h = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]."))
         if h == "localhost" || h.hasSuffix(".localhost") || h.hasSuffix(".local") || h.hasSuffix(".internal") || h.hasSuffix(".home.arpa") || h.hasSuffix(".lan") { return false }
         if !h.contains(".") && !h.contains(":") { return false }      // bare intranet names
-        if let v4 = IPv4(h) { return isPublic(v4) }
         if h.contains(":") { return isPublicV6(h) }
+        if let v4 = IPv4(h) { return isPublic(v4) }
+        // Other numeric spellings (octal "0177.0.0.1", decimal "2130706433", hex "0x7f000001", short "127.1") go through inet_aton.
+        if h.allSatisfy({ $0.isNumber || $0 == "." || $0 == "x" || ("a"..."f").contains($0) }), h.first?.isNumber == true {
+            var a = in_addr()
+            if inet_aton(h, &a) == 1 { return isPublic(UInt32(bigEndian: a.s_addr)) }
+        }
         return true
     }
 
     /// Every address the name resolves to must be public (DNS pointing a public name at 127.0.0.1 is the usual trick).
     static func resolvesPublic(_ host: String) async -> Bool {
-        if IPv4(host) != nil || host.contains(":") { return isPublicName(host) }
+        if host.contains(":") || host.first?.isNumber == true && host.allSatisfy({ $0.isNumber || $0 == "." || $0 == "x" || ("a"..."f").contains($0) }) {
+            return isPublicName(host)     // a literal: no lookup to do
+        }
         return await Task.detached(priority: .utility) { () -> Bool in
             var hints = addrinfo(ai_flags: AI_ADDRCONFIG, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM, ai_protocol: 0, ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
             var res: UnsafeMutablePointer<addrinfo>?
@@ -52,7 +59,8 @@ enum HostPolicy {
         guard parts.count == 4 else { return nil }
         var v: UInt32 = 0
         for p in parts {
-            guard let n = UInt8(p) else { return nil }
+            // Dotted decimal only: a leading zero ("0177") is octal to inet_aton and is left to it.
+            guard !(p.count > 1 && p.first == "0"), let n = UInt8(p) else { return nil }
             v = v << 8 | UInt32(n)
         }
         return v
@@ -72,32 +80,58 @@ enum HostPolicy {
         return true
     }
 
+    /// An IPv6 literal (with or without brackets, with or without a zone) goes through inet_pton so
+    /// every spelling ("0:0:0:0:0:0:0:1", "::ffff:7f00:1", "::1%lo0") lands in the same byte check.
     static func isPublicV6(_ literal: String) -> Bool {
-        let h = literal.lowercased()
-        if h == "::1" || h == "::" { return false }
-        if h.hasPrefix("fe8") || h.hasPrefix("fe9") || h.hasPrefix("fea") || h.hasPrefix("feb") { return false }   // fe80::/10
-        if h.hasPrefix("fc") || h.hasPrefix("fd") { return false }                                                  // fc00::/7
-        if h.hasPrefix("::ffff:"), let v4 = IPv4(String(h.dropFirst(7))) { return isPublic(v4) }                   // mapped v4
-        return true
+        var h = literal.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if let z = h.firstIndex(of: "%") { h = String(h[..<z]) }
+        var addr = in6_addr()
+        guard inet_pton(AF_INET6, h, &addr) == 1 else { return false }
+        return isPublicV6(bytes: withUnsafeBytes(of: addr) { Array($0) })
     }
 
     static func isPublicV6(bytes b: [UInt8]) -> Bool {
         guard b.count == 16 else { return false }
+        func v4(_ at: Int) -> UInt32 { UInt32(b[at]) << 24 | UInt32(b[at + 1]) << 16 | UInt32(b[at + 2]) << 8 | UInt32(b[at + 3]) }
         if b[0..<15].allSatisfy({ $0 == 0 }) { return false }                       // :: and ::1
-        if b[0] == 0xfe, (b[1] & 0xc0) == 0x80 { return false }                      // fe80::/10
-        if (b[0] & 0xfe) == 0xfc { return false }                                    // fc00::/7
-        if b[0..<10].allSatisfy({ $0 == 0 }), b[10] == 0xff, b[11] == 0xff {         // ::ffff:a.b.c.d
-            return isPublic(UInt32(b[12]) << 24 | UInt32(b[13]) << 16 | UInt32(b[14]) << 8 | UInt32(b[15]))
+        if b[0] == 0xfe, (b[1] & 0xc0) == 0x80 { return false }                      // fe80::/10 link-local
+        if b[0] == 0xfe, (b[1] & 0xc0) == 0xc0 { return false }                      // fec0::/10 site-local (deprecated)
+        if (b[0] & 0xfe) == 0xfc { return false }                                    // fc00::/7 unique local
+        if b[0] == 0xff { return false }                                             // ff00::/8 multicast
+        if b[0..<10].allSatisfy({ $0 == 0 }), b[10] == 0xff, b[11] == 0xff { return isPublic(v4(12)) }   // ::ffff:a.b.c.d mapped
+        if b[0..<12].allSatisfy({ $0 == 0 }) { return isPublic(v4(12)) }             // ::a.b.c.d IPv4-compatible (deprecated)
+        if b[0] == 0, b[1] == 0x64, b[2] == 0xff, b[3] == 0x9b, b[4..<12].allSatisfy({ $0 == 0 }) { return isPublic(v4(12)) }   // 64:ff9b::/96 NAT64
+        if b[0] == 0x20, b[1] == 0x02 { return isPublic(v4(2)) }                     // 2002::/16 6to4 embeds the v4 at bytes 2–5
+        if b[0] == 0x20, b[1] == 0x01, b[2] == 0, b[3] == 0 {                        // 2001::/32 Teredo: client v4 is bytes 12–15, inverted
+            return isPublic(~v4(12)) && isPublic(v4(4))
         }
+        if b[0] == 0x20, b[1] == 0x01, b[2] == 0x0d, b[3] == 0xb8 { return false }  // 2001:db8::/32 documentation
         return true
     }
 }
 
-/// Refuses redirects that leave the public internet when a fetch was requested by an agent.
-final class RedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
-    static let shared = RedirectGuard()
+/// For an agent-requested fetch: refuses redirects that leave the public internet and, after the
+/// connection, checks the address actually used (a public name can be re-pointed at 127.0.0.1 between
+/// our lookup and the connection — DNS rebinding — so the response is discarded when that happened).
+/// One instance per fetch; read `sawPrivateAddress` once the call returns.
+final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var privateSeen = false
+    var sawPrivateAddress: Bool { lock.withLock { privateSeen } }
+
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
         guard let url = request.url else { completionHandler(nil); return }
         Task { completionHandler(await HostPolicy.allows(url) ? request : nil) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        for t in metrics.transactionMetrics {
+            guard let addr = t.remoteAddress, !addr.isEmpty else { continue }
+            let ok: Bool
+            if addr.contains(":") { ok = HostPolicy.isPublicV6(addr) }
+            else if let v4 = HostPolicy.IPv4(addr) { ok = HostPolicy.isPublic(v4) }
+            else { ok = false }
+            if !ok { lock.withLock { privateSeen = true } }
+        }
     }
 }

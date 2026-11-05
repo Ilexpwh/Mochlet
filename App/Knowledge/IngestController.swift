@@ -185,7 +185,7 @@ final class IngestController {
             var fetched: URLIngestor.Fetched?
             do {
                 defer { extractLimiter.release() }
-                (content, fetched) = try await extract(id, job.input, ocr: ocr, transcribe: transcribe, robots: robots)
+                (content, fetched) = try await extract(id, job.input, ocr: ocr, transcribe: transcribe, robots: robots, publicOnly: job.from == "mcp")
             }
             if let f = fetched {
                 sourceKey = f.sourceKey
@@ -279,7 +279,9 @@ final class IngestController {
         }
     }
 
-    private func extract(_ id: String, _ input: IngestInput, ocr: Bool, transcribe: Bool, robots: Bool) async throws -> (ExtractedContent, URLIngestor.Fetched?) {
+    /// `publicOnly` comes from the job value at the start of the run (an agent's request stays an agent's
+    /// request even if the job list changes underneath), and is true whenever the origin is unknown.
+    private func extract(_ id: String, _ input: IngestInput, ocr: Bool, transcribe: Bool, robots: Bool, publicOnly: Bool = true) async throws -> (ExtractedContent, URLIngestor.Fetched?) {
         let onProgress: @Sendable (Double) -> Void = { p in Task { @MainActor in AppCoordinator.shared.ingest.progress(id, p) } }
         switch input {
         case .file(let url):
@@ -288,7 +290,7 @@ final class IngestController {
             let c = try await Task.detached(priority: .userInitiated) { try await FileExtractor.extract(url, options: opts, progress: onProgress) }.value
             return (c, nil)
         case .url(let url):
-            let f = try await URLIngestor.fetch(url, options: URLIngestor.Options(robots: robots, ocr: ocr, publicHostsOnly: self.job(id)?.from == "mcp"), progress: { st, p in
+            let f = try await URLIngestor.fetch(url, options: URLIngestor.Options(robots: robots, ocr: ocr, publicHostsOnly: publicOnly), progress: { st, p in
                 Task { @MainActor in
                     let ing = AppCoordinator.shared.ingest!
                     ing.stage(id, st)

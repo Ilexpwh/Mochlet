@@ -7,6 +7,7 @@ let package = Package(
     products: [
         .library(name: "SlimeKit", targets: ["SlimeKit"]),
         .library(name: "SlimeKitUI", targets: ["SlimeKitUI"]),
+        .library(name: "SlimeKitAudio", targets: ["SlimeKitAudio"]),
         .executable(name: "slimekit-tools", targets: ["slimekit-tools"]),
     ],
     targets: [
@@ -14,9 +15,11 @@ let package = Package(
         .target(name: "SlimeKit"),
         // SwiftUI Canvas renderer and the Emote Lab.
         .target(name: "SlimeKitUI", dependencies: ["SlimeKit"]),
+        // AVAudioPlayer pool over the generated WAVs (user override folder, on-the-fly synthesis fallback).
+        .target(name: "SlimeKitAudio", dependencies: ["SlimeKit"], resources: [.copy("Resources/sounds")]),
         // gen-sounds and render-filmstrip for motion review.
-        .executableTarget(name: "slimekit-tools", dependencies: ["SlimeKit", "SlimeKitUI"]),
-        .testTarget(name: "SlimeKitTests", dependencies: ["SlimeKit", "SlimeKitUI"]),
+        .executableTarget(name: "slimekit-tools", dependencies: ["SlimeKit", "SlimeKitUI", "SlimeKitAudio"]),
+        .testTarget(name: "SlimeKitTests", dependencies: ["SlimeKit", "SlimeKitUI", "SlimeKitAudio"]),
     ],
     swiftLanguageModes: [.v6]
 )

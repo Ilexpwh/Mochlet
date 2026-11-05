@@ -61,10 +61,15 @@ public struct Particle: Sendable, Equatable {
 public struct Blob: Sendable, Equatable {
     public var position: SIMD2<Double>
     public var radius: Double
+    /// Elongation along `heading` (1 = circle); the cross axis shrinks by the inverse.
+    public var stretch: Double
+    public var heading: Double
 
-    public init(position: SIMD2<Double>, radius: Double) {
+    public init(position: SIMD2<Double>, radius: Double, stretch: Double = 1, heading: Double = 0) {
         self.position = position
         self.radius = radius
+        self.stretch = stretch
+        self.heading = heading
     }
 }
 
@@ -92,6 +97,7 @@ public struct SlimeFrame: Sendable, Equatable {
     public var particles: [Particle]
     public var blobs: [Blob]
     public var opacity: Double
+    public var faceOpacity: Double
     public var glowBoost: Double
     public var sizeScale: Double
     public var ghostStretch: SIMD2<Double>

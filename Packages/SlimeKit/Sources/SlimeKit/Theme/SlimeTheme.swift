@@ -82,6 +82,8 @@ public struct SlimeTheme: Sendable, Codable, Equatable, Hashable, Identifiable {
 
     public static let all: [SlimeTheme] = [.rimuru, .peach, .mint, .lilac, .lemon]
 
+    public static let names = ["rimuru", "peach", "mint", "lilac", "lemon"]
+
     public static func named(_ name: String) -> SlimeTheme {
         all.first { $0.name == name } ?? .rimuru
     }

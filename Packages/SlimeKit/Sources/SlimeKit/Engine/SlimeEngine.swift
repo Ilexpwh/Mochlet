@@ -18,7 +18,20 @@ public final class SlimeEngine {
     /// Idle seconds before falling asleep (pointer farther than `sleepDistance` R).
     public var sleepAfter: Double = 120
     public var sleepDistance: Double = 7
-    public var opacity: Double = 1
+    /// Whole-slime opacity (ghost 0.7, dimmed main 0.4). Animate with `setOpacity`.
+    public var opacity: Double {
+        get { opacityAnim.value }
+        set { opacityAnim.set(newValue) }
+    }
+    /// Face-only opacity (minis fade their eyes in after pinch-off).
+    public var faceOpacity: Double {
+        get { faceOpacityAnim.value }
+        set { faceOpacityAnim.set(newValue) }
+    }
+    private var opacityAnim = AnimatedValue(1)
+    private var faceOpacityAnim = AnimatedValue(1)
+    /// Eyes closed and no blinks while the ghost is out (drag-out).
+    public private(set) var isAway = false
     /// Extra metaball circles (split droplets, pinch-off bulge) supplied by the stage.
     public var blobs: [Blob] = []
     public var ghostStretch = SIMD2<Double>(1, 1)
@@ -164,6 +177,8 @@ public final class SlimeEngine {
         eyeScale.advance(to: time)
         blush.advance(to: time)
         mouthOpen.advance(to: time)
+        opacityAnim.advance(to: time)
+        faceOpacityAnim.advance(to: time)
         if let o = eyeOverride, time >= o.until { eyeOverride = nil }
         if let m = mouthOverride, time >= m.until { mouthOverride = nil }
         if let g = glance, time >= g.until { glance = nil }
@@ -529,6 +544,67 @@ public final class SlimeEngine {
 
     public func rest() {
         body.rest()
+    }
+
+    // MARK: - Stage hooks
+
+    public func setOpacity(_ o: Double, duration: Double, ease: Ease = .inOutSine) {
+        opacityAnim.animate(to: o, duration: duration, ease: ease, at: time)
+    }
+
+    public func setFaceOpacity(_ o: Double, duration: Double, ease: Ease = .inOutSine) {
+        faceOpacityAnim.animate(to: o, duration: duration, ease: ease, at: time)
+    }
+
+    public func setLean(_ radians: Double, duration: Double, ease: Ease = .outBack) {
+        lean.animate(to: radians, duration: duration, ease: ease, at: time)
+    }
+
+    /// Eyes closed and dimmed while the ghost copy is being dragged around.
+    public func setAway(_ on: Bool) {
+        guard on != isAway else { return }
+        isAway = on
+        lastInteractionAt = time
+        if on {
+            setOpacity(0.4, duration: 0.35)
+        } else {
+            setOpacity(1, duration: 0.25)
+        }
+    }
+
+    /// Temporary eye shapes from the stage (ghost squint, mini surprise).
+    public func setEyeOverride(_ shape: EyeShape?, for duration: Double = 0.3) {
+        if let shape {
+            eyeOverride = (shape, shape, time + duration)
+        } else {
+            eyeOverride = nil
+        }
+    }
+
+    /// Neck break at the end of a pinch-off: recoil away from `side` with the pinch sound.
+    public func pinchRecoil(side: Double) {
+        if !reduceMotion { body.apply(.slap(side: side, strength: 0.6)) }
+        cue(.pinch)
+    }
+
+    /// A mini just merged back: puff, happy face for 0.8 s, absorb sound.
+    public func absorbed() {
+        if !reduceMotion { body.apply(.puff(scale: 0.1)) }
+        eyeOverride = (.happyArc, .happyArc, time + 0.8)
+        mouthOverride = (.omega, time + 0.8)
+        blush.animate(keys: [.init(to: max(baseBlush, 0.6), duration: 0.15, ease: .outQuad), .init(to: baseBlush, duration: 0.7, ease: .inOutSine)], at: time)
+        cue(.absorb)
+    }
+
+    /// Tunables for the Emote Lab.
+    public var bodyParams: SoftBodyParams {
+        get { body.params }
+        set { if newValue.isStable { body.setParams(newValue) } }
+    }
+
+    public func setBreath(amplitude: Double, rate: Double, duration: Double = 0.6) {
+        breath.amplitude.animate(to: amplitude, duration: duration, ease: .inOutSine, at: time)
+        breath.rate.animate(to: rate, duration: duration, ease: .inOutSine, at: time)
     }
 
     // MARK: - Emotes
@@ -1004,6 +1080,7 @@ public final class SlimeEngine {
     // MARK: - Frame
 
     private func resolvedEye(_ side: Double) -> EyeShape {
+        if isAway { return .closedLine }
         if let o = eyeOverride { return side < 0 ? o.left : o.right }
         return baseEye
     }
@@ -1062,7 +1139,7 @@ public final class SlimeEngine {
         }
         let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty
             || !blobs.isEmpty || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
-        let lively = blink.isBlinking || lean.isAnimating || eyeScale.isAnimating || blush.isAnimating || mouthOpen.isAnimating
+        let lively = blink.isBlinking || lean.isAnimating || opacityAnim.isAnimating || faceOpacityAnim.isAnimating || eyeScale.isAnimating || blush.isAnimating || mouthOpen.isAnimating
             || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || isHovering || pointer != nil
         activity = moving ? 2 : (lively ? 1 : 0)
         return SlimeFrame(
@@ -1071,7 +1148,7 @@ public final class SlimeEngine {
             blush: blush.value, blushCenters: blushCenters, blushForeshorten: blushFore,
             core: coreSpring.value, coreBoost: coreBoost, gaze: SIMD2(yaw, pitch),
             highlightShift: SIMD2(-0.08 * yaw, 0.06 * pitch), tint: tint, accessories: acc, particles: particles,
-            blobs: blobs, opacity: opacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
+            blobs: blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
             ghostStretch: ghostStretch, ghostHeading: ghostHeading)
     }
 }

@@ -145,7 +145,10 @@ public struct SlimeRenderer {
         let blobPaths: [Path] = frame.blobs.map { b in
             let c = px(b.position)
             let r = CGFloat(b.radius) * R
-            return Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+            let s = CGFloat(max(0.2, b.stretch))
+            return Path(ellipseIn: CGRect(x: -r * s, y: -r / s, width: 2 * r * s, height: 2 * r / s))
+                .applying(CGAffineTransform(rotationAngle: CGFloat(b.heading)))
+                .applying(CGAffineTransform(translationX: c.x, y: c.y))
         }
         ctx.drawLayer { layer in
             layer.drawLayer { inner in
@@ -183,7 +186,9 @@ public struct SlimeRenderer {
 
     // 7–9. Blush, eyes, mouth (clipped to the body).
     func drawFace(in ctx: inout GraphicsContext, bodyPath: Path) {
+        guard frame.faceOpacity > 0.005 else { return }
         var fc = ctx
+        fc.opacity = ctx.opacity * frame.faceOpacity
         fc.clip(to: bodyPath)
         let rot = CGFloat(frame.body.rotation)
         let sx = CGFloat(frame.body.scaleX)

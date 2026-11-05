@@ -50,6 +50,9 @@ final class SettingsStore {
     var knowledgeDescribeImages: Bool { didSet { defaults.set(knowledgeDescribeImages, forKey: "knowledgeDescribeImages") } }
     var knowledgeIntegrate: Bool { didSet { defaults.set(knowledgeIntegrate, forKey: "knowledgeIntegrate") } }
     var knowledgeRobots: Bool { didSet { defaults.set(knowledgeRobots, forKey: "knowledgeRobots") } }
+    /// Voice: "auto" or a BCP-47 language (zh-CN, zh-TW, en-US); short spoken confirmations.
+    var voiceLocale: String { didSet { defaults.set(voiceLocale, forKey: "voiceLocale") } }
+    var voiceSpeakReplies: Bool { didSet { defaults.set(voiceSpeakReplies, forKey: "voiceSpeakReplies") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -90,6 +93,8 @@ final class SettingsStore {
         knowledgeDescribeImages = defaults.object(forKey: "knowledgeDescribeImages") as? Bool ?? true
         knowledgeIntegrate = defaults.object(forKey: "knowledgeIntegrate") as? Bool ?? true
         knowledgeRobots = defaults.object(forKey: "knowledgeRobots") as? Bool ?? true
+        voiceLocale = defaults.string(forKey: "voiceLocale") ?? "auto"
+        voiceSpeakReplies = defaults.object(forKey: "voiceSpeakReplies") as? Bool ?? false
     }
 
     // MARK: Provider base URLs

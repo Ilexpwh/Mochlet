@@ -288,7 +288,7 @@ final class IngestController {
             let c = try await Task.detached(priority: .userInitiated) { try await FileExtractor.extract(url, options: opts, progress: onProgress) }.value
             return (c, nil)
         case .url(let url):
-            let f = try await URLIngestor.fetch(url, options: URLIngestor.Options(robots: robots, ocr: ocr), progress: { st, p in
+            let f = try await URLIngestor.fetch(url, options: URLIngestor.Options(robots: robots, ocr: ocr, publicHostsOnly: self.job(id)?.from == "mcp"), progress: { st, p in
                 Task { @MainActor in
                     let ing = AppCoordinator.shared.ingest!
                     ing.stage(id, st)
@@ -382,14 +382,7 @@ final class IngestController {
     }
 
     private func decide(_ r: DecisionRequest, brain: LLMClient?) async -> DecisionAnswer? {
-        let engine = app.knowledge.engine
-        if let json = await engine.cachedDecision(hash: r.cacheKey), let a = JSONRepair.decode(DecisionAnswer.self, from: json) { return a }
-        var engines: [any DecisionEngine] = []
-        if FoundationModelsDecisionEngine.isAvailable { engines.append(FoundationModelsDecisionEngine()) }
-        if let brain { engines.append(LLMJSONDecisionEngine(client: brain)) }
-        guard !engines.isEmpty, let a = try? await CompositeDecisionEngine(engines).decide(r) else { return nil }
-        if let data = try? JSONEncoder().encode(a) { await engine.cacheDecision(hash: r.cacheKey, backend: a.backend, answerJSON: String(decoding: data, as: UTF8.self)) }
-        return a
+        await Decisions.decide(r, app: app, brain: brain)
     }
 
     private func projectCandidates() -> [ProjectRouter.Candidate] {

@@ -5,6 +5,7 @@ import MochletCore
 import MochletServices
 
 enum WebReaderError: Error, CustomStringConvertible {
+    case privateHost(String)
     case timeout
     case notHTML(String)
     case isPDF(URL)
@@ -14,6 +15,7 @@ enum WebReaderError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .timeout: return "The page did not finish loading in time."
+        case .privateHost(let h): return "\(h.isEmpty ? "That address" : h) is not on the public internet; agents may only ask for public links."
         case .notHTML(let t): return "Not a web page (\(t))."
         case .isPDF: return "The link is a PDF."
         case .failed(let s): return s
@@ -54,14 +56,17 @@ final class WebReader: NSObject, WKNavigationDelegate {
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var pdfHit: URL?
+    private var publicOnly = false
 
-    func read(_ url: URL, timeout: Double = 25) async throws -> Page {
+    func read(_ url: URL, timeout: Double = 25, publicOnly: Bool = false) async throws -> Page {
         while busy { await withCheckedContinuation { waiters.append($0) } }
         busy = true
         defer {
             busy = false
             if !waiters.isEmpty { waiters.removeFirst().resume() }
         }
+        if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
+        self.publicOnly = publicOnly
         let web = makeWebView()
         pdfHit = nil
         try await load(url, in: web, timeout: timeout)
@@ -159,6 +164,19 @@ final class WebReader: NSObject, WKNavigationDelegate {
         finish(WebReaderError.failed(error.localizedDescription))
     }
 
+    /// Agent-requested reads may not follow redirects or frames into private networks.
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        guard publicOnly, let url = navigationAction.request.url, url.scheme != "about" else { return .allow }
+        if await HostPolicy.allows(url) { return .allow }
+        if navigationAction.targetFrame?.isMainFrame ?? true {
+            navigation.map { c in
+                navigation = nil
+                c.resume(throwing: WebReaderError.privateHost(url.host ?? ""))
+            }
+        }
+        return .cancel
+    }
+
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
         let mime = navigationResponse.response.mimeType?.lowercased() ?? ""
         if mime == "application/pdf" {
@@ -253,18 +271,19 @@ enum StaticFetcher {
         return URLSession(configuration: c)
     }()
 
-    static func data(_ url: URL, accept: String? = nil, maxBytes: Int = 10_000_000) async throws -> (Data, HTTPURLResponse) {
+    static func data(_ url: URL, accept: String? = nil, maxBytes: Int = 10_000_000, publicOnly: Bool = false) async throws -> (Data, HTTPURLResponse) {
         var req = URLRequest(url: url)
         if let accept { req.setValue(accept, forHTTPHeaderField: "Accept") }
-        let (data, resp) = try await session.data(for: req)
+        if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
+        let (data, resp) = try await session.data(for: req, delegate: publicOnly ? RedirectGuard.shared : nil)
         guard let http = resp as? HTTPURLResponse else { throw WebReaderError.failed("No HTTP response from \(url.host ?? "server")") }
         guard (200..<300).contains(http.statusCode) else { throw WebReaderError.failed("\(url.host ?? "server") answered \(http.statusCode)") }
         guard data.count <= maxBytes else { throw WebReaderError.tooLarge }
         return (data, http)
     }
 
-    static func text(_ url: URL, accept: String? = nil, maxBytes: Int = 10_000_000) async throws -> String {
-        let (data, http) = try await data(url, accept: accept, maxBytes: maxBytes)
+    static func text(_ url: URL, accept: String? = nil, maxBytes: Int = 10_000_000, publicOnly: Bool = false) async throws -> String {
+        let (data, http) = try await data(url, accept: accept, maxBytes: maxBytes, publicOnly: publicOnly)
         return decode(data, charset: http.textEncodingName)
     }
 
@@ -281,10 +300,11 @@ enum StaticFetcher {
     }
 
     /// Downloads to a temp file named after the URL (so the mirror keeps a readable name); 100 MB cap.
-    static func download(_ url: URL, suggestedName: String, maxBytes: Int = 100_000_000) async throws -> URL {
+    static func download(_ url: URL, suggestedName: String, maxBytes: Int = 100_000_000, publicOnly: Bool = false) async throws -> URL {
         var req = URLRequest(url: url)
         req.setValue("application/pdf,*/*", forHTTPHeaderField: "Accept")
-        let (tmp, resp) = try await session.download(for: req)
+        if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
+        let (tmp, resp) = try await session.download(for: req, delegate: publicOnly ? RedirectGuard.shared : nil)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             try? FileManager.default.removeItem(at: tmp)
             throw WebReaderError.failed("\(url.host ?? "server") answered \((resp as? HTTPURLResponse)?.statusCode ?? 0)")

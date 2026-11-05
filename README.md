@@ -19,7 +19,7 @@ Everything starts from the character, not from forms:
 | double-click | quick menu (terminal, sessions, projects, knowledge, signals, meetings, settings…) |
 | triple-click | meeting note-taker on/off |
 | five clicks | it splits into droplets and pulls itself back together |
-| hold ≥ 250 ms | push-to-talk |
+| hold ≥ 250 ms (or `⌃⌥V`) | push-to-talk: speak, release; the words show as they form and the request is carried out (see Voice) |
 | drag anywhere | take it out of the notch: drop it in any corner or edge of any screen and it lives there (eyes on the cursor, same clicks) until you drag it back onto the notch |
 | ⌥ drag onto a window | attach that window as context |
 | right-click | the full menu |
@@ -75,6 +75,27 @@ claude mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet
 
 Details in [docs/KNOWLEDGE.md](docs/KNOWLEDGE.md); `scripts/smoke-ingest.sh` exercises the engine
 without the app through `mochlet-cli`.
+
+## Voice
+
+Hold the slime (or `⌃⌥V`), talk, let go. Speech stays on this Mac: Apple's `SpeechAnalyzer` writes the
+words into the bubble as they form (grey while still changing), the model for your language downloads on
+first use (Settings → Voice & Meetings: automatic, 简体, 繁體, 粵語, English, 日本語), and `esc` cancels. What
+you said is routed, not just transcribed:
+
+| You say | It does |
+|---|---|
+| "记一下，明天给老王打电话" · "note to self: buy oat milk" | appends to `Knowledge/notes/YYYY/MM/DD.md` under the minute |
+| "work on mochlet: fix the build" · "让咕咕帮我跑一下测试" · "resume coucou" | opens a terminal with the agent on that project |
+| "read https://arxiv.org/abs/2404.16130" · "把这个链接存起来" (a link on the clipboard) | chews it into the knowledge base |
+| "what did I save about Vision Pro" · "知识库：头显价格" | asks the knowledge base, with citations |
+| "open settings" · "start taking meeting notes" · "what's hot in AI today" | the obvious thing |
+| anything else | goes to chat; with the chat open, it is dictated into the box instead |
+
+Clear phrasings are matched by rules in a millisecond. The rest, and "which project did you mean", go
+to a typed decision: a TypeSafe Jev key if you add one (Settings → Voice & Meetings, with a probe
+button), else Apple's on-device model when it is available, else the brain. A missing project is asked
+for with chips; say its name or tap, within 20 s. "Speak short replies" answers "Noted" / "On it" aloud.
 
 ## Layout
 
@@ -133,6 +154,8 @@ open "mochlet://debug/hookfile?path=$PWD/Tests/Fixtures/hooks/claude-session.jso
 open "mochlet://debug/approve?decision=allow&$T"   # answer?pick=Label · answer?other=text · session?id= · jump
 open "mochlet://debug/settings?tab=agents&shot=1&$T"
 open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"   # remove=slug · offer=/path · open=1
+open "mochlet://debug/voice?text=记一下，买牛奶&$T"          # route words as if spoken; file=/path.aiff replays audio through the transcriber
+open "mochlet://debug/voice?pick=mochlet&$T"               # answer "which project?" (pick=cancel) · start=1 / stop=1 · cancel=1
 open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach

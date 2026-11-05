@@ -482,6 +482,8 @@ final class NotchWindowController: NSWindowController {
             guard event.keyCode == 53 else { return }
             MainActor.assumeIsolated {
                 guard let wc = AppCoordinator.shared.window else { return }
+                let voice = wc.app.voice!
+                if voice.isActive || voice.state == .waiting { voice.cancel(); wc.send(.collapse); return }
                 if wc.app.notch.mode == .expanded, !wc.heldOpen { wc.send(.collapse) }
             }
         }
@@ -497,6 +499,7 @@ final class NotchWindowController: NSWindowController {
     private func handleKey(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if event.keyCode == 53 {
+            if app.voice.isActive || app.voice.state == .waiting { app.voice.cancel() }
             send(.collapse)
             panel.resignKey()
             return true

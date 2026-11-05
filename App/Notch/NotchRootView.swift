@@ -178,8 +178,16 @@ struct AskBubbleView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
+        if app.voice.state != .idle {
+            VoiceView(app: app)
+        } else {
+            typing
+        }
+    }
+
+    private var typing: some View {
         @Bindable var store = app.notch
-        VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: 8) {
             TextField("Ask Mochlet…", text: $store.askText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, design: .rounded))

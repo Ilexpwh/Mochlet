@@ -127,7 +127,7 @@ public enum FileTranscriber {
     }
 
     /// The current locale when the transcriber supports it, else English; a Chinese system gets zh_CN.
-    static func pickLocale(_ wanted: Locale?) async throws -> Locale {
+    public static func pickLocale(_ wanted: Locale?) async throws -> Locale {
         let supported = await SpeechTranscriber.supportedLocales
         func match(_ l: Locale) -> Locale? { supported.first { $0.identifier(.bcp47) == l.identifier(.bcp47) } ?? supported.first { $0.language.languageCode == l.language.languageCode } }
         if let wanted, let m = match(wanted) { return m }

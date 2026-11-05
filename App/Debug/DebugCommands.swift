@@ -12,6 +12,7 @@ import MochletCore
 ///   shot?name=x[&full=1]        PNG of the island (or the whole panel); desktop panel as x-desktop.png
 ///   fsm?input=click|reveal|collapse|hide|pointerEntered|pointerLeft|greetingComplete|launch
 ///   view?name=ask               open an expanded view
+///   voice?text=…               route words as if spoken (start=1/stop=1 · file=/path.wav · cancel=1 · pick=slug)
 ///   emote?name=happy            trigger an emote on the main slime
 ///   agent?state=working         set the main slime's agent state
 ///   mini?id=a&state=working     spawn/update a mini     endmini?id=a      remove it
@@ -247,6 +248,22 @@ enum DebugCommands {
             if let slug = arg("remove") { app.projects.remove(slug) }
             if let path = arg("offer") { app.projects.offer(folder: URL(fileURLWithPath: path)); app.openProjects() }
             if arg("open") != nil { app.openProjects() }
+        case "voice":
+            // voice?text=…  route an utterance as if spoken | start=1 / stop=1 push-to-talk | file=/path.wav plays the microphone | cancel=1 | pick=slug answers "which project"
+            if let t = arg("text") {
+                result = "pending voice"
+                let resultFile = dir.appendingPathComponent("result.txt")
+                Task { @MainActor in
+                    await app.voice.handle(text: t)
+                    let v = app.voice!
+                    let line = "voice: \(v.lastAction ?? v.state.description) | \(v.lastIntent.map { "\($0.intent.rawValue) \($0.backend)" } ?? "no intent")"
+                    try? line.write(to: resultFile, atomically: true, encoding: .utf8)
+                }
+            } else if arg("start") != nil { app.voice.begin() }
+            else if arg("stop") != nil { app.voice.end() }
+            else if arg("cancel") != nil { app.voice.cancel() }
+            else if let f = arg("file") { app.voice.beginFromFile(URL(fileURLWithPath: f)) }
+            else if let p = arg("pick") { app.voice.answerPending(project: p == "cancel" ? nil : app.projects.match(p)) }
         case "ask":
             // ask?text=…   what the ask bubble would do with this text
             if let t = arg("text") { app.notch.askText = t; app.submitAsk() }
@@ -399,7 +416,7 @@ enum DebugCommands {
         d["question"] = app.questions.pending.map { ["index": $0.index, "questions": $0.question.questions.map(\.text), "selections": $0.selections] as [String: Any] } ?? "nil"
         d["hooks"] = ["lines": app.hooks.lineCount, "invalid": app.hooks.invalidCount, "running": app.hooks.isRunning, "socket": app.hooks.socketPath, "relay": app.hooks.relayPath?.path ?? ""]
         d["plans"] = ["claude": app.plans.claude.map { "\($0.dominantPercent(now: Date()))" } ?? "nil", "codex": app.plans.codex.map { "\($0.dominantPercent(now: Date()))" } ?? "nil"]
-        d["chat"] = ["provider": app.chat.providerKind.rawValue, "model": app.chat.model, "thread": app.chat.current?.id ?? "", "title": app.chat.current?.title ?? "",
+        d["chat"] = ["provider": app.chat.providerKind.rawValue, "model": app.chat.model, "input": app.chat.input, "thread": app.chat.current?.id ?? "", "title": app.chat.current?.title ?? "",
                      "streaming": app.chat.isStreaming, "streamingText": String(app.chat.streamingText.suffix(200)), "activity": app.chat.streamingActivity,
                      "messages": app.chat.messages.map { ["role": $0.role.rawValue, "text": String($0.text.prefix(300)), "error": $0.error ?? "", "attachments": $0.attachments.map(\.title)] as [String: Any] },
                      "pending": app.chat.pendingAttachments.map(\.title), "threads": app.chat.threads.count, "error": app.chat.lastError ?? ""] as [String: Any]
@@ -408,6 +425,11 @@ enum DebugCommands {
                          "list": app.projects.projects.map { ["slug": $0.slug, "name": $0.name, "path": $0.primaryPath ?? "", "agent": $0.defaultAgent ?? "", "sessions": $0.lastSessions] as [String: Any] }] as [String: Any]
         d["headless"] = app.headless.runs.map { ["session": $0.key, "agent": $0.value.agent.id, "text": String($0.value.text.suffix(120))] }
         let kb = app.knowledge!
+        let v = app.voice!
+        d["voice"] = ["state": v.state.description, "caption": v.caption, "transcript": v.transcript, "heard": v.lastHeard, "action": v.lastAction ?? "", "error": v.error ?? "",
+                      "locale": v.localeID, "pending": v.pending?.question ?? "", "assets": v.assetState.map { "\($0)" } ?? "", "download": v.downloadProgress ?? -1,
+                      "decisions": Decisions.describe(app: app), "speak": app.settings.voiceSpeakReplies, "setting": app.settings.voiceLocale,
+                      "intent": v.lastIntent.map { "\($0.intent.rawValue) project=\($0.project?.slug ?? "") task=\($0.task ?? "") url=\($0.url?.absoluteString ?? "") backend=\($0.backend) conf=\(String(format: "%.2f", $0.confidence))" } ?? ""] as [String: Any]
         d["knowledge"] = ["root": kb.root.path, "ready": kb.ready, "pages": kb.counts.pages, "chunks": kb.counts.chunks, "references": kb.counts.references,
                           "embedded": kb.counts.embedded, "pendingEmbeddings": kb.pendingEmbeddings, "status": kb.status ?? "", "error": kb.lastError ?? "",
                           "question": kb.question, "answering": kb.isAnswering, "answer": String(kb.answerText.suffix(400)),

@@ -16,7 +16,8 @@ wiki pages the app maintains over them, and a schema file that tells every agent
   syntheses/    answers you filed ("File this answer"), question as title, sources = citations
   meta/         lint-YYYY-MM-DD.md (type: lint)
   projects/     <project-slug>/{index.md, <slug>.md, references/}   reports filed to a project
-  meetings/ notes/ signals/ memories/     later milestones write here
+  notes/YYYY/MM/DD.md          type: note, one `## HH:MM` entry per spoken or typed note
+  meetings/ signals/ memories/  later milestones write here
 ```
 
 Every directory also gets `.abstract.md` (≤ 256 chars) and `.overview.md` (≤ 4000 chars) sidecars,
@@ -125,3 +126,13 @@ the notch shows the stage for every job.
 Settings → Knowledge → Chewing switches OCR, transcription, image descriptions, integration and
 `robots.txt` individually. The ingest card offers Open, Ask (the knowledge card with the report in
 context), Move (to another project or the inbox) and Re-chew; a failed job offers Try again and the log.
+
+## Notes
+
+"记一下…", "note to self…" (voice, or typed into the ask bubble) appends to `notes/YYYY/MM/DD.md`
+(`NoteWriter`): the page is created with `type: note`, title `Notes YYYY-MM-DD` and
+`mochlet: {kind: notes, last_source: voice}`; the body is `# Notes YYYY-MM-DD` followed by `## HH:MM`
+headings, and a second note in the same minute joins the previous entry. The page is reindexed on its own
+(`reindex(only:)`), the folder indexes regenerated and `log.md` gets `- HH:MM note | <text> → notes/…`.
+Notes are plain pages: they are found by `find`/`search`, linted, and integrate like anything else when
+you ask the base to.

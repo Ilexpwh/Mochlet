@@ -162,6 +162,20 @@ extension KnowledgeEngine {
     // MARK: Moving between projects
 
     /// Moves a report (and its mirrored copies) to another project folder or the inbox.
+    /// A spoken or typed note under today's `notes/YYYY/MM/DD.md`.
+    func appendNote(_ text: String, source: String = "voice", at date: Date = Date()) throws -> String {
+        let i = try open()
+        let rel = NoteWriter.path(for: date)
+        try ensureDirectory((rel as NSString).deletingLastPathComponent)
+        let existing = exists(rel) ? (try? OKFDocument.parse(try bundle.read(rel))) : nil
+        let doc = NoteWriter.append(text, to: existing, at: date, source: source)
+        try bundle.write(doc, to: rel)
+        try bundle.appendLog(kind: "note", text: "\(OneLine.collapse(text, limit: 80)) → \(rel)")
+        try bundle.reindex(into: i, only: [rel])
+        try bundle.regenerateIndexes(from: i)
+        return rel
+    }
+
     func moveReport(_ path: String, toProject project: String?) throws -> Filed {
         let i = try open()
         let doc = try OKFDocument.parse(try bundle.read(path))

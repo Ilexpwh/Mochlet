@@ -69,6 +69,7 @@ final class AppCoordinator {
     private(set) var headless: HeadlessRunner!
     private(set) var knowledge: KnowledgeController!
     private(set) var ingest: IngestController!
+    private(set) var voice: VoiceController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -102,6 +103,7 @@ final class AppCoordinator {
         headless = HeadlessRunner(app: self)
         knowledge = KnowledgeController(app: self)
         ingest = IngestController(app: self)
+        voice = VoiceController(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
@@ -423,18 +425,18 @@ final class AppCoordinator {
         slime.stage.main.startListening()
         window.send(.voiceStart)
         notch.askText = ""
+        voice.begin()
     }
 
     private func endPushToTalk() {
         guard pushToTalkActive else { return }
         pushToTalkActive = false
-        slime.stage.main.stopListening(hadSpeech: false)
         window.hold("ptt", false)
         window.send(.voiceEnd)
-        toast("Push-to-talk with on-device speech arrives with milestone 8.", symbol: "mic")
+        voice.end()
     }
 
-    private func toggleMeetingNotes() {
+    func toggleMeetingNotes() {
         slime.stage.main.trigger(.confused)
         toast("The meeting note-taker arrives with milestone 9.", symbol: "waveform")
     }

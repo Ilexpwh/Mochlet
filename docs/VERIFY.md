@@ -158,3 +158,35 @@ open "mochlet://debug/kb?window=1&$T"                        # saves the frontmo
 open "mochlet://debug/state?$T"; python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Logs/Mochlet/debug/state.json')))['ingest'])"
 ```
 
+## Voice (M8)
+
+1. Settings → Voice & Meetings shows the language, whether its speech model is installed, the microphone
+   permission and the decision stack ("Claude Code", "on-device", "Jev"). Pick 中文（简体）: the model
+   downloads with a progress bar and the card note "Downloading … speech"; a toast says when it is ready.
+2. Hold the slime: it leans in with a small `o` mouth and mic bars, the bubble shows "Listening…" with
+   five level bars, finals in white and the still-changing words in grey, "release to send · esc cancels"
+   and the locale. Release: a nod when it heard something, a shrug when it did not.
+3. Say "记一下，明天给老王打电话": "Noted." toast, happy hop, `Knowledge/notes/<today>.md` has a `## HH:MM`
+   entry, `log.md` a `note |` line; a second note in the same minute joins the entry.
+4. Say "start working on the parser" with two projects registered: the `?` bubble asks "Which project?"
+   with a chip per project and Cancel; say "mochlet" (or tap) → a terminal opens with the task; wait
+   20 s instead → the question expires quietly.
+5. Say "what did I save about GraphRAG": the Knowledge card answers with citations. Say "read" followed by
+   a URL, or "把这个链接存起来" with a link on the clipboard: the ingest card chews it.
+6. Open the chat, hold and say anything: the words land in the chat box (dictation). Press `esc` while
+   listening: the turn is dropped, nothing is sent.
+7. Deny the microphone in System Settings: holding shows "Microphone access is off…" and the Voice tab
+   offers "Open Privacy settings". Pick a language without a model on a Mac that cannot download it:
+   "not supported" in the tab, a toast when holding.
+
+Scripted version (no microphone needed):
+
+```sh
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/voice?text=记一下，明天给老王打电话&$T"; sleep 1; cat ~/Library/Logs/Mochlet/debug/result.txt
+open "mochlet://debug/voice?text=start%20working%20on%20the%20parser&$T"; sleep 12   # decision via the brain when no on-device model
+open "mochlet://debug/shot?name=voice-question&$T"; open "mochlet://debug/voice?pick=cancel&$T"
+open "mochlet://debug/voice?file=$HOME/Mochlet/Knowledge/projects/mochlet/references/<sha12>-speech.aiff&$T"   # any wav/aiff/m4a
+sleep 3; open "mochlet://debug/shot?name=voice-listening&$T"
+open "mochlet://debug/state?$T"; python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Logs/Mochlet/debug/state.json')))['voice'])"
+```

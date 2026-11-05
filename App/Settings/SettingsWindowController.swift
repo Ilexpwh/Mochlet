@@ -44,8 +44,7 @@ struct SettingsView: View {
             ChatSettingsView(app: app).tabItem { Label("Chat", systemImage: "bubble.left") }.tag("chat")
             ProjectsSettingsView(app: app).tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
             KnowledgeSettingsView(app: app).tabItem { Label("Knowledge", systemImage: "books.vertical") }.tag("knowledge")
-            ComingView(title: "Voice & Meetings", text: "Speech, the decision engine and the note-taker arrive with milestones 8 and 9.")
-                .tabItem { Label("Voice & Meetings", systemImage: "waveform") }.tag("voice")
+            VoiceSettingsView(app: app).tabItem { Label("Voice & Meetings", systemImage: "waveform") }.tag("voice")
             ComingView(title: "Signals", text: "The AI signals engine arrives with milestone 10.")
                 .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }.tag("signals")
         }

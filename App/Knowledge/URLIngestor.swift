@@ -9,6 +9,8 @@ enum URLIngestor {
     struct Options: Sendable {
         var robots = true
         var ocr = true
+        /// Agent-initiated (MCP) reads stay on the public internet: no loopback, link-local or private hosts, also after redirects.
+        var publicHostsOnly = false
     }
 
     struct Fetched: Sendable {
@@ -24,11 +26,12 @@ enum URLIngestor {
     static func fetch(_ url: URL, options: Options, progress: @escaping @Sendable (IngestStage, Double) -> Void) async throws -> Fetched {
         let canonical = URLCanonicalizer.canonical(url.absoluteString)
         var key = ReportWriter.sourceKey(url: url.absoluteString)
+        if options.publicHostsOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
         if options.robots, !(await RobotsCache.shared.allows(url)) { throw WebReaderError.robots(url.host ?? "The site") }
         switch URLRoute.route(url) {
         case .pdf(let u):
             progress(.reading, 0.2)
-            let file = try await StaticFetcher.download(u, suggestedName: Self.fileName(for: u, ext: "pdf"))
+            let file = try await StaticFetcher.download(u, suggestedName: Self.fileName(for: u, ext: "pdf"), publicOnly: options.publicHostsOnly)
             progress(.extracting, 0)
             var c = try await PDFExtractor.extract(file, ocr: options.ocr, progress: { p in progress(.extracting, p) })
             c.resourceURL = canonical
@@ -84,7 +87,7 @@ enum URLIngestor {
         case .page(let u):
             progress(.reading, 0.1)
             do {
-                let page = try await WebReader.shared.read(u)
+                let page = try await WebReader.shared.read(u, publicOnly: options.publicHostsOnly)
                 progress(.extracting, 0.5)
                 var md = HTMLToMarkdown.convert(page.article.contentHTML, baseURL: page.finalURL)
                 if page.article.textLength < 200 || md.count < 200 {
@@ -104,7 +107,7 @@ enum URLIngestor {
                 return Fetched(content: c, sourceKey: key, canonical: URLCanonicalizer.canonical(page.finalURL.absoluteString), snapshotHTML: page.html)
             } catch WebReaderError.isPDF(let pdf) {
                 progress(.reading, 0.3)
-                let file = try await StaticFetcher.download(pdf, suggestedName: Self.fileName(for: pdf, ext: "pdf"))
+                let file = try await StaticFetcher.download(pdf, suggestedName: Self.fileName(for: pdf, ext: "pdf"), publicOnly: options.publicHostsOnly)
                 progress(.extracting, 0)
                 var c = try await PDFExtractor.extract(file, ocr: options.ocr, progress: { p in progress(.extracting, p) })
                 c.resourceURL = canonical
@@ -112,7 +115,7 @@ enum URLIngestor {
             } catch {
                 // No JavaScript rendering: plain fetch plus the heuristics.
                 progress(.extracting, 0.3)
-                let (data, http) = try await StaticFetcher.data(u)
+                let (data, http) = try await StaticFetcher.data(u, publicOnly: options.publicHostsOnly)
                 let mime = http.mimeType?.lowercased() ?? ""
                 if mime == "application/pdf" {
                     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mochlet-downloads/\(UUID().uuidString)", isDirectory: true)

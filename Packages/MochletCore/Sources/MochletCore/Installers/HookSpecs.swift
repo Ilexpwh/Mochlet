@@ -7,6 +7,15 @@ public enum HookInstallStatus: String, Sendable, Equatable {
 /// Marker every Mochlet hook command carries; removal strips only entries containing it.
 public let hookMarker = "mochlet-hook"
 
+func containsText(_ v: JSONValue, _ needle: String) -> Bool {
+    switch v {
+    case .string(let s): return s.contains(needle)
+    case .array(let a): return a.contains { containsText($0, needle) }
+    case .object(let o): return o.values.contains { containsText($0, needle) }
+    default: return false
+    }
+}
+
 func containsMarker(_ v: JSONValue) -> Bool {
     switch v {
     case .string(let s): return s.contains(hookMarker)
@@ -235,5 +244,354 @@ public enum GeminiHookSpec {
             if g["hooks"][0]["command"].string != command(relayPath, normalized) { ok = false }
         }
         return !any ? .notInstalled : ok ? .installed : .outdated
+    }
+}
+
+// MARK: - Antigravity
+
+/// Antigravity: `~/.gemini/config/hooks.json`, everything under our own top-level key.
+public enum AntigravityHookSpec {
+    public static let key = "mochlet"
+    public static let toolEvents = ["PreToolUse", "PostToolUse"]
+    public static let lifecycleEvents = ["PreInvocation", "PostInvocation", "Stop"]
+
+    public static func command(_ relayPath: String, event: String) -> String { "\"\(relayPath)\" --agent antigravity \(event)" }
+
+    public static func install(into json: JSONValue, relayPath: String, path: String) throws -> JSONValue {
+        var root = json.isNull ? JSONValue.object([:]) : json
+        guard root.object != nil else { throw ConfigFileError.unexpectedShape(path, "root") }
+        var ours: [String: JSONValue] = [:]
+        for e in toolEvents {
+            ours[e] = .array([.object(["matcher": .string("*"), "hooks": .array([.object(["type": .string("command"), "command": .string(command(relayPath, event: e)), "timeout": .number(10)])])])])
+        }
+        for e in lifecycleEvents {
+            ours[e] = .array([.object(["type": .string("command"), "command": .string(command(relayPath, event: e)), "timeout": .number(10)])])
+        }
+        root[key] = .object(ours)
+        return root
+    }
+
+    public static func uninstall(from json: JSONValue) -> JSONValue {
+        var root = json
+        guard var o = root.object else { return root }
+        o[key] = nil
+        root = .object(o)
+        return root
+    }
+
+    public static func status(of json: JSONValue, relayPath: String) -> HookInstallStatus {
+        let ours = json[key]
+        guard !ours.isNull else { return .notInstalled }
+        return containsMarker(ours) && containsText(ours, relayPath) ? .installed : .outdated
+    }
+}
+
+// MARK: - Copilot CLI
+
+/// GitHub Copilot CLI: our own `~/.copilot/hooks/mochlet.json` (camelCase events, `bash` + `timeoutSec`).
+public enum CopilotHookSpec {
+    public static let events: [(String, Int)] = [
+        ("sessionStart", 10), ("userPromptSubmitted", 10), ("preToolUse", 10), ("permissionRequest", 120),
+        ("postToolUse", 10), ("agentStop", 10), ("sessionEnd", 3), ("notification", 10),
+    ]
+
+    public static func command(_ relayPath: String, event: String) -> String { "\"\(relayPath)\" --agent copilot \(event)" }
+
+    public static func install(into json: JSONValue, relayPath: String, path: String) throws -> JSONValue {
+        var root = json.isNull ? JSONValue.object([:]) : json
+        guard root.object != nil else { throw ConfigFileError.unexpectedShape(path, "root") }
+        var hooks = root["hooks"].object ?? [:]
+        if !root["hooks"].isNull, root["hooks"].object == nil { throw ConfigFileError.unexpectedShape(path, "hooks") }
+        for (event, timeout) in events {
+            var entries = hooks[event]?.array ?? []
+            entries.removeAll { ($0["bash"].string ?? "").contains(hookMarker) }
+            entries.append(.object(["type": .string("command"), "bash": .string(command(relayPath, event: event)), "timeoutSec": .number(Double(timeout))]))
+            hooks[event] = .array(entries)
+        }
+        root["hooks"] = .object(hooks)
+        root["version"] = .number(1)
+        return root
+    }
+
+    /// Returns nil when nothing but our entries remains (the file can be deleted).
+    public static func uninstall(from json: JSONValue) -> JSONValue? {
+        var root = json
+        guard var hooks = root["hooks"].object else { return nil }
+        for (k, v) in hooks {
+            let kept = (v.array ?? []).filter { !($0["bash"].string ?? "").contains(hookMarker) }
+            hooks[k] = kept.isEmpty ? nil : .array(kept)
+        }
+        if hooks.isEmpty { return nil }
+        root["hooks"] = .object(hooks)
+        return root
+    }
+
+    public static func status(of json: JSONValue, relayPath: String) -> HookInstallStatus {
+        guard let hooks = json["hooks"].object, !hooks.isEmpty else { return .notInstalled }
+        let ours = hooks.values.flatMap { $0.array ?? [] }.compactMap { $0["bash"].string }.filter { $0.contains(hookMarker) }
+        if ours.isEmpty { return .notInstalled }
+        return ours.count == events.count && ours.allSatisfy({ $0.contains(relayPath) }) ? .installed : .outdated
+    }
+}
+
+// MARK: - Muse Code
+
+/// Muse Code: `~/.config/muse/settings.json`, Claude-shaped hooks with `matcher: "*"` and ms timeouts.
+public enum MuseHookSpec {
+    public static let events: [(String, Int)] = [
+        ("SessionStart", 10), ("UserPromptSubmit", 5), ("PreToolUse", 5), ("PermissionRequest", 120), ("PostToolUse", 5), ("Stop", 5), ("SessionEnd", 3),
+    ]
+
+    public static func command(_ relayPath: String, event: String) -> String { "\"\(relayPath)\" --agent muse \(event)" }
+
+    public static func install(into json: JSONValue, relayPath: String, path: String) throws -> JSONValue {
+        let isNew = json.isNull
+        var root = isNew ? JSONValue.object([:]) : json
+        guard root.object != nil else { throw ConfigFileError.unexpectedShape(path, "root") }
+        if !root["hooks"].isNull, root["hooks"].object == nil { throw ConfigFileError.unexpectedShape(path, "hooks") }
+        for (event, seconds) in events {
+            var groups = stripOurs(try hookGroups(root, event: event, path: path))
+            groups.append(.object(["matcher": .string("*"), "hooks": .array([.object(["type": .string("command"), "command": .string(command(relayPath, event: event)), "timeout": .number(Double(seconds * 1000))])])]))
+            setHookGroups(&root, event: event, groups: groups)
+        }
+        if isNew { root["schema_version"] = .number(1) }
+        return root
+    }
+
+    public static func uninstall(from json: JSONValue) -> JSONValue {
+        var root = json
+        guard let hooks = root["hooks"].object else { return root }
+        for (event, v) in hooks {
+            setHookGroups(&root, event: event, groups: stripOurs(v.array ?? []))
+        }
+        if root["hooks"].object?.isEmpty == true { var o = root.object ?? [:]; o["hooks"] = nil; root = .object(o) }
+        return root
+    }
+
+    public static func status(of json: JSONValue, relayPath: String) -> HookInstallStatus {
+        guard let hooks = json["hooks"].object else { return .notInstalled }
+        var found = 0
+        var current = true
+        for (event, _) in events {
+            let cmds = (hooks[event]?.array ?? []).flatMap { ($0["hooks"].array ?? []) }.compactMap { $0["command"].string }.filter { $0.contains(hookMarker) }
+            if cmds.isEmpty { continue }
+            found += 1
+            if !cmds.allSatisfy({ $0.contains(relayPath) }) { current = false }
+        }
+        if found == 0 { return .notInstalled }
+        return found == events.count && current ? .installed : .outdated
+    }
+}
+
+// MARK: - Generated plugin files (OpenCode, Amp, Hermes)
+
+/// A plugin file Mochlet writes whole: installed when it exists with our header and the current relay path.
+public struct GeneratedPluginFile: Sendable, Equatable {
+    public static let header = "generated by Mochlet"
+    public var relativePath: String
+    public var contents: String
+
+    public static func status(existing: String?, relayPath: String) -> HookInstallStatus {
+        guard let existing, existing.contains(header) || existing.contains(hookMarker) else { return .notInstalled }
+        return existing.contains(relayPath) ? .installed : .outdated
+    }
+
+    /// Only files we generated are ever deleted.
+    public static func isOurs(_ contents: String) -> Bool { contents.contains(header) }
+
+    static func jsQuote(_ path: String) -> String {
+        path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+    }
+}
+
+public enum OpenCodePluginSpec {
+    public static let relativePath = ".config/opencode/plugins/mochlet.js"
+
+    public static func contents(relayPath: String) -> String {
+        """
+        // Mochlet hook plugin for OpenCode — \(GeneratedPluginFile.header). Safe to delete.
+        // Forwards session and tool events to the Mochlet notch (fire-and-forget, never blocks).
+        import { spawn } from 'node:child_process';
+
+        const HOOK = '\(GeneratedPluginFile.jsQuote(relayPath))';
+        const EVENT_MAP = {
+          'session.created': 'SessionStart',
+          'session.idle': 'Stop',
+          'session.error': 'StopFailure',
+          'session.deleted': 'SessionEnd',
+          'permission.asked': 'PermissionRequest',
+        };
+
+        function forward(hook_event_name, payload) {
+          try {
+            const p = spawn(HOOK, ['--agent', 'opencode', hook_event_name], { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
+            p.on('error', () => {});
+            p.stdin.on('error', () => {});
+            p.stdin.write(JSON.stringify({ hook_event_name, ...payload }) + '\\n');
+            p.stdin.end();
+            p.unref();
+          } catch (_) {}
+        }
+
+        export const MochletPlugin = async (_ctx) => ({
+          event: async ({ event }) => {
+            const hook_event_name = EVENT_MAP[event.type];
+            if (!hook_event_name) return;
+            const props = event.properties || {};
+            const payload = {
+              session_id: event.sessionID || event.session_id || props.sessionID || props.session_id || '',
+              cwd: event.cwd || event.directory || props.cwd || props.directory || '',
+            };
+            if (typeof props.tool === 'string') payload.tool_name = props.tool;
+            if (props.input != null) payload.tool_input = props.input;
+            if (typeof props.error === 'string') payload.error = props.error;
+            forward(hook_event_name, payload);
+          },
+          'tool.execute.before': async (input) => {
+            forward('PreToolUse', {
+              session_id: input.sessionID || input.session_id || '',
+              cwd: input.cwd || '',
+              tool_name: typeof input.tool === 'string' ? input.tool : '',
+              tool_input: input.input ?? null,
+            });
+          },
+          'tool.execute.after': async (input, _output) => {
+            forward('PostToolUse', {
+              session_id: input.sessionID || input.session_id || '',
+              cwd: input.cwd || '',
+              tool_name: typeof input.tool === 'string' ? input.tool : '',
+            });
+          },
+        });
+        """
+    }
+}
+
+public enum AmpPluginSpec {
+    public static let relativePath = ".config/amp/plugins/mochlet.ts"
+
+    public static func contents(relayPath: String) -> String {
+        """
+        // Mochlet hook plugin for Amp — \(GeneratedPluginFile.header). Safe to delete.
+        // Forwards every event to the Mochlet notch (display only, never blocks).
+        import { spawn } from 'node:child_process';
+
+        const HOOK = '\(GeneratedPluginFile.jsQuote(relayPath))';
+
+        function forward(event_name: string, fields: Record<string, unknown>): void {
+          try {
+            const payload = JSON.stringify({ hook_event_name: event_name, ...fields });
+            const p = spawn(HOOK, ['--agent', 'amp', event_name], { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
+            p.on('error', () => {});
+            (p.stdin as import('node:stream').Writable).on('error', () => {});
+            (p.stdin as import('node:stream').Writable).write(payload + '\\n');
+            (p.stdin as import('node:stream').Writable).end();
+            p.unref();
+          } catch (_) {}
+        }
+
+        export default function (amp: any): void {
+          amp.on('session.start', (e: any) => { forward('SessionStart', { session_id: e.thread?.id ?? '', cwd: e.cwd ?? '' }); });
+          amp.on('agent.start', (e: any) => { forward('UserPromptSubmit', { session_id: e.thread?.id ?? '', prompt: e.prompt ?? '' }); });
+          amp.on('tool.call', (e: any) => { try { forward('PreToolUse', { session_id: e.thread?.id ?? '', tool_name: typeof e.tool === 'string' ? e.tool : '', tool_input: e.input ?? null }); } finally { return { action: 'allow' }; } });
+          amp.on('tool.result', (e: any) => { forward('PostToolUse', { session_id: e.thread?.id ?? '', tool_name: typeof e.tool === 'string' ? e.tool : '' }); });
+          amp.on('agent.end', (e: any) => { forward('Stop', { session_id: e.thread?.id ?? '', last_assistant_message: e.message ?? '' }); });
+        }
+        """
+    }
+}
+
+public enum HermesPluginSpec {
+    public static let directory = ".hermes/plugins/mochlet"
+    public static let initPath = ".hermes/plugins/mochlet/__init__.py"
+    public static let yamlPath = ".hermes/plugins/mochlet/plugin.yaml"
+
+    public static let pluginYAML = """
+    name: mochlet
+    version: "1.0"
+    description: Mochlet notch integration (\(GeneratedPluginFile.header))
+    """
+
+    public static func initPy(relayPath: String) -> String {
+        """
+        # Mochlet hook plugin for Hermes Agent — \(GeneratedPluginFile.header). Safe to delete.
+        # Session/tool events go to the Mochlet notch (fire-and-forget). Approvals use
+        # register_approval_transport when Hermes exposes it, else an observer hook.
+        import json, subprocess, threading
+
+        HOOK = '\(GeneratedPluginFile.jsQuote(relayPath))'
+        _lock = threading.Lock()
+        _current_session_id = ''
+
+
+        def _fire(fields):
+            def _run():
+                try:
+                    p = subprocess.Popen([HOOK, '--agent', 'hermes', fields.get('hook_event_name', '')],
+                                         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                         start_new_session=True)
+                    p.stdin.write(json.dumps(fields).encode() + b'\\n')
+                    p.stdin.close()
+                    p.wait(timeout=5)
+                except Exception:
+                    pass
+            threading.Thread(target=_run, daemon=True).start()
+
+
+        def register(ctx):
+            def on_session_start(**kw):
+                global _current_session_id
+                sid = kw.get('session_id', '')
+                with _lock:
+                    _current_session_id = sid
+                _fire({'hook_event_name': 'SessionStart', 'session_id': sid, 'platform': kw.get('platform', 'cli') or 'cli', 'cwd': kw.get('cwd', '')})
+
+            def on_session_end(**kw):
+                sid = kw.get('session_id', '') or _current_session_id
+                _fire({'hook_event_name': 'StopFailure' if kw.get('interrupted') else 'SessionEnd', 'session_id': sid})
+
+            def post_llm_call(**kw):
+                sid = kw.get('session_id', '') or _current_session_id
+                _fire({'hook_event_name': 'Stop', 'session_id': sid, 'last_assistant_message': kw.get('assistant_response', '')})
+
+            def pre_tool_call(**kw):
+                sid = kw.get('session_id', '') or _current_session_id
+                _fire({'hook_event_name': 'PreToolUse', 'session_id': sid, 'tool_name': kw.get('tool_name', ''), 'tool_input': kw.get('args') or {}})
+
+            def post_tool_call(**kw):
+                sid = kw.get('session_id', '') or _current_session_id
+                _fire({'hook_event_name': 'PostToolUse', 'session_id': sid, 'tool_name': kw.get('tool_name', '')})
+
+            ctx.register_hook('on_session_start', on_session_start)
+            ctx.register_hook('on_session_end', on_session_end)
+            ctx.register_hook('post_llm_call', post_llm_call)
+            ctx.register_hook('pre_tool_call', pre_tool_call)
+            ctx.register_hook('post_tool_call', post_tool_call)
+
+            if hasattr(ctx, 'register_approval_transport'):
+                def _present(request):
+                    sid = getattr(request, 'session_id', None) or getattr(request, 'session_key', None) or _current_session_id
+                    cmd = getattr(request, 'command', '')
+                    timeout = getattr(request, 'timeout_seconds', getattr(request, 'timeout', 30.0))
+                    allowed = list(getattr(request, 'allowed_choices', ('once', 'deny')))
+                    payload = json.dumps({'hook_event_name': 'PermissionRequest', 'session_id': sid, 'tool_name': 'Bash',
+                                          'tool_input': {'command': cmd, 'description': getattr(request, 'description', '')}}).encode()
+                    try:
+                        result = subprocess.run([HOOK, '--agent', 'hermes', 'PermissionRequest'], input=payload, capture_output=True,
+                                                timeout=max(1.0, float(timeout) - 2.0))
+                        choice = json.loads(result.stdout)['choice']
+                        if choice not in allowed:
+                            raise ValueError(choice)
+                        return request.respond(choice)
+                    except Exception:
+                        return request.respond('deny')
+                ctx.register_approval_transport('mochlet', _present)
+            else:
+                def pre_approval_request(**kw):
+                    sid = kw.get('session_key', '') or _current_session_id
+                    _fire({'hook_event_name': 'PreToolUse', 'session_id': sid, 'tool_name': 'Approval pending in Hermes',
+                           'tool_input': {'command': kw.get('command', ''), 'description': kw.get('description', '')}})
+                ctx.register_hook('pre_approval_request', pre_approval_request)
+        """
     }
 }

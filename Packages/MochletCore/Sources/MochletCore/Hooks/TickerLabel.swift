@@ -41,6 +41,11 @@ public enum TickerLabel {
         "Glob": "Searches", "Grep": "Searches", "WebSearch": "Searches the web", "WebFetch": "Fetches",
         "TodoWrite": "Tasks", "update_plan": "Tasks", "Task": "Agent", "spawn_agent": "Agent", "LS": "Lists",
         "NotebookEdit": "Notebook", "ask_question": "Needs input",
+        // Gemini CLI, Codex and OpenCode tool names
+        "read_file": "Reads", "read_many_files": "Reads", "write_file": "Writes", "replace": "Edits", "edit": "Edits", "write": "Writes",
+        "run_shell_command": "Runs", "shell": "Runs", "shell_command": "Runs", "glob": "Searches", "grep": "Searches", "search_file_content": "Searches",
+        "list_directory": "Lists", "list": "Lists", "web_fetch": "Fetches", "webfetch": "Fetches", "google_web_search": "Searches the web", "web_search": "Searches the web",
+        "websearch": "Searches the web", "todowrite": "Tasks", "task": "Agent",
     ]
 
     public static func bashVerb(_ command: String) -> String {

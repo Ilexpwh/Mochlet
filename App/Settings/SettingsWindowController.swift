@@ -41,10 +41,8 @@ struct SettingsView: View {
         TabView(selection: Binding(get: { app.notch.settingsTab }, set: { app.notch.settingsTab = $0 })) {
             GeneralSettingsView(app: app).tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag("general")
             AgentsSettingsView(app: app).tabItem { Label("Agents", systemImage: "terminal") }.tag("agents")
-            ComingView(title: "Chat", text: "Providers, API keys and CLI subscriptions arrive with milestone 5.")
-                .tabItem { Label("Chat", systemImage: "bubble.left") }.tag("chat")
-            ComingView(title: "Projects", text: "The project registry arrives with milestone 5.")
-                .tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
+            ChatSettingsView(app: app).tabItem { Label("Chat", systemImage: "bubble.left") }.tag("chat")
+            ProjectsSettingsView(app: app).tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
             ComingView(title: "Knowledge", text: "The OKF knowledge base and its MCP server arrive with milestone 6.")
                 .tabItem { Label("Knowledge", systemImage: "books.vertical") }.tag("knowledge")
             ComingView(title: "Voice & Meetings", text: "Speech, the decision engine and the note-taker arrive with milestones 8 and 9.")
@@ -133,7 +131,7 @@ struct AgentRow: View {
                 }
                 Text(row.agent.file.path.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
                     .font(.caption.monospaced()).foregroundStyle(.secondary)
-                if let n = row.note { Text(n).font(.caption).foregroundStyle(n == "Trusted." ? Color.secondary : Color.orange) }
+                if let n = row.note { Text(n).font(.caption).foregroundStyle(n.hasPrefix("Run /hooks") || n.hasPrefix("A file of yours") ? Color.orange : Color.secondary) }
                 if let e = row.error { Text(e).font(.caption).foregroundStyle(.red) }
             }
             Spacer()

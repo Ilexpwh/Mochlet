@@ -61,6 +61,9 @@ final class AppCoordinator {
     private(set) var hooks: HookCenter!
     private(set) var installers: AgentInstallerController!
     private(set) var terminal: TerminalJumper!
+    private(set) var projects: ProjectsController!
+    private(set) var chat: ChatController!
+    private(set) var headless: HeadlessRunner!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -89,11 +92,16 @@ final class AppCoordinator {
         approvals = ApprovalCenter(app: self)
         questions = QuestionCenter(app: self)
         terminal = TerminalJumper(app: self)
+        projects = ProjectsController(app: self)
+        chat = ChatController(app: self)
+        headless = HeadlessRunner(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
         statusItem.install()
         sessions.start()
+        projects.start()
+        chat.start()
         hooks.start()
         installers.refresh()
         #if DEBUG
@@ -176,6 +184,16 @@ final class AppCoordinator {
         window.send(.openExternally(.menu))
     }
 
+    func openChat() {
+        window.send(.openExternally(.chat))
+        window.focusInput()
+    }
+
+    func openProjects(focusNew: Bool = false) {
+        notch.projectsFocus = focusNew ? "new" : nil
+        window.send(.openExternally(.projects))
+    }
+
     func openSettings() {
         if settingsWindow == nil { settingsWindow = SettingsWindowController(app: self) }
         settingsWindow?.show()
@@ -202,16 +220,90 @@ final class AppCoordinator {
         var out: [String] = []
         if approvals.count > 0 || questions.pending != nil { out.append("What needs my approval?") }
         if let c = sessions.mostRecent { out.append("Summarise what \(c.label) is doing") }
+        if let p = projects.projects.first { out.append("Work on \(p.name): ") }
         out.append("Ask the knowledge base…")
         return Array(out.prefix(3))
     }
 
+    /// The ask bubble: project commands are carried out, everything else goes to the chat.
     func submitAsk() {
         let text = notch.askText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         notch.askText = ""
-        slime.stage.main.trigger(.happy)
-        toast("“\(text)” noted. Chat with Claude, Codex and the API providers arrives with milestone 5.", symbol: "bubble.left")
+        if let intent = ProjectIntentParser.parse(text) {
+            handle(intent)
+            return
+        }
+        if text.hasPrefix("Ask the knowledge base") {
+            toast("The knowledge base arrives with milestone 6.", symbol: "books.vertical")
+            return
+        }
+        openChat()
+        chat.send(text)
+    }
+
+    func handle(_ intent: ProjectIntent) {
+        switch intent {
+        case .makeProject(let path, let name):
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+                toast("No folder at \(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).", symbol: "folder.badge.questionmark")
+                return
+            }
+            let p = projects.add(path: path, name: name)
+            slime.stage.main.trigger(.happy)
+            toast("\(p.name) is now a project.", symbol: "folder.badge.plus")
+        case .clone(let url, let name):
+            openProjects()
+            projects.clone(url: url, name: name)
+        case .workOn(let name, let task, let agentTag):
+            guard let p = projects.match(name) else { unknownProject(name); return }
+            let agent = agentTag.flatMap { AgentKind(tag: $0, bundleID: nil, termProgram: nil) } ?? p.defaultAgent.flatMap { AgentKind(tag: $0, bundleID: nil, termProgram: nil) } ?? AgentKind(tag: settings.defaultAgent, bundleID: nil, termProgram: nil)
+            startWork(project: p, task: task, agent: agent)
+        case .resume(let name, let agentTag):
+            guard let p = projects.match(name) else { unknownProject(name); return }
+            resumeProject(p, agent: agentTag.flatMap { AgentKind(tag: $0, bundleID: nil, termProgram: nil) })
+        case .open(let name, let terminal):
+            guard let p = projects.match(name) else { unknownProject(name); return }
+            if projects.open(project: p, in: terminal) { slime.stage.main.trigger(.happy); window.send(.collapse) } else { toast("Could not open \(p.name).", symbol: "terminal") }
+        case .listProjects:
+            openProjects()
+        }
+    }
+
+    private func unknownProject(_ name: String) {
+        let known = projects.projects.map(\.name).prefix(4).joined(separator: ", ")
+        toast(known.isEmpty ? "No project called “\(name)”. Drop a folder on me to add one." : "No project called “\(name)”. I know: \(known).", symbol: "folder.badge.questionmark")
+    }
+
+    /// "Work on X: task": a terminal window by default, a background run when the setting says so.
+    func startWork(project: Project, task: String, agent: AgentKind) {
+        guard let cwd = project.primaryPath else { return }
+        var p = project
+        if p.defaultAgent != agent.id { p.defaultAgent = agent.id; projects.update(p) }
+        if settings.headlessTasks {
+            headless.start(agent: agent, project: project, cwd: cwd, task: task, resume: nil)
+            window.send(.collapse)
+            toast("\(agent.displayName) is working on \(project.name).", symbol: "bolt")
+        } else {
+            if projects.launch(project: project, agent: agent, task: task, resume: nil) {
+                window.send(.collapse)
+            } else {
+                toast(projects.note ?? "Could not open a terminal.", symbol: "terminal")
+            }
+        }
+    }
+
+    func resumeProject(_ project: Project, agent: AgentKind?) {
+        let candidates: [AgentKind] = agent.map { [$0] } ?? [.claude, .codex, .gemini]
+        guard let a = candidates.first(where: { project.lastSessions[$0.id] != nil }), let id = project.lastSessions[a.id] else {
+            toast("No earlier \(agent?.displayName ?? "agent") session for \(project.name) yet.", symbol: "arrow.counterclockwise")
+            return
+        }
+        if settings.headlessTasks {
+            toast("Resume opens a terminal so you can keep talking to the agent.", symbol: "terminal")
+        }
+        if projects.launch(project: project, agent: a, task: nil, resume: id) { window.send(.collapse) } else { toast(projects.note ?? "Could not open a terminal.", symbol: "terminal") }
     }
 
     func menu(_ action: MenuAction) {
@@ -246,9 +338,15 @@ final class AppCoordinator {
             window.send(.collapse)
             if !terminal.jump(to: sessions.focused) { toast("No agent session to jump to yet.", symbol: "terminal") }
         case .newSession:
-            toast("New sessions from the notch arrive with milestone 5 (projects).", symbol: action.symbol)
-        case .projects, .attachWindow:
-            toast("\(action.title) arrives with milestone 5 (projects and chat).", symbol: action.symbol)
+            openProjects(focusNew: true)
+        case .projects:
+            openProjects()
+        case .attachWindow:
+            if let target = WindowContextCapture.frontmostWindow() {
+                attachWindow(target)
+            } else {
+                toast("Bring the window to the front, then choose Attach window (or ⌥-drag me onto it).", symbol: action.symbol)
+            }
         case .knowledge:
             toast("Knowledge base arrives with milestone 6.", symbol: action.symbol)
         case .meetings:
@@ -405,10 +503,16 @@ final class AppCoordinator {
         return menu
     }
 
-    /// ⌥-drop of the slime on another app's window. Context capture lands with milestone 5.
+    /// ⌥-drop of the slime on another app's window: its title, URL and (optionally) a screenshot
+    /// become context for the next chat message.
     func attachWindow(_ target: WindowProbe.TargetWindow) {
         slime.stage.main.trigger(.happy)
-        toast("Attached \(target.owner)\(target.title.isEmpty ? "" : " · \(target.title)"). Window context arrives with milestone 5.", symbol: "macwindow.badge.plus")
+        let wantShot = settings.windowScreenshots
+        Task { @MainActor in
+            let a = await WindowContextCapture.capture(target, screenshot: wantShot)
+            chat.attach(a)
+            openChat()
+        }
     }
 
     // MARK: - Drops
@@ -437,14 +541,25 @@ final class AppCoordinator {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.slime.stage.main.ingestionFinished(success: true)
-            if isFolder {
-                self.toast("“\(name)” can become a project with milestone 5.", symbol: "folder")
+            if isFolder, let url = urls.first {
+                self.projects.offer(folder: url)
+                self.openProjects()
+            } else if let url = urls.first, url.isFileURL {
+                // Text-like files become chat context now; the knowledge base (M6) files everything.
+                self.chat.attachFile(url)
+                self.openChat()
+            } else if let url = urls.first {
+                self.chat.attach(ChatAttachment(kind: .text, title: url.host ?? "link", text: url.absoluteString))
+                self.openChat()
+            } else if let text, !text.isEmpty {
+                self.chat.attach(ChatAttachment(kind: .text, title: String(OneLine.collapse(text, limit: 30)), text: text))
+                self.openChat()
             } else {
-                self.toast("Chewed “\(name)”. Filing into the knowledge base arrives with milestone 6.", symbol: "doc.text")
+                self.toast("Chewed “\(name)”.", symbol: "doc.text")
             }
         }
         chewWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
     }
 }
 

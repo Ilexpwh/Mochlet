@@ -32,6 +32,15 @@ final class SettingsStore {
     var showCodexPlan: Bool { didSet { defaults.set(showCodexPlan, forKey: "showCodexPlan") } }
     /// Mini slimes that finished go back to idle after this many seconds.
     var finishedLinger: Double { didSet { defaults.set(finishedLinger, forKey: "finishedLinger") } }
+    /// Chat backend (`ChatProviderKind` raw value) and model.
+    var chatProvider: String { didSet { defaults.set(chatProvider, forKey: "chatProvider") } }
+    var chatModel: String { didSet { defaults.set(chatModel, forKey: "chatModel") } }
+    /// "auto" or a `TerminalApp` raw value.
+    var preferredTerminal: String { didSet { defaults.set(preferredTerminal, forKey: "preferredTerminal") } }
+    var defaultAgent: String { didSet { defaults.set(defaultAgent, forKey: "defaultAgent") } }
+    /// "work on" tasks run as background processes instead of opening a terminal window.
+    var headlessTasks: Bool { didSet { defaults.set(headlessTasks, forKey: "headlessTasks") } }
+    var windowScreenshots: Bool { didSet { defaults.set(windowScreenshots, forKey: "windowScreenshots") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -58,6 +67,28 @@ final class SettingsStore {
         showClaudePlan = defaults.object(forKey: "showClaudePlan") as? Bool ?? true
         showCodexPlan = defaults.object(forKey: "showCodexPlan") as? Bool ?? true
         finishedLinger = defaults.object(forKey: "finishedLinger") as? Double ?? 6
+        chatProvider = defaults.string(forKey: "chatProvider") ?? "claude-cli"
+        chatModel = defaults.string(forKey: "chatModel") ?? ""
+        preferredTerminal = defaults.string(forKey: "preferredTerminal") ?? "auto"
+        defaultAgent = defaults.string(forKey: "defaultAgent") ?? "claude"
+        headlessTasks = defaults.object(forKey: "headlessTasks") as? Bool ?? false
+        windowScreenshots = defaults.object(forKey: "windowScreenshots") as? Bool ?? false
+    }
+
+    // MARK: Provider base URLs
+
+    func baseURLOverride(for kind: ChatProviderKind) -> String? {
+        let v = defaults.string(forKey: "baseURL.\(kind.rawValue)") ?? ""
+        return v.isEmpty ? nil : v
+    }
+
+    func baseURL(for kind: ChatProviderKind) -> String {
+        baseURLOverride(for: kind) ?? kind.defaultBaseURL ?? ""
+    }
+
+    func setBaseURL(_ url: String, for kind: ChatProviderKind) {
+        let v = url.trimmingCharacters(in: .whitespaces)
+        if v.isEmpty { defaults.removeObject(forKey: "baseURL.\(kind.rawValue)") } else { defaults.set(v, forKey: "baseURL.\(kind.rawValue)") }
     }
 
     // MARK: Login item

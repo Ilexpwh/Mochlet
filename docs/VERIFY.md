@@ -44,3 +44,40 @@ scripts/replay-hooks.sh Tests/Fixtures/hooks/question.json 0 --ask &
 open "mochlet://debug/answer?pick=SQLite%20FTS5&$T"
 open "mochlet://debug/shot?name=card&$T"                             # ~/Library/Logs/Mochlet/debug/card.png
 ```
+
+## Projects and chat (M5)
+
+1. Drop a folder on the slime: it chews, the Projects card asks "Make <name> a project?"; Yes writes
+   `~/Mochlet/projects.json` (the git remote is recorded when there is one). "Add folder…" and
+   Settings → Projects do the same; editing the file by hand is picked up live.
+2. Click the slime and type `work on <project>: say hello`: a new iTerm (or your preferred terminal) window
+   opens in the project folder running `claude 'say hello'`; the hooks turn it into a mini slime labelled
+   with the project's name; `last_sessions.claude` in projects.json gets the session id.
+3. On the Projects card the row now offers Resume: a terminal opens with `claude --resume <id>`.
+   `open <project> in ghostty` / Cursor / VS Code open the folder without an agent.
+4. Settings → Chat → "Run tasks in the background", then `work on <project>: say hello` again: no window;
+   a mini appears with the Claude glyph and transport headless; the session card shows the reply and
+   "done"; Stop in the card ends it.
+5. Type anything else in the ask bubble: the Chat card opens and Claude Code (your subscription, through
+   `claude -p`) streams the answer; the thread is kept in `~/Library/Application Support/Mochlet/store.sqlite`
+   and listed under the clock icon; `⌘K` starts a new thread; the provider menu switches to Codex, Gemini,
+   or any API provider whose key you saved under Settings → Chat (model lists load from the API).
+6. Quick menu → Attach window with Safari in front: a chip "Safari · <title>" appears above the input and
+   the URL is sent as context; with "Attach a screenshot" on (Screen Recording granted) an image is sent to
+   providers that accept images.
+7. Drop a text file or a link on the slime: it becomes a chat attachment and the Chat card opens.
+8. `say "what are my sessions doing"` while an agent works: the answer names the live sessions (the system
+   prompt carries them) and the main slime looks thinking while a reply streams.
+9. Settings → Agents lists all nine agents; Install… on Copilot creates `~/.copilot/hooks/mochlet.json`,
+   on OpenCode `~/.config/opencode/plugins/mochlet.js`; Remove deletes only files Mochlet generated.
+
+Scripted version:
+
+```sh
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"
+open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hello&$T"        # opens a terminal
+open "mochlet://debug/workon?project=mochlet&task=say%20hello&headless=1&$T"   # background run
+open "mochlet://debug/chat?text=Reply%20with%20pong&$T"; sleep 10; open "mochlet://debug/state?$T"
+open "mochlet://debug/attach?$T"                                               # frontmost window → chip
+```

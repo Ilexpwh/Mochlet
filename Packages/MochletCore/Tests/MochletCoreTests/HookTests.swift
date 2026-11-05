@@ -92,6 +92,35 @@ private func line(_ s: String) -> Data { Data(s.utf8) }
         HookEvent(name: name, rawName: name.rawValue, agent: .claude, sessionID: session, cwd: "/p", tool: tool, toolInput: .object(["command": .string(cmd)]))
     }
 
+    @Test func detailShowsEverythingTheUserDecidesOn() {
+        let long = (0..<12).map { "echo line \($0)" }.joined(separator: "\n")
+        let bash = ApprovalRequest(event: event(.permissionRequest, cmd: long))
+        #expect(bash.detail == long)
+        #expect(bash.detailLineCount == 12)
+        let edit = HookEvent(name: .permissionRequest, rawName: "PermissionRequest", agent: .claude, sessionID: "s", cwd: "/p", tool: "Edit",
+                             toolInput: .object(["file_path": .string("/p/src/main.swift"), "old_string": .string("let a = 1"), "new_string": .string("let a = 2")]))
+        let e = ApprovalRequest(event: edit)
+        #expect(e.detail.contains("/p/src/main.swift"))
+        #expect(e.detail.contains("- let a = 1"))
+        #expect(e.detail.contains("+ let a = 2"))
+        var raw = JSONValue.object(["permission_suggestions": .array([
+            .object(["type": .string("addRules"), "behavior": .string("allow"), "destination": .string("localSettings"),
+                     "rules": .array([.object(["toolName": .string("Bash"), "ruleContent": .string("git status:*")])])]),
+            .object(["type": .string("setMode"), "mode": .string("acceptEdits")]),
+        ])])
+        raw["tool_name"] = .string("Bash")
+        let withRules = HookEvent(name: .permissionRequest, rawName: "PermissionRequest", agent: .claude, sessionID: "s", cwd: "/p", tool: "Bash",
+                                  toolInput: .object(["command": .string("git status")]), raw: raw)
+        let r = ApprovalRequest(event: withRules)
+        #expect(r.canAlways)
+        #expect(r.alwaysSummary == ["allow Bash(git status:*)", "switch to acceptEdits mode"])
+        let plan = HookEvent(name: .permissionRequest, rawName: "PermissionRequest", agent: .claude, sessionID: "s", cwd: "/p", tool: "ExitPlanMode",
+                             toolInput: .object(["plan": .string("# Title\n\nStep one\nStep two")]))
+        let pr = ApprovalRequest(event: plan)
+        #expect(pr.command == "Title")
+        #expect(pr.detail.hasSuffix("Step two"))
+    }
+
     @Test func fifoAndCap() {
         var q = ApprovalQueue()
         for i in 0..<5 {

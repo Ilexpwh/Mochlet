@@ -252,12 +252,16 @@ struct ApprovalView: View {
 
     var body: some View {
         if let r = app.approvals.head {
+            let always = r.canAlways ? r.alwaysSummary : []
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(r.agent.glyph).font(.system(size: 12, weight: .bold)).foregroundStyle(CardStyle.color(.approval))
                     Text(r.projectName).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
                     Text(r.isPlan ? "wants to start this plan" : "wants to run").font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.6))
                     Spacer(minLength: 0)
+                    if r.detailLineCount > 1 {
+                        Text("\(r.detailLineCount) lines").font(.system(size: 9.5, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
+                    }
                     if app.approvals.count > 1 {
                         Text("1/\(app.approvals.count)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
                     }
@@ -265,15 +269,29 @@ struct ApprovalView: View {
                 HStack(alignment: .top, spacing: 6) {
                     Text(r.isPlan ? "Plan" : r.tool).font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.7))
                         .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Color.white.opacity(0.12)))
-                    Text(r.command).font(.system(size: 11.5, design: r.isPlan ? .rounded : .monospaced)).foregroundStyle(.white.opacity(0.92)).lineLimit(3).textSelection(.enabled)
+                    // The whole command or plan, scrollable: nothing is hidden behind an ellipsis.
+                    ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                        Text(r.detail)
+                            .font(.system(size: 11.5, design: r.isPlan ? .rounded : .monospaced))
+                            .foregroundStyle(.white.opacity(0.92))
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: !r.isPlan, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(.vertical, 2)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 18, maxHeight: detailHeight(r), alignment: .topLeading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                if !always.isEmpty {
+                    Text("Always adds: " + always.joined(separator: " · "))
+                        .font(.system(size: 9.5, design: .rounded)).foregroundStyle(Color(red: 1.0, green: 0.82, blue: 0.5).opacity(0.85))
+                        .lineLimit(2).textSelection(.enabled)
+                }
                 Text([r.terminal.terminalName ?? r.agent.displayName, r.cwd.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.4)).lineLimit(1)
                 if let note = app.notch.cardNote {
                     Text(note).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.6))
                 }
-                Spacer(minLength: 0)
                 HStack(spacing: 6) {
                     if r.isPlan {
                         IslandButton("Auto mode", symbol: "bolt.fill") { app.approvals.decide(.planAuto) }
@@ -288,10 +306,25 @@ struct ApprovalView: View {
                     IslandButton("Reply in terminal", symbol: "terminal") { app.approvals.decide(.ask) }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(GeometryReader { g in
+                Color.clear.onAppear { report(g.size.height) }.onChange(of: g.size.height) { _, h in report(h) }
+            })
         } else {
             SessionDetailView(app: app)
         }
+    }
+
+    /// One line stays one line; long commands and plans get a scroll box up to 150 pt.
+    private func detailHeight(_ r: ApprovalRequest) -> CGFloat {
+        let lines = r.isPlan ? 20 : r.detailLineCount
+        return min(150, max(18, CGFloat(lines) * 15 + 4))
+    }
+
+    private func report(_ h: CGFloat) {
+        let total = Double(h) + app.notch.geometry.height + 4 + app.notch.contentBottom
+        let clamped = min(360, max(NotchLayout.viewHeight(.approval), total))
+        if app.notch.measuredHeight != clamped { app.notch.measuredHeight = clamped }
     }
 }
 

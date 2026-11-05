@@ -106,6 +106,8 @@ struct ExpandedContent: View {
         case .diff: DiffView(app: app)
         case .approval: ApprovalView(app: app)
         case .question: QuestionView(app: app)
+        case .chat: ChatView(app: app)
+        case .projects: ProjectsView(app: app)
         default: PlaceholderView(view: view)
         }
     }

@@ -36,6 +36,22 @@ requests and AskUserQuestion prompts become cards you answer from the notch (or 
 terminal); the finished turn makes the slime jump; `⌃⌥T` jumps to the exact terminal tab or tmux
 pane; plan-usage pills show how much of your Claude and Codex subscription is used.
 
+## Projects and chat
+
+Drop a folder on the slime (or say "make ~/path a project", "clone git@github.com:you/repo.git") and
+it lands in `~/Mochlet/projects.json`, a plain file you can edit. Then:
+
+- "work on <project>: <task>" opens a new terminal window (iTerm, Ghostty, Warp, kitty, WezTerm,
+  Alacritty or Terminal.app) in that folder running Claude Code, Codex or Gemini with the task; the
+  hooks turn it into a mini slime named after the project. With "run tasks in the background" on,
+  the agent runs headless instead and reports into the same card.
+- "resume <project>" reopens the last session of that agent; "open <project> in cursor".
+- Anything else you type is a chat: Claude Code (your subscription), Codex, Gemini, or an API
+  provider (Anthropic, OpenRouter, OpenAI, DeepSeek, Qwen, Moonshot, Google, Ollama, LM Studio)
+  with a key kept in your keychain. Threads are kept in `store.sqlite`; `⌘K` starts a new one.
+- ⌥-drag the slime onto a window, or Attach window in the menu: its title, URL (browsers) and,
+  optionally, a screenshot become context for the next message. Dropped text files and links do too.
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -92,6 +108,10 @@ open "mochlet://debug/emote?name=love&$T"          # agent?state=working · mini
 open "mochlet://debug/hookfile?path=$PWD/Tests/Fixtures/hooks/claude-session.jsonl&$T"   # replay hook events
 open "mochlet://debug/approve?decision=allow&$T"   # answer?pick=Label · answer?other=text · session?id= · jump
 open "mochlet://debug/settings?tab=agents&shot=1&$T"
+open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"   # remove=slug · offer=/path · open=1
+open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
+open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
+open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach
 ```
 
 `scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay

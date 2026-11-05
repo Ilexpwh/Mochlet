@@ -36,12 +36,20 @@ final class SessionStore {
     /// Sessions that have something waiting for the user, most recent first.
     var pending: [SessionCard] { live.filter { $0.state == .approval || $0.state == .question }.reversed() }
 
+    /// Registered projects (names and paths) for new cards.
+    func setProjects(_ projects: [Project]) {
+        registry.registeredProjects = projects
+        registry.reresolveProjects()
+        publish()
+    }
+
     func apply(_ input: SessionInput) {
         registry.frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let now = Date()
-        if case .hook = input {
+        if case .hook(let e) = input {
             eventCount += 1
             lastEventAt = now
+            if e.name == .sessionStart || e.name == .userPromptSubmit { app.projects?.recordSession(agent: e.agent, sessionID: e.sessionID, cwd: e.sessionRoot ?? e.cwd) }
         }
         let effects = registry.reduce(input, now: now)
         for e in effects { perform(e) }
@@ -101,7 +109,9 @@ final class SessionStore {
         notch.tickerText = tickerCard.map { Self.ticker($0) } ?? ""
         let mood = SlimeMoodPolicy.aggregate(liveCards.map(\.state))
         let main = app.slime.stage.main
-        let wanted = Self.mainState(mood)
+        var wanted = Self.mainState(mood)
+        // A chat reply in flight shows as thinking unless a session needs the user or failed.
+        if app.chat?.isStreaming == true, wanted == .idle || wanted == .working || wanted == .thinking { wanted = .thinking }
         if main.agentState != wanted { main.agent(wanted) }
     }
 

@@ -25,6 +25,8 @@ public enum JSONValue: Sendable, Equatable, Hashable, Codable {
         }
     }
 
+    public static func parse(_ text: String) -> JSONValue? { parse(Data(text.utf8)) }
+
     public static func parse(_ data: Data) -> JSONValue? {
         guard let obj = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else { return nil }
         return JSONValue(any: obj)

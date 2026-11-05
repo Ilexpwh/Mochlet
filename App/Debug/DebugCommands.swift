@@ -231,6 +231,32 @@ enum DebugCommands {
             if let id = arg("id") { app.openSession(id) } else { app.openSession(nil) }
         case "jump":
             result = app.terminal.jump(to: app.sessions.card(arg("id")) ?? app.sessions.focused) ? "ok jumped: \(app.terminal.lastResult)" : "no terminal"
+        case "chat":
+            // chat?text=…[&provider=claude-cli][&model=…]   send a message; chat?new=1 starts a thread
+            if let pr = arg("provider").flatMap(ChatProviderKind.init(rawValue:)) { app.chat.setProvider(pr) }
+            if let m = arg("model") { app.chat.setModel(m) }
+            if arg("new") != nil { app.chat.newThread() }
+            if let t = arg("text") { app.openChat(); app.chat.send(t) } else { app.openChat() }
+        case "chatstop":
+            app.chat.cancel()
+        case "attach":
+            if let w = WindowContextCapture.frontmostWindow() { app.attachWindow(w) } else { result = "no frontmost window" }
+        case "project":
+            // project?add=/path[&name=x] | project?remove=slug | project?offer=/path
+            if let path = arg("add") { app.projects.add(path: path, name: arg("name")) }
+            if let slug = arg("remove") { app.projects.remove(slug) }
+            if let path = arg("offer") { app.projects.offer(folder: URL(fileURLWithPath: path)); app.openProjects() }
+            if arg("open") != nil { app.openProjects() }
+        case "ask":
+            // ask?text=…   what the ask bubble would do with this text
+            if let t = arg("text") { app.notch.askText = t; app.submitAsk() }
+        case "workon":
+            // workon?project=&task=[&agent=claude][&headless=1]
+            if let name = arg("project"), let p = app.projects.match(name), let task = arg("task") {
+                let agent = AgentKind(tag: arg("agent") ?? "claude", bundleID: nil, termProgram: nil)
+                if arg("headless") != nil, let cwd = p.primaryPath { app.headless.start(agent: agent, project: p, cwd: cwd, task: task, resume: nil) }
+                else { app.startWork(project: p, task: task, agent: agent) }
+            } else { result = "unknown project" }
         case "settings":
             // settings?tab=agents[&shot=1]   open the Settings window on a tab; shot writes settings.png
             app.openSettings()
@@ -308,6 +334,14 @@ enum DebugCommands {
         d["question"] = app.questions.pending.map { ["index": $0.index, "questions": $0.question.questions.map(\.text), "selections": $0.selections] as [String: Any] } ?? "nil"
         d["hooks"] = ["lines": app.hooks.lineCount, "invalid": app.hooks.invalidCount, "running": app.hooks.isRunning, "socket": app.hooks.socketPath, "relay": app.hooks.relayPath?.path ?? ""]
         d["plans"] = ["claude": app.plans.claude.map { "\($0.dominantPercent(now: Date()))" } ?? "nil", "codex": app.plans.codex.map { "\($0.dominantPercent(now: Date()))" } ?? "nil"]
+        d["chat"] = ["provider": app.chat.providerKind.rawValue, "model": app.chat.model, "thread": app.chat.current?.id ?? "", "title": app.chat.current?.title ?? "",
+                     "streaming": app.chat.isStreaming, "streamingText": String(app.chat.streamingText.suffix(200)), "activity": app.chat.streamingActivity,
+                     "messages": app.chat.messages.map { ["role": $0.role.rawValue, "text": String($0.text.prefix(300)), "error": $0.error ?? "", "attachments": $0.attachments.map(\.title)] as [String: Any] },
+                     "pending": app.chat.pendingAttachments.map(\.title), "threads": app.chat.threads.count, "error": app.chat.lastError ?? ""] as [String: Any]
+        d["projects"] = ["count": app.projects.projects.count, "offer": app.projects.pendingOffer?.path ?? "", "note": app.projects.note ?? "", "clone": app.projects.cloneStatus ?? "",
+                         "terminal": app.projects.preferredTerminal.rawValue,
+                         "list": app.projects.projects.map { ["slug": $0.slug, "name": $0.name, "path": $0.primaryPath ?? "", "agent": $0.defaultAgent ?? "", "sessions": $0.lastSessions] as [String: Any] }] as [String: Any]
+        d["headless"] = app.headless.runs.map { ["session": $0.key, "agent": $0.value.agent.id, "text": String($0.value.text.suffix(120))] }
         d["time"] = ISO8601DateFormatter().string(from: Date())
         guard let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) else { return "state failed" }
         try? data.write(to: dir.appendingPathComponent("state.json"))

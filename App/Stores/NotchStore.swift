@@ -55,6 +55,8 @@ final class NotchStore {
     var pillCount = 0
     /// Selected Settings tab (so the debug channel and deep links can open one).
     var settingsTab = "general"
+    /// "new" asks the projects card to open the task field on the first project.
+    var projectsFocus: String?
 
     var layout: NotchLayout { NotchLayout(geometry: geometry) }
 

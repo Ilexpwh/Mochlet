@@ -39,6 +39,58 @@ public struct ApprovalRequest: Sendable, Equatable, Identifiable {
     public var isPlan: Bool { tool == "ExitPlanMode" }
     public var canAlways: Bool { agent.supportsAlways && !permissionSuggestions.isEmptyish }
 
+    /// Everything the card must show before the user decides: the whole command (never
+    /// truncated), the file an edit touches, the full plan, or the tool input itself.
+    public var detail: String {
+        if isPlan { return input["plan"].string ?? command }
+        if let c = input["command"].string, !c.isEmpty { return c }
+        var lines: [String] = []
+        if let path = input.firstString(["file_path", "path", "notebook_path"]) { lines.append(path) }
+        if let url = input["url"].string { lines.append(url) }
+        if let pattern = input["pattern"].string { lines.append("pattern: \(pattern)") }
+        if let old = input["old_string"].string {
+            lines.append("- " + OneLine.collapse(old, limit: 160))
+            lines.append("+ " + OneLine.collapse(input["new_string"].string ?? "", limit: 160))
+        }
+        if let edits = input["edits"].array { lines.append("\(edits.count) edits") }
+        if let content = input["content"].string { lines.append("\(content.utf8.count) bytes, \(content.components(separatedBy: "\n").count) lines") }
+        if let prompt = input.firstString(["prompt", "description", "query"]) { lines.append(OneLine.collapse(prompt, limit: 200)) }
+        if lines.isEmpty, let data = try? input.data(pretty: true, sortedKeys: true), let text = String(data: data, encoding: .utf8), text != "null" {
+            return text
+        }
+        return lines.isEmpty ? tool : lines.joined(separator: "\n")
+    }
+
+    public var detailLineCount: Int { detail.isEmpty ? 0 : detail.components(separatedBy: "\n").count }
+
+    /// What "Always" would add, one line per rule, from the agent's `permission_suggestions`.
+    public var alwaysSummary: [String] {
+        guard let items = permissionSuggestions.array else { return [] }
+        var out: [String] = []
+        for item in items {
+            let type = item["type"].string ?? ""
+            switch type {
+            case "addRules":
+                let behavior = item["behavior"].string ?? "allow"
+                for rule in item["rules"].array ?? [] {
+                    let tool = rule["toolName"].string ?? "?"
+                    if let content = rule["ruleContent"].string, !content.isEmpty {
+                        out.append("\(behavior) \(tool)(\(content))")
+                    } else {
+                        out.append("\(behavior) \(tool)")
+                    }
+                }
+            case "setMode":
+                out.append("switch to \(item["mode"].string ?? "?") mode")
+            case "addDirectories":
+                for d in item["directories"].array ?? [] { out.append("allow directory \(d.string ?? "?")") }
+            default:
+                out.append(type.isEmpty ? "rule" : type)
+            }
+        }
+        return out
+    }
+
     public static func planTitle(_ plan: String) -> String {
         for raw in plan.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)

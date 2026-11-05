@@ -27,6 +27,8 @@ public enum SessionInput: Sendable, Equatable {
 
 /// Pure session bookkeeping: cards keyed by session id, ordered by last activity.
 public struct SessionRegistry: Sendable, Equatable {
+    /// Registered projects (from projects.json) so cards carry the user's names.
+    public var registeredProjects: [Project] = []
     public static let finishedReset: TimeInterval = 6
     public static let maxSilence: TimeInterval = 12 * 3600
     public static let maxTurnSilence: TimeInterval = 30 * 60
@@ -41,6 +43,19 @@ public struct SessionRegistry: Sendable, Equatable {
 
     public var ordered: [SessionCard] { order.compactMap { cards[$0] } }
     public var live: [SessionCard] { ordered.filter { $0.state != .ended } }
+
+    /// A folder was registered, renamed or removed: existing cards take the registry's name
+    /// (or fall back to the folder name) so the mini labels follow projects.json.
+    public mutating func reresolveProjects() {
+        for (id, card) in cards {
+            var c = card
+            let fresh = ProjectResolver.resolve(cwd: c.cwd, sessionRoot: nil, projects: registeredProjects, fallbackName: (c.cwd as NSString).lastPathComponent)
+            if fresh.isRegistered != c.project.isRegistered || (fresh.isRegistered && fresh != c.project) {
+                c.project = fresh
+                cards[id] = c
+            }
+        }
+    }
     public var states: [SessionState] { live.map(\.state) }
     public func card(_ id: String) -> SessionCard? { cards[id] }
     public var workingCount: Int { cards.values.filter(\.isWorking).count }
@@ -81,12 +96,14 @@ public struct SessionRegistry: Sendable, Equatable {
         if let existing = cards[e.sessionID] {
             c = existing
         } else {
-            c = SessionCard(id: e.sessionID, agent: e.agent, project: ProjectRef(name: e.projectName, path: e.sessionRoot ?? e.cwd), cwd: e.cwd, terminal: e.terminal, startedAt: now)
+            let project = ProjectResolver.resolve(cwd: e.cwd, sessionRoot: e.sessionRoot, projects: registeredProjects, fallbackName: e.projectName)
+            let transport: SessionTransport = e.raw["mochlet_transport"].string == "headless" ? .headless(runnerID: e.raw["mochlet_runner"].string ?? e.sessionID) : .observed
+            c = SessionCard(id: e.sessionID, agent: e.agent, project: project, cwd: e.cwd, terminal: e.terminal, startedAt: now, transport: transport)
             order.append(e.sessionID)
             fx.append(.spawnMini(id: e.sessionID))
             fx.append(.sound("work"))
         }
-        if let t = e.sessionTitle, !t.isEmpty { c.project.name = t }
+        if let t = e.sessionTitle, !t.isEmpty, !c.project.isRegistered { c.project.name = t }
         if !e.cwd.isEmpty { c.cwd = e.cwd }
         if e.terminal != TerminalIdentity() { c.terminal = e.terminal }
         if working {

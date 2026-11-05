@@ -26,6 +26,21 @@ final class PlanStore {
         AppCoordinator.shared.updatePills()
     }
 
+    /// `rate_limit_event` from a `claude -p` run: the same windows in a different shape.
+    func receive(claudeRateLimitEvent info: JSONValue, now: Date = Date()) {
+        let windows = info["unifiedWindows"]
+        var limits: [String: JSONValue] = [:]
+        for key in ["five_hour", "seven_day"] {
+            let w = windows[key]
+            guard let util = w["utilization"].number else { continue }
+            var o: [String: JSONValue] = ["used_percentage": .number(util * 100)]
+            if let r = w["resetsAt"].number { o["resets_at"] = .number(r) }
+            limits[key] = .object(o)
+        }
+        guard !limits.isEmpty else { return }
+        receive(statusLine: StatusLinePayload(sessionID: "", rateLimits: .object(limits)), now: now)
+    }
+
     /// At most once a minute, and never two at once.
     func refreshCodex(force: Bool = false) {
         let now = Date()

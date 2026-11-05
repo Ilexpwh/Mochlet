@@ -3,7 +3,8 @@
 //   mochlet-cli find <query> [-k 8] [--type report]
 //   mochlet-cli grep <text>
 //   mochlet-cli lint                       write meta/lint-YYYY-MM-DD.md and print the findings
-//   mochlet-cli ingest <file.md|.txt> [--project slug] [--title t]   file a text source (no model)
+//   mochlet-cli ingest <file> [--project slug] [--title t]   file any readable source (no model: text extraction only)
+//   mochlet-cli extract <file>             print what the extractors read (Markdown)
 //   mochlet-cli embed [--limit 500]        compute on-device vectors for chunks that lack them
 //   mochlet-cli bootstrap                  create the folders, SCHEMA.md and indexes
 // Options: --root <folder> (default ~/Mochlet/Knowledge or $MOCHLET_KNOWLEDGE_ROOT), --index <sqlite>.
@@ -42,7 +43,7 @@ enum MochletCLI {
     let limit = Int(option("--limit") ?? "500") ?? 500
 
     guard let command = args.first else {
-        print("usage: mochlet-cli reindex|find|grep|lint|ingest|embed|bootstrap [args] [--root dir] [--index file]")
+        print("usage: mochlet-cli reindex|find|grep|lint|ingest|extract|embed|bootstrap [args] [--root dir] [--index file]")
         exit(2)
     }
     args.removeFirst()
@@ -112,17 +113,21 @@ enum MochletCLI {
             print(findings.isEmpty ? "clean: \(pages.count) pages" : "\(findings.count) findings → \(rel)")
             for f in findings.prefix(40) { print("  \(f.kind.rawValue): \(f.path) — \(f.detail)") }
 
+        case "extract":
+            guard let file = args.first else { print("extract needs a file"); exit(2) }
+            let url = URL(fileURLWithPath: (file as NSString).expandingTildeInPath)
+            let c = try await FileExtractor.extract(url, options: FileExtractor.Options(ocr: true, transcribe: true), progress: nil)
+            print("title: \(c.title)")
+            print("extractors: \(c.extractors.joined(separator: ", "))  words: \(c.words)  language: \(c.language ?? "?")")
+            for (k, v) in c.metadata.sorted(by: { $0.key < $1.key }) { print("\(k): \(v)") }
+            for w in c.warnings { print("warning: \(w)") }
+            print("---")
+            print(c.markdown)
         case "ingest":
             guard let file = args.first else { print("ingest needs a file"); exit(2) }
             let url = URL(fileURLWithPath: (file as NSString).expandingTildeInPath)
-            let ext = url.pathExtension.lowercased()
-            guard ["md", "markdown", "txt", "text", ""].contains(ext) else {
-                print("mochlet-cli ingests text and Markdown; drop \(url.lastPathComponent) on the slime for PDFs, Office files, images and media.")
-                exit(2)
-            }
             try bundle.bootstrap()
             let index = try openIndex()
-            let text = try String(contentsOf: url, encoding: .utf8)
             let dir = project.map { "projects/\($0)" } ?? "inbox"
             let (refPath, sha) = try bundle.mirror(fileAt: url, into: dir)
             let key = ReportWriter.sourceKey(sha256: sha)
@@ -130,19 +135,25 @@ enum MochletCLI {
                 print("already chewed: \(p) (use --force to re-chew)")
                 exit(0)
             }
-            var body = text
-            if let doc = try? OKFDocument.parse(text) { body = doc.body }
-            let title = titleOverride ?? (try? OKFDocument.parse(text))?.frontmatter.title ?? OKFDocument(frontmatter: OKFFrontmatter(type: "x"), body: body).heading ?? (url.lastPathComponent as NSString).deletingPathExtension
+            let content = try await FileExtractor.extract(url, options: FileExtractor.Options(ocr: true, transcribe: true), progress: nil)
+            let body = content.markdown
+            let title = titleOverride ?? content.title
+            var touched: Set<String> = [refPath]
+            if !KnowledgeBundle.textReferenceExtensions.contains(url.pathExtension.lowercased()) {
+                touched.insert(try bundle.mirror(text: body, name: Slug.make(title, maxLength: 48) + ".md", into: dir).relativePath)
+            }
             let draft = ReportDraft.fromText(title: title, markdown: body)
-            let prov = ReportProvenance(sourceKey: key, resource: "file://" + url.path, referencePath: refPath, ingestedFrom: "cli", extractors: ["text"],
-                                        words: body.split(whereSeparator: { $0 == " " || $0 == "\n" }).count, project: project, sha256: sha)
+            var prov = ReportProvenance(sourceKey: key, resource: "file://" + url.path, referencePath: refPath, ingestedFrom: "cli", extractors: content.extractors,
+                                        words: content.words, project: project, sha256: sha)
+            prov.mirrors = touched.subtracting([refPath]).sorted()
             let page = ReportWriter.document(draft, provenance: prov)
             let slug = bundle.uniqueSlug(title, in: dir)
             let rel = "\(dir)/\(slug).md"
             try bundle.write(page, to: rel)
             try index.recordIngest(sourceKey: key, path: rel, status: "done")
             try bundle.appendLog(kind: "ingest", text: "\(title) → \(rel)")
-            try bundle.reindex(into: index, only: [rel, refPath])
+            touched.insert(rel)
+            try bundle.reindex(into: index, only: touched)
             try bundle.regenerateIndexes(from: index)
             print("filed \(rel) (source mirrored at \(refPath))")
 

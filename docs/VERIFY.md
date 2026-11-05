@@ -121,3 +121,40 @@ open "mochlet://debug/kb?file=1&$T"; open "mochlet://debug/kb?lint=1&$T"
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find","arguments":{"query":"Vision Pro"}}}' \
   | ~/Library/Application\ Support/Mochlet/bin/mochlet-mcp
 ```
+
+## Ingestion (M7)
+
+1. Drop `Tests/Fixtures/ingest/sample.pptx` on the slime: it chews (bites, progress ring on the compact
+   strip), the card shows reading → extracting → analysing · Claude Code → routing → filing → integrating,
+   then the title, the one-liner, "Wiki: n new, m revised" and Open / Ask / Move / Re-chew. The report
+   under `projects/<slug>/` or `inbox/` has slides and speaker notes in its mirror, entities and tags in
+   the frontmatter; `entities/` and `concepts/` gained or changed pages; `log.md` has `ingest |` and
+   `integrate |` lines.
+2. Drop a scanned PDF, a `.docx`, a `.png` with text and an `.m4a`: OCR, Office, image description (when
+   the brain can see) and transcription each show in `mochlet.extractors`.
+3. Paste `https://arxiv.org/abs/2404.16130`, a GitHub repository URL and a news article into the ask
+   bubble: the arXiv report cites the paper's PDF mirror, the GitHub one the README, the article a
+   `.html` snapshot and a readable `.md` next to it.
+4. With two or more projects registered, drop something ambiguous: the project pick card appears with
+   confidence chips and a 10 s countdown; choosing another project moves the report and bumps the priors
+   (`project_priors` in the index). Move from the done card does the same later.
+5. Drop the same file again: "Already chewed" with Re-chew; Re-chew rewrites the same report path.
+6. Save window (quick menu, or `⌘`-drag a window onto the slime): with Screen Recording allowed the
+   window's text is OCRed and filed as a window report; without it a toast explains what to allow.
+7. No brain configured (Settings → Chat): the report is filed from the text alone with a warning; the
+   brain's own `claude -p` calls never add mini slimes.
+
+Scripted version:
+
+```sh
+scripts/smoke-ingest.sh                                      # also: pptx extract and a non-text ingest through the CLI
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/ingest/sample.pptx&force=1&$T"      # then poll state → ingest.jobs
+open "mochlet://debug/kb?url=https://arxiv.org/abs/2404.16130&$T"
+open "mochlet://debug/kb?text=Notes%20about%20nothing%20in%20particular&title=Note&question=1&$T"   # forces the pick card
+open "mochlet://debug/shot?name=ingest-question&$T"; open "mochlet://debug/kb?pick=inbox&$T"
+open "mochlet://debug/kb?move=mochlet&$T"                    # moves the last report (mirrors follow)
+open "mochlet://debug/kb?window=1&$T"                        # saves the frontmost window
+open "mochlet://debug/state?$T"; python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/Library/Logs/Mochlet/debug/state.json')))['ingest'])"
+```
+

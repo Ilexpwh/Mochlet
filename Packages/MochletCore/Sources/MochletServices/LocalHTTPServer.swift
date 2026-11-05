@@ -108,6 +108,10 @@ public final class LocalHTTPServer: @unchecked Sendable {
                     c.send(content: HTTPResponse.text("too large", status: 413).serialized, completion: .contentProcessed { _ in c.cancel() })
                     return
                 }
+                if let declared = Self.declaredLength(buffer), declared < 0 || declared > Self.maxBody {
+                    c.send(content: HTTPResponse.text(declared < 0 ? "bad length" : "too large", status: declared < 0 ? 400 : 413).serialized, completion: .contentProcessed { _ in c.cancel() })
+                    return
+                }
                 if let req = Self.parse(buffer) {
                     Task {
                         let resp = await self.handler(req)
@@ -120,6 +124,17 @@ public final class LocalHTTPServer: @unchecked Sendable {
             }
         }
         receive()
+    }
+
+    /// The Content-Length once the head has arrived (nil before that; -1 when unparsable).
+    static func declaredLength(_ data: Data) -> Int? {
+        guard let headEnd = data.range(of: Data("\r\n\r\n".utf8)) else { return nil }
+        let head = String(decoding: data[data.startIndex..<headEnd.lowerBound], as: UTF8.self)
+        for l in head.components(separatedBy: "\r\n") where l.lowercased().hasPrefix("content-length:") {
+            let v = l.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+            return Int(v) ?? -1
+        }
+        return 0
     }
 
     /// Returns the request once the head and the full body have arrived.
@@ -135,10 +150,11 @@ public final class LocalHTTPServer: @unchecked Sendable {
             guard let colon = l.firstIndex(of: ":") else { continue }
             headers[String(l[..<colon]).lowercased()] = l[l.index(after: colon)...].trimmingCharacters(in: .whitespaces)
         }
-        let length = Int(headers["content-length"] ?? "0") ?? 0
+        guard let length = Int(headers["content-length"] ?? "0"), length >= 0, length <= maxBody else { return nil }
         let bodyStart = headEnd.upperBound
-        guard data.count - bodyStart >= length else { return nil }
-        let body = data[bodyStart..<(bodyStart + length)]
+        let (bodyEnd, overflow) = bodyStart.addingReportingOverflow(length)
+        guard !overflow, bodyEnd <= data.endIndex else { return nil }
+        let body = data[bodyStart..<bodyEnd]
         return HTTPRequest(method: String(requestLine[0]), path: String(requestLine[1]), headers: headers, body: Data(body))
     }
 }

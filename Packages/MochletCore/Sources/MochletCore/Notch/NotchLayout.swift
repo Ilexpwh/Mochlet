@@ -53,7 +53,7 @@ public struct NotchLayout: Sendable, Equatable {
         case .diff: return 320
         case .sessionDetail: return 220
         case .meetingLive: return 220
-        case .ingest: return 140
+        case .ingest: return 150
         case .projects, .knowledge, .signals: return 240
         case .toast: return 120
         }

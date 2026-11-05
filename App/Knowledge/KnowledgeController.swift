@@ -40,7 +40,6 @@ final class KnowledgeController {
     private(set) var mcpError: String?
     private(set) var embeddingNote: String?
     private(set) var pendingEmbeddings = 0
-    private(set) var chewing = 0
     var query = ""
 
     init(app: AppCoordinator) {
@@ -59,6 +58,7 @@ final class KnowledgeController {
         reindexTask = Task { [weak self] in
             guard let self else { return }
             await self.bootstrapAndIndex()
+            self.refreshRecentTitles()
             self.startWatcher()
             await self.startMCP()
             self.scheduleEmbeddings()
@@ -264,6 +264,7 @@ final class KnowledgeController {
                 lastError = ChatProviderError.noKey(kind.displayName).localizedDescription
                 return
             }
+            (provider as? CLIChatProvider)?.lean = true
             let request = ChatRequest(messages: [ChatMessage(threadID: "knowledge", role: .user, text: prompt.user)], system: prompt.system,
                                       model: kind.isCLI ? "" : (app.chat.model.isEmpty ? (kind.defaultModels.first ?? "") : app.chat.model))
             for try await ev in provider.stream(request) {
@@ -289,6 +290,7 @@ final class KnowledgeController {
             let prompt = AnswerComposer.prompt(question: question, hits: hits, indexSummary: await engine.indexSummary())
             let kind = app.chat.providerKind
             guard let provider = app.chat.makeProvider(kind) else { return ("", prompt.citations, ChatProviderError.noKey(kind.displayName).localizedDescription) }
+            (provider as? CLIChatProvider)?.lean = true
             let request = ChatRequest(messages: [ChatMessage(threadID: "knowledge", role: .user, text: prompt.user)], system: prompt.system,
                                       model: kind.isCLI ? "" : (app.chat.model.isEmpty ? (kind.defaultModels.first ?? "") : app.chat.model))
             var text = ""
@@ -358,31 +360,50 @@ final class KnowledgeController {
         case link(URL)
     }
 
-    /// Files a resource while the slime chews; returns where it landed.
-    @discardableResult
-    func add(_ resource: Resource, project: String? = nil, from: String = "drop") async -> KnowledgeEngine.Filed? {
-        chewing += 1
-        if chewing == 1 { app.slime.stage.main.drop() }
-        defer {
-            chewing -= 1
-            if chewing == 0 { app.slime.stage.main.ingestionFinished(success: lastError == nil) }
+    /// How many sources are being chewed right now.
+    var chewing: Int { app.ingest?.active.count ?? 0 }
+
+    /// Files a resource through the ingest pipeline (extract → analyse → route → file → integrate).
+    func add(_ resource: Resource, project: String? = nil, from: String = "drop", force: Bool = false) async -> KnowledgeEngine.Filed? {
+        let input: IngestInput
+        switch resource {
+        case .file(let url): input = .file(url)
+        case .text(let text, let title): input = .text(text, title: title)
+        case .link(let url): input = .url(url)
         }
-        do {
-            let filed: KnowledgeEngine.Filed
-            switch resource {
-            case .file(let url): filed = try await engine.addFile(url, project: project, from: from)
-            case .text(let text, let title): filed = try await engine.addText(text, title: title, project: project, from: from)
-            case .link(let url): filed = try await engine.addLink(url, project: project, from: from)
+        return await app.ingest.ingest(input, project: project, from: from, force: force)
+    }
+
+    /// The pipeline landed a report (or moved one): refresh counts, embed, commit.
+    func didFile(_ filed: KnowledgeEngine.Filed, commitMessage: String?) {
+        lastFiled = filed
+        lastError = nil
+        Task { [weak self] in
+            guard let self else { return }
+            self.counts = await self.engine.counts()
+            self.scheduleEmbeddings()
+        }
+        if let m = commitMessage, !filed.existing { commitIfEnabled(m) }
+    }
+
+    func noteIngestError(_ text: String) { lastError = text }
+
+    /// Titles of the last reports filed under a project (context for the project router).
+    func recentReportTitles(project: String, limit: Int = 3) -> [String] {
+        recentTitles[project] ?? []
+    }
+
+    @ObservationIgnored private var recentTitles: [String: [String]] = [:]
+
+    func refreshRecentTitles() {
+        Task { [weak self] in
+            guard let self else { return }
+            var out: [String: [String]] = [:]
+            for p in app.projects.projects {
+                let docs = (try? await self.engine.documents(pathPrefix: "\(BundleLayout.projects)/\(p.slug)/", types: ["report"])) ?? []
+                out[p.slug] = docs.sorted { $0.mtime > $1.mtime }.prefix(3).map(\.title)
             }
-            lastFiled = filed
-            lastError = nil
-            counts = await engine.counts()
-            if !filed.existing { commitIfEnabled("ingest | \(OneLine.collapse(filed.title, limit: 60))") }
-            scheduleEmbeddings()
-            return filed
-        } catch {
-            lastError = error.localizedDescription
-            return nil
+            self.recentTitles = out
         }
     }
 
@@ -421,6 +442,17 @@ final class KnowledgeController {
     }
 
     func revealInFinder() { NSWorkspace.shared.activateFileViewerSelecting([root]) }
+
+    /// Where an agent may read files from on the user's behalf: project folders and the usual
+    /// document folders, never a dot-directory (.ssh, .config, .claude…) or a system path.
+    func isAllowedForAgents(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+        if path.split(separator: "/").contains(where: { $0.hasPrefix(".") }) { return false }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var roots = ["\(home)/Mochlet", "\(home)/Downloads", "\(home)/Documents", "\(home)/Desktop"]
+        roots += app.projects.projects.flatMap { $0.paths }
+        return roots.contains { path.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
+    }
 
     // MARK: MCP tools
 
@@ -502,9 +534,12 @@ final class KnowledgeController {
             if let u = a["url"].string, let url = URL(string: u), url.scheme?.hasPrefix("http") == true {
                 filed = await add(.link(url), project: project, from: "mcp")
             } else if let p = a["path"].string, !p.isEmpty {
-                let url = URL(fileURLWithPath: (p as NSString).expandingTildeInPath)
+                let url = URL(fileURLWithPath: (p as NSString).expandingTildeInPath).standardizedFileURL
                 guard FileManager.default.fileExists(atPath: url.path) else { return .error("No file at \(url.path)") }
-                filed = await add(.file(url), project: project, from: "mcp")
+                guard isAllowedForAgents(url) else {
+                    return .error("Agents may file files from registered project folders, ~/Mochlet, Downloads, Documents and Desktop only (no hidden folders). Drop the file on Mochlet for anything else.")
+                }
+                filed = await add(.file(url), project: project.flatMap { KnowledgeBundle.isValidSlug($0) ? $0 : nil }, from: "mcp")
             } else if let t = a["text"].string, !t.isEmpty {
                 filed = await add(.text(t, title: a["title"].string), project: project, from: "mcp")
             } else {

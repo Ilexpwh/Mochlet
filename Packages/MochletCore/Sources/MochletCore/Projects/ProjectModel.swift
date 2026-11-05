@@ -144,7 +144,13 @@ public enum Slug {
         }
         while out.hasSuffix("-") { out.removeLast() }
         if out.count > maxLength {
-            out = String(out.prefix(maxLength))
+            // Cut at a word boundary when one falls in the back half, so slugs do not end mid-word.
+            let head = String(out.prefix(maxLength + 1))
+            if let dash = head.lastIndex(of: "-"), head.distance(from: head.startIndex, to: dash) >= maxLength / 2 {
+                out = String(head[..<dash])
+            } else {
+                out = String(out.prefix(maxLength))
+            }
             while out.hasSuffix("-") { out.removeLast() }
         }
         if out.isEmpty {

@@ -151,6 +151,9 @@ func addTerminalIdentity(_ p: inout [String: Any]) {
         if let s = value as? String, s.isEmpty { return }
         p[key] = value
     }
+    // Child CLIs Mochlet runs itself carry these; the app hides brain calls and matches headless runs by session.
+    if env["MOCHLET_BRAIN"] == "1" { set("mochlet_transport", "brain") }
+    else if env["MOCHLET_HEADLESS"] == "1" { set("mochlet_headless", true) }
     set("term_program", env["TERM_PROGRAM"])
     set("term_session_id", env["TERM_SESSION_ID"])
     set("iterm_session_id", env["ITERM_SESSION_ID"])

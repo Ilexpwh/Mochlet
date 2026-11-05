@@ -45,6 +45,11 @@ final class SettingsStore {
     var knowledgeEmbeddings: Bool { didSet { defaults.set(knowledgeEmbeddings, forKey: "knowledgeEmbeddings") } }
     var knowledgeGit: Bool { didSet { defaults.set(knowledgeGit, forKey: "knowledgeGit") } }
     var knowledgeRoot: String { didSet { defaults.set(knowledgeRoot, forKey: "knowledgeRoot") } }
+    var knowledgeOCR: Bool { didSet { defaults.set(knowledgeOCR, forKey: "knowledgeOCR") } }
+    var knowledgeTranscribe: Bool { didSet { defaults.set(knowledgeTranscribe, forKey: "knowledgeTranscribe") } }
+    var knowledgeDescribeImages: Bool { didSet { defaults.set(knowledgeDescribeImages, forKey: "knowledgeDescribeImages") } }
+    var knowledgeIntegrate: Bool { didSet { defaults.set(knowledgeIntegrate, forKey: "knowledgeIntegrate") } }
+    var knowledgeRobots: Bool { didSet { defaults.set(knowledgeRobots, forKey: "knowledgeRobots") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -80,6 +85,11 @@ final class SettingsStore {
         knowledgeEmbeddings = defaults.object(forKey: "knowledgeEmbeddings") as? Bool ?? true
         knowledgeGit = defaults.object(forKey: "knowledgeGit") as? Bool ?? false
         knowledgeRoot = defaults.string(forKey: "knowledgeRoot") ?? ""
+        knowledgeOCR = defaults.object(forKey: "knowledgeOCR") as? Bool ?? true
+        knowledgeTranscribe = defaults.object(forKey: "knowledgeTranscribe") as? Bool ?? true
+        knowledgeDescribeImages = defaults.object(forKey: "knowledgeDescribeImages") as? Bool ?? true
+        knowledgeIntegrate = defaults.object(forKey: "knowledgeIntegrate") as? Bool ?? true
+        knowledgeRobots = defaults.object(forKey: "knowledgeRobots") as? Bool ?? true
     }
 
     // MARK: Provider base URLs

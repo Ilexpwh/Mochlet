@@ -66,6 +66,9 @@ struct CompactOverlay: View {
                     .lineLimit(1)
                     .frame(width: NotchLayout.tickerWidth, alignment: .leading)
             }
+            if let p = store.chewProgress {
+                ChewRing(progress: p)
+            }
             PlanPills(app: app)
             if !app.settings.soundEnabled {
                 Image(systemName: "speaker.slash.fill").font(.system(size: 8)).foregroundStyle(.white.opacity(0.4))
@@ -109,6 +112,7 @@ struct ExpandedContent: View {
         case .chat: ChatView(app: app)
         case .projects: ProjectsView(app: app)
         case .knowledge: KnowledgeView(app: app)
+        case .ingest: IngestView(app: app)
         default: PlaceholderView(view: view)
         }
     }

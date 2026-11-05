@@ -271,12 +271,15 @@ enum DebugCommands {
             }
         case "kb":
             // kb?find=…[&k=5] | ask=… | reindex=1 | lint=1 | file=1 | add=/path | text=…[&title=] | url=… | open=1
+            // add/text/url take &force=1 (re-chew) and &question=1 (always show the project question); pick=slug|inbox · move=slug|inbox · window=1 · retry=1
             // Async commands write "pending" now and overwrite result.txt when done.
             let resultFile = dir.appendingPathComponent("result.txt")
             let later: @Sendable (String) -> Void = { text in
                 try? text.write(to: resultFile, atomically: true, encoding: .utf8)
             }
             if arg("open") != nil { app.openKnowledge() }
+            let force = arg("force") != nil
+            if arg("question") != nil { app.ingest.askNext = true }
             if let q = arg("find") {
                 result = "pending find"
                 let k = Int(num("k") ?? 8)
@@ -298,10 +301,24 @@ enum DebugCommands {
             } else if let path = arg("add") {
                 result = "pending add"
                 Task { @MainActor in
-                    let f = await AppCoordinator.shared.knowledge.add(.file(URL(fileURLWithPath: path)), from: "debug")
+                    let f = await AppCoordinator.shared.knowledge.add(.file(URL(fileURLWithPath: path)), from: "debug", force: force)
                     later(f.map { "\($0.existing ? "existing" : "filed") \($0.path) | \($0.title)" } ?? "failed: \(AppCoordinator.shared.knowledge.lastError ?? "?")")
-                    AppCoordinator.shared.openKnowledge()
                 }
+            } else if let p = arg("pick") {
+                app.ingest.choose(p == "inbox" ? nil : p)
+                result = "picked \(p)"
+            } else if let p = arg("move") {
+                result = "pending move"
+                Task { @MainActor in
+                    let f = await AppCoordinator.shared.ingest.moveLast(toProject: p == "inbox" ? nil : p)
+                    later(f.map { "moved \($0.path)" } ?? "move failed")
+                }
+            } else if arg("window") != nil {
+                app.saveWindowContext()
+                result = "saving window"
+            } else if arg("retry") != nil {
+                app.ingest.retryLast()
+                result = "retrying"
             } else if let text = arg("text") {
                 result = "pending text"
                 let title = arg("title")
@@ -312,7 +329,7 @@ enum DebugCommands {
             } else if let u = arg("url"), let url = URL(string: u) {
                 result = "pending url"
                 Task { @MainActor in
-                    let f = await AppCoordinator.shared.knowledge.add(.link(url), from: "debug")
+                    let f = await AppCoordinator.shared.knowledge.add(.link(url), from: "debug", force: force)
                     later(f.map { "\($0.existing ? "existing" : "filed") \($0.path) | \($0.title)" } ?? "failed: \(AppCoordinator.shared.knowledge.lastError ?? "?")")
                 }
             }
@@ -397,6 +414,12 @@ enum DebugCommands {
                           "citations": kb.citations.map { "[\($0.n)] \($0.path):\($0.lineStart)" }, "filed": kb.answerFiled ?? "",
                           "lastFiled": kb.lastFiled.map { "\($0.path)" } ?? "", "lint": kb.lastFindings.map { "\($0.kind.rawValue): \($0.path)" },
                           "mcpPort": kb.mcpPort.map(Int.init) ?? 0, "mcpError": kb.mcpError ?? "", "embeddingNote": kb.embeddingNote ?? "", "chewing": kb.chewing] as [String: Any]
+        let ing = app.ingest!
+        d["ingest"] = ["jobs": ing.jobs.map { ["label": $0.label, "stage": $0.stage.rawValue, "progress": $0.progress, "project": $0.project ?? "", "path": $0.filed?.path ?? "",
+                                              "title": $0.title ?? "", "summary": $0.summary ?? "", "error": $0.error ?? "", "integration": $0.integration ?? "", "routing": $0.routing ?? "",
+                                              "detail": $0.detail ?? "", "warnings": $0.warnings] as [String: Any] },
+                       "question": ing.question.map { q in ["job": q.jobID, "options": q.question.options.map { "\($0.slug ?? "inbox"):\(String(format: "%.2f", $0.confidence))" }, "suggested": q.question.suggested ?? "inbox"] as [String: Any] } ?? [:],
+                       "brain": LLMClient.brain(app)?.label ?? "", "chewProgress": app.notch.chewProgress ?? -1] as [String: Any]
         d["time"] = ISO8601DateFormatter().string(from: Date())
         guard let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) else { return "state failed" }
         try? data.write(to: dir.appendingPathComponent("state.json"))

@@ -47,6 +47,10 @@ final class SessionStore {
         registry.frontmostBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         let now = Date()
         if case .hook(let e) = input {
+            // Mochlet's own `claude -p` calls (ingest analysis, KB answers, chat) are not the user's sessions:
+            // brain calls never show; a headless/chat run only enriches the card its runner already announced.
+            if e.raw["mochlet_transport"].string == "brain" { return }
+            if e.raw["mochlet_headless"].bool == true, registry.card(e.sessionID) == nil { return }
             eventCount += 1
             lastEventAt = now
             if e.name == .sessionStart || e.name == .userPromptSubmit { app.projects?.recordSession(agent: e.agent, sessionID: e.sessionID, cwd: e.sessionRoot ?? e.cwd) }

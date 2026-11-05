@@ -49,6 +49,24 @@ public final class KnowledgeBundle: @unchecked Sendable {
 
     public func url(_ relative: String) -> URL { root.appendingPathComponent(relative) }
 
+    /// A relative path that cannot leave the bundle: no absolute paths, no `..`, no `~`.
+    public static func isSafeRelativePath(_ relative: String) -> Bool {
+        guard !relative.isEmpty, !relative.hasPrefix("/"), !relative.hasPrefix("~"), !relative.contains("\0") else { return false }
+        return !relative.split(separator: "/").contains { $0 == ".." }
+    }
+
+    /// Project slugs come from agents too: letters, digits, `-` and `_` only.
+    public static func isValidSlug(_ slug: String) -> Bool {
+        slug.count <= 64 && !slug.isEmpty && slug.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") } && !slug.hasPrefix("-")
+    }
+
+    func checked(_ relative: String) throws -> URL {
+        guard Self.isSafeRelativePath(relative) else { throw BundleError.unsafePath(relative) }
+        let u = url(relative).standardizedFileURL
+        guard u.path.hasPrefix(root.standardizedFileURL.path + "/") else { throw BundleError.unsafePath(relative) }
+        return u
+    }
+
     // MARK: Bootstrap
 
     /// Creates the folders and reserved files that are missing; returns what it created.
@@ -125,7 +143,7 @@ public final class KnowledgeBundle: @unchecked Sendable {
     }
 
     public func read(_ relative: String) throws -> String {
-        try String(contentsOf: url(relative), encoding: .utf8)
+        try String(contentsOf: checked(relative), encoding: .utf8)
     }
 
     public func scan(_ relative: String) throws -> ScannedPage {
@@ -253,6 +271,7 @@ public final class KnowledgeBundle: @unchecked Sendable {
     // MARK: Writing
 
     public func write(text: String, to relative: String) throws {
+        _ = try checked(relative)
         let u = url(relative)
         try FileManager.default.createDirectory(at: u.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = Data(text.utf8)
@@ -279,6 +298,7 @@ public final class KnowledgeBundle: @unchecked Sendable {
 
     /// Copies a source into `<directory>/references/<sha12>-<name>`; returns the relative path and sha256.
     public func mirror(fileAt source: URL, into directory: String) throws -> (relativePath: String, sha256: String) {
+        _ = try checked(directory + "/x")
         let data = try Data(contentsOf: source)
         let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let name = String(sha.prefix(12)) + "-" + Slug.make((source.lastPathComponent as NSString).deletingPathExtension, maxLength: 48) + (source.pathExtension.isEmpty ? "" : "." + source.pathExtension.lowercased())
@@ -290,6 +310,7 @@ public final class KnowledgeBundle: @unchecked Sendable {
     }
 
     public func mirror(text: String, name: String, into directory: String) throws -> (relativePath: String, sha256: String) {
+        _ = try checked(directory + "/x")
         let data = Data(text.utf8)
         let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let ext = (name as NSString).pathExtension
@@ -389,7 +410,11 @@ public final class KnowledgeBundle: @unchecked Sendable {
     public func reportedReferences(from index: KnowledgeIndex) throws -> Set<String> {
         var out: Set<String> = []
         for d in try index.documents(types: ["report"]) {
-            if let n = try? YAMLLite.parse(d.frontmatterYAML), let r = n["mochlet"]?["reference"]?.string { out.insert(r) }
+            guard let n = try? YAMLLite.parse(d.frontmatterYAML), let m = n["mochlet"] else { continue }
+            if let r = m["reference"]?.string { out.insert(r) }
+            if case .sequence(let items)? = m["mirrors"] {
+                for item in items { if case .string(let p) = item { out.insert(p) } }
+            }
         }
         return out
     }
@@ -399,5 +424,12 @@ public final class KnowledgeBundle: @unchecked Sendable {
         guard let text = try? read("index.md"), let doc = try? OKFDocument.parse(text) else { return nil }
         let body = doc.body.replacingOccurrences(of: OKFIndexFile.marker, with: "").trimmingCharacters(in: .whitespacesAndNewlines)
         return String(body.prefix(1500))
+    }
+}
+
+public enum BundleError: Error, CustomStringConvertible, Equatable {
+    case unsafePath(String)
+    public var description: String {
+        switch self { case .unsafePath(let p): return "Path leaves the knowledge folder: \(p)" }
     }
 }

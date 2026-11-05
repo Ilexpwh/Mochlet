@@ -4,9 +4,10 @@ import simd
 import SlimeKit
 import SlimeKitUI
 import MochletCore
+import MochletServices
 
 enum MenuAction: String, CaseIterable, Identifiable {
-    case jumpToTerminal, newSession, projects, knowledge, signals, meetings, attachWindow, desktop, sound, settings, pauseObservation, quit
+    case jumpToTerminal, newSession, projects, knowledge, signals, meetings, attachWindow, saveWindow, desktop, sound, settings, pauseObservation, quit
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum MenuAction: String, CaseIterable, Identifiable {
         case .signals: return "Signals"
         case .meetings: return "Meeting notes"
         case .attachWindow: return "Attach window"
+        case .saveWindow: return "Save window to knowledge"
         case .desktop: return "Let me out"
         case .sound: return "Sound"
         case .settings: return "Settings"
@@ -36,6 +38,7 @@ enum MenuAction: String, CaseIterable, Identifiable {
         case .signals: return "antenna.radiowaves.left.and.right"
         case .meetings: return "waveform"
         case .attachWindow: return "macwindow.badge.plus"
+        case .saveWindow: return "square.and.arrow.down.on.square"
         case .desktop: return "arrow.up.left.and.arrow.down.right"
         case .sound: return "speaker.wave.2"
         case .settings: return "gearshape"
@@ -65,6 +68,7 @@ final class AppCoordinator {
     private(set) var chat: ChatController!
     private(set) var headless: HeadlessRunner!
     private(set) var knowledge: KnowledgeController!
+    private(set) var ingest: IngestController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -97,6 +101,7 @@ final class AppCoordinator {
         chat = ChatController(app: self)
         headless = HeadlessRunner(app: self)
         knowledge = KnowledgeController(app: self)
+        ingest = IngestController(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
@@ -367,6 +372,8 @@ final class AppCoordinator {
             }
         case .knowledge:
             openKnowledge()
+        case .saveWindow:
+            saveWindowContext()
         case .meetings:
             toggleMeetingNotes()
         case .signals:
@@ -590,15 +597,30 @@ final class AppCoordinator {
         }
         Task { [weak self] in
             guard let self else { return }
-            var last: KnowledgeEngine.Filed?
-            for r in resources { if let f = await self.knowledge.add(r, project: self.projectSlug(forDrop: r)) { last = f } }
-            if let f = last {
-                if !f.existing { self.slime.stage.main.trigger(.happy) }
-                self.toast((f.existing ? "Already chewed: " : "Filed: ") + f.title, symbol: f.existing ? "checkmark.circle" : "tray.and.arrow.down", seconds: 3)
-                self.openKnowledge()
-            } else if let e = self.knowledge.lastError {
-                self.toast("Could not file that: \(e)", symbol: "exclamationmark.triangle", seconds: 4)
+            for r in resources { _ = await self.knowledge.add(r, project: self.projectSlug(forDrop: r)) }
+        }
+    }
+
+    /// "Save this window": the front window's title, URL and (with Screen Recording) its text, filed as a report.
+    func saveWindowContext() {
+        guard let target = WindowContextCapture.frontmostWindow() else {
+            toast("Bring the window to the front, then choose Save window.", symbol: "square.and.arrow.down.on.square")
+            return
+        }
+        slime.stage.main.trigger(.happy)
+        Task { @MainActor in
+            let a = await WindowContextCapture.capture(target, screenshot: true)
+            var text = ""
+            if let b64 = a.imageBase64, let data = Data(base64Encoded: b64), let src = CGImageSourceCreateWithData(data as CFData, nil), let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+                text = (try? await OCR.recognise(cgImage: img)) ?? ""
             }
+            let url = a.text.split(separator: "\n").first { $0.hasPrefix("URL: ") }.map { String($0.dropFirst(5)) }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if let url, let u = URL(string: url) { _ = await knowledge.add(.link(u), from: "window"); return }
+                toast("Allow Screen Recording (System Settings → Privacy) so I can read the window, or drop its file or link on me.", symbol: "eye.slash", seconds: 5)
+                return
+            }
+            _ = await ingest.ingest(.window(title: target.title, app: target.owner, url: url, text: text), project: nil, from: "window")
         }
     }
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# M6 smoke test without the app: build mochlet-cli, create a throwaway bundle with the fixture pages,
+# M6/M7 smoke test without the app: build mochlet-cli, create a throwaway bundle with the fixture pages,
 # ingest the sample note, check that find cites it, that a Chinese query works, and that lint
 # reports the planted orphan and the broken link.
 set -euo pipefail
@@ -22,6 +22,13 @@ zh=$("$CLI" find "头显 价格" -k 3)
 case "$zh" in *"inbox/"*) echo "ok: Chinese query hits";; *) echo "FAIL: Chinese query"; echo "$zh"; exit 1;; esac
 dup=$("$CLI" ingest Tests/Fixtures/knowledge/vision-pro.md)
 case "$dup" in *"already chewed"*) echo "ok: dedupe";; *) echo "FAIL: dedupe"; echo "$dup"; exit 1;; esac
+ex=$("$CLI" extract Tests/Fixtures/ingest/sample.pptx)
+case "$ex" in *"## Slide 1"*) echo "ok: pptx slides extracted";; *) echo "FAIL: pptx extract"; echo "$ex" | head -20; exit 1;; esac
+case "$ex" in *"_Notes:_"*) echo "ok: speaker notes extracted";; *) echo "FAIL: speaker notes"; exit 1;; esac
+pp=$("$CLI" ingest Tests/Fixtures/ingest/sample.pptx)
+case "$pp" in *"filed inbox/"*) echo "ok: pptx filed";; *) echo "FAIL: pptx ingest"; echo "$pp"; exit 1;; esac
+ls "$ROOT/Knowledge/inbox/references/" | grep -q -- "-sample.pptx" && echo "ok: pptx mirrored"
+ls "$ROOT/Knowledge/inbox/references/" | grep -q "\.md$" && echo "ok: readable mirror next to it"
 lint=$("$CLI" lint)
 echo "$lint" | head -8
 case "$lint" in *"orphan: entities/lonely-widget.md"*) echo "ok: orphan reported";; *) echo "FAIL: orphan not reported"; exit 1;; esac

@@ -55,8 +55,14 @@ it lands in `~/Mochlet/projects.json`, a plain file you can edit. Then:
 ## Knowledge base
 
 Drop a file, a link or some text on the slime and it chews it into `~/Mochlet/Knowledge/`, an OKF
-Markdown bundle (open it in Obsidian). Text and Markdown are summarised into a `report` page with the
-source mirrored next to it; other kinds are mirrored now and read in full with the ingestion milestone.
+Markdown bundle (open it in Obsidian). PDFs (with OCR for scanned pages), Word/RTF/ODT, PowerPoint
+(slides and speaker notes), images (OCR plus a description when the brain can see), audio and video
+(on-device transcription), code and plain text are read in full; links are rendered in a hidden web
+view and reduced to the article (arXiv, GitHub repos and files, and YouTube have their own readers).
+The brain writes a `report` page (summary, key points, entities, action items, open questions, quotes),
+the source is mirrored next to it, a router picks the project (asking you when unsure, with a 10 s
+default), and an integrator revises the entity and concept pages the source touches. The ingest card
+shows every stage, offers Open / Ask / Move / Re-chew, and a chewing ring sits on the compact strip.
 Quick menu → Knowledge (or type `kb: <question>` into the ask bubble) asks the base: the answer streams
 with `[n]` citations whose chips open the page at the line, and "File this answer" keeps it as a
 `syntheses/` page with backlinks. Lint lists orphans, broken links and pages never integrated. Search is
@@ -131,6 +137,7 @@ open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what th
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach
 open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/knowledge/vision-pro.md&$T"   # kb?find=… · ask=… · file=1 · lint=1 · url=… · text=…
+open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/ingest/sample.pptx&force=1&question=1&$T"   # re-chew, always ask; pick=inbox · move=slug · window=1 · retry=1
 ```
 
 `scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay

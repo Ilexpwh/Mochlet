@@ -58,9 +58,11 @@ public final class AppleContextualEmbedding: EmbeddingProvider, @unchecked Senda
         for t in texts {
             let script = Self.script(for: t)
             let m = try model(for: script)
-            let result = try m.embeddingResult(for: String(t.prefix(1800)), language: nil)
             var sum = [Float](repeating: 0, count: dimension)
             var n: Float = 0
+            // A chunk the model rejects (markup only, odd scripts) gets a zero vector: it never matches
+            // by meaning, keyword search still finds it, and it is not retried on every launch.
+            guard let result = try? m.embeddingResult(for: String(t.prefix(1800)), language: nil) else { out.append(sum); continue }
             result.enumerateTokenVectors(in: t.startIndex..<t.endIndex) { vector, _ in
                 guard vector.count == self.dimension else { return true }
                 for i in 0..<self.dimension { sum[i] += Float(vector[i]) }

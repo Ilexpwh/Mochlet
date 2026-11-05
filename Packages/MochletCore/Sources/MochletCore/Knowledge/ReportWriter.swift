@@ -94,6 +94,7 @@ public struct ReportProvenance: Equatable, Sendable {
     public var sourceKey: String        // sha256:… | url:… | arxiv:…
     public var resource: String?        // canonical URL or file:// path
     public var referencePath: String?   // mirrored copy, relative to the bundle
+    public var mirrors: [String] = []   // further mirrors (readable .md of a binary, HTML snapshot), relative to the bundle
     public var ingestedFrom: String     // drop | url | voice | mcp | window | cli
     public var model: String?
     public var extractors: [String] = []
@@ -125,6 +126,7 @@ public enum ReportWriter {
         var m: [YAMLPair] = [YAMLPair("kind", .string(d.contentKind)), YAMLPair("ingested_from", .string(p.ingestedFrom)), YAMLPair("language", .string(d.language)), YAMLPair("integrated", .bool(false))]
         if let s = p.sha256 { m.append(YAMLPair("sha256", .string(s))) }
         if let r = p.referencePath { m.append(YAMLPair("reference", .string(r))) }
+        if !p.mirrors.isEmpty { m.append(YAMLPair("mirrors", .sequence(p.mirrors.map { .string($0) }))) }
         if let u = p.resource, u.hasPrefix("http") { m.append(YAMLPair("canonical_url", .string(u))) }
         if let proj = p.project { m.append(YAMLPair("project", .string(proj))) }
         if p.words > 0 { m.append(YAMLPair("words", .int(p.words))) }

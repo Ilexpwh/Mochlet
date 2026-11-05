@@ -47,7 +47,7 @@ actor KnowledgeEngine {
 
     func setEmbeddings(_ on: Bool) { embeddingsEnabled = on }
 
-    private func open() throws -> KnowledgeIndex {
+    func open() throws -> KnowledgeIndex {
         if let index { return index }
         try FileManager.default.createDirectory(at: URL(fileURLWithPath: indexPath).deletingLastPathComponent(), withIntermediateDirectories: true)
         let i = try KnowledgeIndex(path: indexPath)
@@ -131,17 +131,19 @@ actor KnowledgeEngine {
 
     // MARK: Filing
 
-    private func ensureDirectory(_ relative: String) throws {
+    func ensureDirectory(_ relative: String) throws {
         try FileManager.default.createDirectory(at: bundle.url(relative), withIntermediateDirectories: true)
     }
 
-    private func directory(forProject project: String?) -> String {
-        project.map { "projects/\($0)" } ?? BundleLayout.inbox
+    /// Only a well-formed slug names a project folder; anything else (including agent input) goes to the inbox.
+    func directory(forProject project: String?) -> String {
+        guard let project, KnowledgeBundle.isValidSlug(project) else { return BundleLayout.inbox }
+        return "\(BundleLayout.projects)/\(project)"
     }
 
     /// Files a text or Markdown file as a report; other kinds are mirrored with a stub until the
     /// ingestion milestone adds the extractors, so nothing dropped on the slime is lost.
-    func addFile(_ url: URL, project: String?, from: String, force: Bool = false) throws -> Filed {
+    func addFile(_ url: URL, project: String?, from: String, force: Bool = false, reason: String? = nil) throws -> Filed {
         let i = try open()
         let dir = directory(forProject: project)
         try ensureDirectory(dir)
@@ -167,11 +169,11 @@ actor KnowledgeEngine {
         } else {
             let title = (url.lastPathComponent as NSString).deletingPathExtension
             let kind = Self.kind(forExtension: ext)
-            draft = ReportDraft(title: title, oneLiner: "\(kind) mirrored into the knowledge base, waiting for extraction.",
-                                summary: "Mochlet kept a copy of this \(kind.lowercased()) under references/. Reading \(ext.isEmpty ? "this kind of file" : ".\(ext) files") (text, OCR, transcription) arrives with the ingestion milestone; until then open the mirrored copy from the Source section.")
+            draft = ReportDraft(title: title, oneLiner: reason.map { "\(kind) mirrored but not read: \($0)" } ?? "\(kind) mirrored into the knowledge base without reading it.",
+                                summary: "Mochlet kept a copy of this \(kind.lowercased()) under references/ but could not read it\(reason.map { ": " + $0 } ?? ""). Open the mirrored copy from the Source section, or re-chew it from the Knowledge card once the problem is fixed.")
             draft.contentKind = kind.lowercased()
             draft.language = "en"
-            note = "Mirrored; extraction for .\(ext) comes with the ingestion milestone."
+            note = reason.map { "Mirrored, not read: \($0)" } ?? "Mirrored without reading."
         }
         if let project { draft.suggestedProject = project }
         let prov = ReportProvenance(sourceKey: key, resource: "file://" + url.path, referencePath: refPath, ingestedFrom: from, extractors: extractors,
@@ -200,7 +202,7 @@ actor KnowledgeEngine {
     }
 
     /// A link: filed as a draft report now (so it is searchable and listed), read in full by the web reader of the ingestion milestone.
-    func addLink(_ url: URL, project: String?, from: String) throws -> Filed {
+    func addLink(_ url: URL, project: String?, from: String, reason: String? = nil) throws -> Filed {
         let i = try open()
         let dir = directory(forProject: project)
         try ensureDirectory(dir)
@@ -213,7 +215,7 @@ actor KnowledgeEngine {
         let host = url.host ?? "link"
         let last = url.lastPathComponent.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
         let title = last.count > 3 && last != "/" ? "\(host): \(last)" : host
-        var draft = ReportDraft(title: title, oneLiner: "Link saved from a drop: \(canonical)", summary: "Saved \(canonical). The web reader (ingestion milestone) fetches the page, mirrors a readable copy and rewrites this report; until then the link itself is what is known.")
+        var draft = ReportDraft(title: title, oneLiner: "Link saved from a drop: \(canonical)", summary: "Saved \(canonical)." + (reason.map { " The page could not be read: \($0). Re-chew it from the Knowledge card once the problem is fixed." } ?? " The page has not been read yet."))
         draft.contentKind = "link"
         draft.tags = ["link", host]
         if let project { draft.suggestedProject = project }
@@ -221,14 +223,36 @@ actor KnowledgeEngine {
         return try file(draft, provenance: prov, in: dir, index: i, note: "Saved the link; full reading arrives with the ingestion milestone.")
     }
 
-    private func file(_ draft: ReportDraft, provenance: ReportProvenance, in dir: String, index i: KnowledgeIndex, note: String?) throws -> Filed {
+    func file(_ draft: ReportDraft, provenance: ReportProvenance, in dir: String, index i: KnowledgeIndex, note: String?) throws -> Filed {
         let page = ReportWriter.document(draft, provenance: provenance)
-        let slug = bundle.uniqueSlug(draft.title, in: dir)
-        let rel = "\(dir)/\(slug).md"
+        // A re-chew of a known source keeps its path when it stays in the same folder, so links to the
+        // report survive; moved elsewhere, the old report goes away instead of lingering as a twin.
+        let previous = (try? i.ingestRecord(sourceKey: provenance.sourceKey))?.path.flatMap { exists($0) ? $0 : nil }
+        var stale: [String] = []
+        if let previous, let old = try? OKFDocument.parse(try bundle.read(previous)), case .mapping(let pairs)? = old.frontmatter.mochlet,
+           let m = pairs.first(where: { $0.key == "mirrors" }), case .sequence(let items) = m.value {
+            for item in items {
+                if case .string(let p) = item, p != provenance.referencePath, !provenance.mirrors.contains(p), exists(p) { stale.append(p) }
+            }
+        }
+        let rel: String
+        if let previous, (previous as NSString).deletingLastPathComponent == dir {
+            rel = previous
+        } else {
+            rel = "\(dir)/\(bundle.uniqueSlug(draft.title, in: dir)).md"
+        }
         try bundle.write(page, to: rel)
         try i.recordIngest(sourceKey: provenance.sourceKey, path: rel, status: "done")
         try bundle.appendLog(kind: "ingest", text: "\(draft.title) → \(rel)")
         var touched: Set<String> = [rel]
+        if let previous, previous != rel {
+            try? FileManager.default.removeItem(at: bundle.url(previous))
+            touched.insert(previous)
+        }
+        for p in stale {
+            try? FileManager.default.removeItem(at: bundle.url(p))
+            touched.insert(p)
+        }
         if let r = provenance.referencePath { touched.insert(r) }
         try bundle.reindex(into: i, only: touched)
         try bundle.regenerateIndexes(from: i)

@@ -109,9 +109,9 @@ private struct KnowledgeHeader: View {
                 Divider()
                 Button("Knowledge settings…") { app.openSettings(tab: "knowledge") }
             } label: {
-                Image(systemName: "ellipsis.circle").font(.system(size: 12))
+                Image(systemName: "ellipsis.circle").font(.system(size: 13, weight: .semibold)).frame(width: 22, height: 22).contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(.white.opacity(0.7))
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22, height: 22).foregroundStyle(.white.opacity(0.75))
             .help("Reindex, open the folder, settings")
         }
     }
@@ -154,6 +154,13 @@ private struct CitationRow: View {
     let app: AppCoordinator
     let citations: [Citation]
 
+    /// "Title › heading" without repeating the page title when the heading path starts with it.
+    private func chipTitle(_ c: Citation) -> String {
+        var h = c.heading
+        if h == c.title { h = "" } else if h.hasPrefix(c.title + " > ") { h = String(h.dropFirst(c.title.count + 3)) }
+        return c.title + (h.isEmpty ? "" : " › \(h)")
+    }
+
     var body: some View {
         let kb = app.knowledge!
         ScrollView(.horizontal, showsIndicators: false) {
@@ -163,7 +170,7 @@ private struct CitationRow: View {
                         HStack(spacing: 4) {
                             Text("\(c.n)").font(.system(size: 9.5, weight: .bold, design: .rounded))
                                 .padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(Color.white.opacity(0.18)))
-                            Text(c.title + (c.heading.isEmpty ? "" : " › \(c.heading)")).font(.system(size: 10.5, design: .rounded)).lineLimit(1)
+                            Text(chipTitle(c)).font(.system(size: 10.5, design: .rounded)).lineLimit(1)
                             if let p = c.page { Text("p.\(p)").font(.system(size: 9.5, design: .rounded)).opacity(0.7) }
                             if let t = c.timestamp { Text(AnswerComposer.timestampText(t)).font(.system(size: 9.5, design: .monospaced)).opacity(0.7) }
                         }

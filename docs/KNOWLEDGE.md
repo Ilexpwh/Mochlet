@@ -83,9 +83,45 @@ through SQLite WAL): `bootstrap`, `reindex [--force]`, `find <query> [-k 8] [--t
 `MOCHLET_KNOWLEDGE_ROOT` point it at another bundle (the index then lives at `<root>/.index.sqlite`).
 `scripts/smoke-ingest.sh` runs the whole chain against the fixtures.
 
-## What arrives next
+## Ingestion
 
-M7 adds the extractors (PDF with OCR, Office, PPTX, images, audio/video), the web reader, the report
-analyzer (summary, key points, entities, action items via the brain), the integrator that revises entity
-and concept pages after each ingest, and the project router. Until then a non-text drop is mirrored with
-a stub report so nothing is lost, and a link is filed as a draft report that the reader will rewrite.
+A drop, a pasted link, text from the ask bubble, "Save window" or an MCP `add_resource` call becomes an
+ingest job (`IngestController`): two extractions run at once, one brain call at a time, and the card in
+the notch shows the stage for every job.
+
+1. **Extract** (`MochletServices/Extract`): text, Markdown and CSV (`TextExtractor`), code (fenced up to
+   200 KB, else an outline), PDF through PDFKit with Vision OCR for pages under 40 characters
+   (`PDFExtractor`), docx/rtf/odt through `NSAttributedString` with `textutil` as fallback
+   (`OfficeExtractor`), PPTX from the slide XML with speaker notes (`PPTXExtractor`), images through OCR
+   (`ImageExtractor`), audio and video through `AVAssetReader` and `SpeechAnalyzer` with ffmpeg for mkv,
+   webm and opus (`MediaExtractor`). Links (`URLIngestor`): PDFs are downloaded; `arxiv.org/abs|pdf`
+   fetches the metadata from the export API plus the PDF; GitHub repositories get the README and the
+   file tree, GitHub blobs the raw file; YouTube uses oEmbed plus subtitles when `yt-dlp` is installed;
+   every other page is rendered in a hidden `WKWebView` and reduced to the article by Mochlet's own
+   reader script, with a static fetch as fallback. `robots.txt` is honoured unless the setting is off.
+2. **Analyse**: the brain (the chat backend, used one-shot through `LLMClient`) fills the report schema:
+   title, one-liner, summary, key points, why it matters, entities, tags, language, content kind,
+   suggested project, action items, open questions, quotes, related pages. Sources above about 12k
+   tokens are read window by window (notes per part, then one reduce pass). Images get a description
+   first when the brain can see them. Claude Code answers through `--json-schema`; other backends get
+   the schema in the prompt and one repair pass. The brain runs without MCP servers, tools or a
+   session file, and its hook events are tagged so no mini slime appears for them.
+3. **Route**: `ProjectRouter` asks a `DecisionEngine` (Apple FoundationModels on-device first, then the
+   brain as LLM-JSON; answers cached 24 h) to pick a project or the inbox from the title, one-liner,
+   tags, host and source folder, multiplied by learned priors (`host:`, `tag:`, `dir:`). Below 70 %
+   confidence or with the top two within 20 % the card asks, with the suggestion accepted after 10 s.
+   Choosing differently, or moving a report later, adjusts the priors.
+4. **File**: the source is mirrored to `<dir>/references/<sha12>-<name>` (plus a readable `.md` for
+   binary files and an `.html` snapshot for pages, listed under `mochlet.mirrors`), the report is
+   written, both are indexed and the folder indexes regenerated. A failed extraction or analysis still
+   files a stub report with the reason, so nothing dropped is lost. Dedupe keys are `sha256:`, the
+   canonical `url:` and `arxiv:<id>`; a known source answers "Already chewed" unless re-chewed, and a
+   re-chew keeps the report's path.
+5. **Integrate**: the brain sees the report, the most related pages (`find`) and the existing titles and
+   returns an `IntegrationPlan` (revise sections, create entity/concept pages, add links, at most 15
+   pages). Pages a human edited receive a "Proposed update" block instead of a rewrite. The report is
+   marked `mochlet.integrated: true` and `log.md` gets an `integrate |` line.
+
+Settings → Knowledge → Chewing switches OCR, transcription, image descriptions, integration and
+`robots.txt` individually. The ingest card offers Open, Ask (the knowledge card with the report in
+context), Move (to another project or the inbox) and Re-chew; a failed job offers Try again and the log.

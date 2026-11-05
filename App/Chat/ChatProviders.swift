@@ -271,6 +271,9 @@ final class CLIChatProvider: ChatProvider, @unchecked Sendable {
     var onRateLimits: (@Sendable (JSONValue) -> Void)?
     /// `read-only` for chat, `workspace-write` for tasks (Codex); permission/approval modes for the others.
     var taskMode = false
+    /// Brain calls: Claude runs without MCP servers, tools or a session file, and its hooks are tagged
+    /// so the app does not mistake them for the user's sessions.
+    var lean = false
 
     init(kind: ChatProviderKind) { self.kind = kind }
 
@@ -300,7 +303,7 @@ final class CLIChatProvider: ChatProvider, @unchecked Sendable {
         case .geminiCLI:
             return CLIArgs.gemini(resume: r.continuation, model: r.model, approvalMode: taskMode ? "yolo" : nil, caps: caps)
         default:
-            var a = CLIArgs.claude(resume: r.continuation, sessionID: sessionID, model: r.model, caps: caps, permissionMode: taskMode ? "acceptEdits" : nil)
+            var a = CLIArgs.claude(resume: r.continuation, sessionID: sessionID, model: r.model, caps: caps, permissionMode: taskMode ? "acceptEdits" : nil, lean: lean)
             if r.continuation == nil, let s = r.system, !s.isEmpty, caps.isEmpty || caps.has("--append-system-prompt") { a += ["--append-system-prompt", s] }
             return a
         }
@@ -317,7 +320,7 @@ final class CLIChatProvider: ChatProvider, @unchecked Sendable {
                 guard let bin = CLIBinaries.find(binaryName) else { throw ChatProviderError.missingBinary(binaryName) }
                 let caps = CLIBinaries.capabilities(bin, helpArgs: kind == .codexCLI ? ["exec", "--help"] : ["--help"])
                 let args = arguments(for: r, caps: caps, sessionID: sessionID)
-                process = CLIProcess(binary: bin, args: args, cwd: r.cwd, env: CLIBinaries.environment())
+                process = CLIProcess(binary: bin, args: args, cwd: r.cwd, env: CLIBinaries.environment(extra: lean ? ["MOCHLET_BRAIN": "1"] : [:]))
             } catch {
                 cont.yield(.failed(error.localizedDescription))
                 cont.finish()

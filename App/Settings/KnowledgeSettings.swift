@@ -30,6 +30,17 @@ struct KnowledgeSettingsView: View {
                 Text("An OKF Markdown bundle you can open in Obsidian or any editor: reports under inbox/ and projects/, entities, concepts, filed answers under syntheses/, lint reports under meta/. Mochlet never edits a page you wrote or verified; it adds a “Proposed update” block instead. The schema in SCHEMA.md (copied to CLAUDE.md and AGENTS.md) tells coding agents the same rules.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Chewing") {
+                Text("Brain: " + (LLMClient.brain(app)?.label ?? "none — pick a chat backend under Settings → Chat; reports are then filed from the text alone"))
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Recognise text in scanned PDFs and images (Vision OCR)", isOn: $s.knowledgeOCR)
+                Toggle("Transcribe audio and video on device (SpeechAnalyzer)", isOn: $s.knowledgeTranscribe)
+                Toggle("Describe images with the brain when it can see", isOn: $s.knowledgeDescribeImages)
+                Toggle("Integrate each report into entity and concept pages", isOn: $s.knowledgeIntegrate)
+                Toggle("Honour robots.txt when reading links", isOn: $s.knowledgeRobots)
+                Text("Dropped files are read with PDFKit, AppKit's document readers, PPTX slide XML, Vision OCR and on-device speech; links are rendered in a hidden web view with Mochlet's own reader script (arXiv, GitHub and YouTube use their APIs). The brain writes the report and proposes which wiki pages to revise; pages you edited only get a “Proposed update” block. Unreadable sources are still mirrored with a stub report.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Search") {
                 Toggle("Use on-device embeddings for search (Apple NLContextualEmbedding, Chinese and English)", isOn: Binding(get: { s.knowledgeEmbeddings }, set: { kb.setEmbeddings($0) }))
                 HStack {

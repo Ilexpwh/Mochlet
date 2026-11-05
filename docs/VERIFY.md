@@ -56,6 +56,8 @@ open "mochlet://debug/shot?name=card&$T"                             # ~/Library
 3. On the Projects card the row now offers Resume: a terminal opens with `claude --resume <id>`.
    `open <project> in ghostty` / Cursor / VS Code open the folder without an agent.
 4. Settings → Chat → "Run tasks in the background", then `work on <project>: say hello` again: no window;
+   (a project cloned by Mochlet first opens a terminal instead until you choose "Trust for background runs"
+   in its ⋯ menu, because a fresh clone may carry project-level agent hooks);
    a mini appears with the Claude glyph and transport headless; the session card shows the reply and
    "done"; Stop in the card ends it.
 5. Type anything else in the ask bubble: the Chat card opens and Claude Code (your subscription, through

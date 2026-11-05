@@ -98,7 +98,7 @@ final class ProjectsController {
     // MARK: Registry
 
     @discardableResult
-    func add(path: String, name: String? = nil, repo: String? = nil, defaultAgent: String? = nil) -> Project {
+    func add(path: String, name: String? = nil, repo: String? = nil, defaultAgent: String? = nil, trusted: Bool = true) -> Project {
         let normalized = ProjectResolver.normalize(path)
         if let existing = file.projects.first(where: { $0.paths.contains(where: { ProjectResolver.normalize($0) == normalized }) }) {
             var p = existing
@@ -110,7 +110,7 @@ final class ProjectsController {
         let displayName = (name?.isEmpty == false ? name! : (normalized as NSString).lastPathComponent)
         let slug = Slug.unique(Slug.make(displayName), taken: Set(file.projects.map(\.slug)))
         let gitRepo = repo ?? Self.gitRemote(at: normalized)
-        let p = Project(slug: slug, name: displayName, paths: [normalized], repo: gitRepo, defaultAgent: defaultAgent)
+        let p = Project(slug: slug, name: displayName, paths: [normalized], repo: gitRepo, defaultAgent: defaultAgent, trusted: trusted)
         file.projects.append(p)
         save()
         note = "Added \(displayName)."
@@ -120,6 +120,12 @@ final class ProjectsController {
     func update(_ p: Project) {
         if let i = file.projects.firstIndex(where: { $0.slug == p.slug }) { file.projects[i] = p } else { file.projects.append(p) }
         save()
+    }
+
+    func setTrusted(_ slug: String, _ trusted: Bool) {
+        guard var p = file.project(slug: slug) else { return }
+        p.trusted = trusted
+        update(p)
     }
 
     func remove(_ slug: String) {
@@ -246,9 +252,9 @@ final class ProjectsController {
         cloneProgress = nil
         app.notch.chewProgress = nil
         if status == 0 {
-            let p = add(path: dest.path, name: name, repo: url)
+            let p = add(path: dest.path, name: name, repo: url, trusted: false)
             cloneStatus = nil
-            note = "Cloned \(p.name)."
+            note = "Cloned \(p.name). Background runs stay off until you trust it."
             app.slime.stage.main.ingestionFinished(success: true)
             app.toast("Cloned \(p.name) into ~/Mochlet/Projects.", symbol: "arrow.down.circle")
         } else {

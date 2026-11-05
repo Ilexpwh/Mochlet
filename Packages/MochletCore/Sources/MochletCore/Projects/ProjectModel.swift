@@ -16,12 +16,17 @@ public struct Project: Codable, Sendable, Equatable, Identifiable {
     public var archived: Bool
     /// agent id → last session id (for "Resume <project>").
     public var lastSessions: [String: String]
+    /// Background ("headless") agent runs are only allowed in trusted folders: folders the user
+    /// picked from disk are trusted; clones are not until the user says so (a cloned repo can carry
+    /// project-level agent hooks that would run unattended).
+    public var trusted: Bool
 
     public var id: String { slug }
     public var primaryPath: String? { paths.first }
 
     public init(slug: String, name: String, aliases: [String] = [], description: String = "", paths: [String], repo: String? = nil,
-                defaultAgent: String? = nil, tags: [String] = [], createdAt: Date = Date(), archived: Bool = false, lastSessions: [String: String] = [:]) {
+                defaultAgent: String? = nil, tags: [String] = [], createdAt: Date = Date(), archived: Bool = false, lastSessions: [String: String] = [:],
+                trusted: Bool = true) {
         self.slug = slug
         self.name = name
         self.aliases = aliases
@@ -33,10 +38,11 @@ public struct Project: Codable, Sendable, Equatable, Identifiable {
         self.createdAt = createdAt
         self.archived = archived
         self.lastSessions = lastSessions
+        self.trusted = trusted
     }
 
     enum CodingKeys: String, CodingKey {
-        case slug, name, aliases, description, paths, repo, tags, archived
+        case slug, name, aliases, description, paths, repo, tags, archived, trusted
         case defaultAgent = "default_agent"
         case createdAt = "created_at"
         case lastSessions = "last_sessions"
@@ -55,6 +61,7 @@ public struct Project: Codable, Sendable, Equatable, Identifiable {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
         archived = try c.decodeIfPresent(Bool.self, forKey: .archived) ?? false
         lastSessions = try c.decodeIfPresent([String: String].self, forKey: .lastSessions) ?? [:]
+        trusted = try c.decodeIfPresent(Bool.self, forKey: .trusted) ?? true
     }
 }
 

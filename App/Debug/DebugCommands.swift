@@ -254,7 +254,8 @@ enum DebugCommands {
             // workon?project=&task=[&agent=claude][&headless=1]
             if let name = arg("project"), let p = app.projects.match(name), let task = arg("task") {
                 let agent = AgentKind(tag: arg("agent") ?? "claude", bundleID: nil, termProgram: nil)
-                if arg("headless") != nil, let cwd = p.primaryPath { app.headless.start(agent: agent, project: p, cwd: cwd, task: task, resume: nil) }
+                if arg("headless") != nil, p.trusted, let cwd = p.primaryPath { app.headless.start(agent: agent, project: p, cwd: cwd, task: task, resume: nil) }
+                else if arg("headless") != nil { result = "project is not trusted for background runs" }
                 else { app.startWork(project: p, task: task, agent: agent) }
             } else { result = "unknown project" }
         case "settings":

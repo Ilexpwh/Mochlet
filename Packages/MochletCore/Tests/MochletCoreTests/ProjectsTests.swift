@@ -136,3 +136,16 @@ import Testing
         #expect(gargs.contains("--working-directory=/Users/me/p"))
     }
 }
+
+@Suite struct ProjectTrustTests {
+    @Test func trustDefaultsToTrueAndRoundTripsFalse() throws {
+        let legacy = Data(#"{"version":1,"projects":[{"slug":"a","name":"A","paths":["/tmp/a"]}]}"#.utf8)
+        let f = try ProjectsFile.decode(legacy)
+        #expect(f.projects[0].trusted == true)
+        var clone = Project(slug: "c", name: "C", paths: ["/tmp/c"], trusted: false)
+        clone.lastSessions["claude"] = "x"
+        let encoded = try ProjectsFile(projects: [clone]).encode()
+        #expect(String(decoding: encoded, as: UTF8.self).contains("\"trusted\" : false"))
+        #expect(try ProjectsFile.decode(encoded).projects[0].trusted == false)
+    }
+}

@@ -140,6 +140,7 @@ private struct ProjectRow: View {
                     Button("Open in VS Code") { app.projects.open(project: project, in: "vscode") }
                     Button("Show in Finder") { if let p = project.primaryPath { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) } }
                     Divider()
+                    Button(project.trusted ? "Untrust (no background runs)" : "Trust for background runs") { app.projects.setTrusted(project.slug, !project.trusted) }
                     Button("Remove from projects", role: .destructive) { app.projects.remove(project.slug) }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 10, weight: .bold)).frame(width: 18, height: 18)
@@ -159,7 +160,7 @@ private struct ProjectRow: View {
                         .focused($taskFocused)
                         .padding(.horizontal, 8).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.08)))
                         .onSubmit { go() }
-                    IslandButton(app.settings.headlessTasks ? "Run here" : "Open terminal", symbol: app.settings.headlessTasks ? "bolt" : "terminal") { go() }
+                    IslandButton(app.settings.headlessTasks && project.trusted ? "Run here" : "Open terminal", symbol: app.settings.headlessTasks && project.trusted ? "bolt" : "terminal") { go() }
                 }
                 .onAppear { taskFocused = true; app.window.focusInput() }
             }

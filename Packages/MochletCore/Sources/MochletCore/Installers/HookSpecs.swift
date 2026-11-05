@@ -493,7 +493,8 @@ public enum AmpPluginSpec {
         export default function (amp: any): void {
           amp.on('session.start', (e: any) => { forward('SessionStart', { session_id: e.thread?.id ?? '', cwd: e.cwd ?? '' }); });
           amp.on('agent.start', (e: any) => { forward('UserPromptSubmit', { session_id: e.thread?.id ?? '', prompt: e.prompt ?? '' }); });
-          amp.on('tool.call', (e: any) => { try { forward('PreToolUse', { session_id: e.thread?.id ?? '', tool_name: typeof e.tool === 'string' ? e.tool : '', tool_input: e.input ?? null }); } finally { return { action: 'allow' }; } });
+          // Observe only: no decision is returned, so Amp's own permission flow still applies.
+          amp.on('tool.call', (e: any) => { forward('PreToolUse', { session_id: e.thread?.id ?? '', tool_name: typeof e.tool === 'string' ? e.tool : '', tool_input: e.input ?? null }); });
           amp.on('tool.result', (e: any) => { forward('PostToolUse', { session_id: e.thread?.id ?? '', tool_name: typeof e.tool === 'string' ? e.tool : '' }); });
           amp.on('agent.end', (e: any) => { forward('Stop', { session_id: e.thread?.id ?? '', last_assistant_message: e.message ?? '' }); });
         }

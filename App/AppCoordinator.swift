@@ -281,7 +281,11 @@ final class AppCoordinator {
         guard let cwd = project.primaryPath else { return }
         var p = project
         if p.defaultAgent != agent.id { p.defaultAgent = agent.id; projects.update(p) }
-        if settings.headlessTasks {
+        if settings.headlessTasks, !project.trusted {
+            // A cloned repo can carry project-level hooks; the first run happens where the user can see it.
+            toast("\(project.name) is a clone you have not trusted yet, so this opens a terminal. Trust it from the Projects card for background runs.", symbol: "lock")
+        }
+        if settings.headlessTasks, project.trusted {
             headless.start(agent: agent, project: project, cwd: cwd, task: task, resume: nil)
             window.send(.collapse)
             toast("\(agent.displayName) is working on \(project.name).", symbol: "bolt")

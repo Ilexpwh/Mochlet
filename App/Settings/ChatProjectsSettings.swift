@@ -120,6 +120,8 @@ struct ProjectsSettingsView: View {
                         if !p.lastSessions.isEmpty {
                             Text(p.lastSessions.keys.sorted().joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
                         }
+                        Toggle("Trusted", isOn: Binding(get: { p.trusted }, set: { projects.setTrusted(p.slug, $0) })).toggleStyle(.checkbox).controlSize(.small)
+                            .help("Background (headless) runs only happen in trusted folders; clones start untrusted.")
                         Button("Remove") { projects.remove(p.slug) }.controlSize(.small)
                     }
                 }

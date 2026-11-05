@@ -118,6 +118,7 @@ struct ExpandedContent: View {
         case .ingest: IngestView(app: app)
         case .meetingLive: MeetingView(app: app)
         case .signals: SignalsView(app: app)
+        case .whatsNew: WhatsNewView(app: app)
         default: PlaceholderView(view: view)
         }
     }

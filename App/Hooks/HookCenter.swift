@@ -30,7 +30,7 @@ final class HookCenter {
             self.server = server
         } catch {
             lastError = error.localizedDescription
-            NSLog("hook socket: \(error.localizedDescription)")
+            MochletLogger(category: "hooks").error("hook socket: \(error.localizedDescription)")
         }
     }
 

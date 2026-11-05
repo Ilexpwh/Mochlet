@@ -3,7 +3,7 @@ import MochletCore
 import MochletServices
 import os
 
-private let logger = Logger(subsystem: "com.ilexpwh.Mochlet", category: "signals")
+private let logger = MochletLogger(category: "signals")
 
 /// The signals pipeline over `signals.sqlite`: new items → prefilter → body → two scores → writing →
 /// embedding → event clustering → hotness. Fetching happens outside (the controller pulls sources in

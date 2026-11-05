@@ -78,7 +78,7 @@ final class KnowledgeController {
         status = "indexing…"
         do {
             let created = try await engine.bootstrap()
-            if !created.isEmpty { NSLog("knowledge: bootstrapped %d items in %@", created.count, root.path) }
+            if !created.isEmpty { MochletLogger(category: "knowledge").info("bootstrapped \(created.count) items in \(root.path)") }
             let report = try await engine.reindex()
             counts = await engine.counts()
             status = report.added + report.updated + report.removed == 0 ? nil : report.summary

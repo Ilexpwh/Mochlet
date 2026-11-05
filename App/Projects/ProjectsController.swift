@@ -315,7 +315,7 @@ final class ProjectsController {
                 var error: NSDictionary?
                 let script = NSAppleScript(source: source)
                 script?.executeAndReturnError(&error)
-                if let error { NSLog("launch applescript: \(error)"); return false }
+                if let error { MochletLogger(category: "projects").error("launch applescript: \(error)"); return false }
             case .open(let args):
                 if !run("/usr/bin/open", args) { return false }
             case .command(let name, let args):

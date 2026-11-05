@@ -134,7 +134,7 @@ final class SettingsStore {
             do {
                 if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             } catch {
-                NSLog("login item: \(error.localizedDescription)")
+                MochletLogger(category: "app").error("login item: \(error.localizedDescription)")
             }
         }
     }

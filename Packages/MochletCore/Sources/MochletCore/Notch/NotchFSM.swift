@@ -3,7 +3,7 @@ import Foundation
 /// What the island shows while expanded.
 public enum NotchView: String, Sendable, Codable, CaseIterable, Equatable {
     case greeting, home, ask, menu, approval, question, chat, diff, sessionDetail
-    case meetingLive, ingest, projects, knowledge, signals, toast
+    case meetingLive, ingest, projects, knowledge, signals, toast, whatsNew
 }
 
 /// Pure open/close logic of the island. Inputs come from the pointer poll, clicks, hooks and

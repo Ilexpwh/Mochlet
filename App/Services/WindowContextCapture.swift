@@ -76,7 +76,7 @@ enum WindowContextCapture {
             guard let png = rep.representation(using: .png, properties: [:]) else { return nil }
             return png.base64EncodedString()
         } catch {
-            NSLog("window capture: \(error.localizedDescription)")
+            MochletLogger(category: "chat").error("window capture: \(error.localizedDescription)")
             return nil
         }
     }

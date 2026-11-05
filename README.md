@@ -139,6 +139,16 @@ server with a bearer token, AIHOT's shape, ≤ 50 per call) or drop JSON files i
 `~/Mochlet/signals/inbox/`. `x_search` sources need a SocialData key; WeChat accounts need AIHOT's
 relay and import disabled. A daily budget caps brain calls (T2 waits first).
 
+## Permissions, logs and housekeeping
+
+Mochlet asks for each macOS permission the first time a feature needs it (microphone for
+push-to-talk, system audio for meetings, Accessibility for window titles, Screen Recording only
+if you turn window screenshots on, Automation when it talks to a terminal or browser). Settings →
+General → Permissions shows where each one stands with Ask and Open buttons. Diagnostics on the
+same tab exports the last two hours of Mochlet's log (`~/Library/Logs/Mochlet/`), opens the data
+folders, measures them and cleans up derived files (daily by itself; never anything under
+`~/Mochlet`). A What's new card appears once per version after the greeting.
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -161,6 +171,7 @@ relay and import disabled. A daily budget caps brain calls (T2 waits first).
 ```sh
 scripts/build-app.sh debug        # → build/debug/Mochlet.app (SwiftPM; no Xcode project needed)
 scripts/build-app.sh release      # → build/release/Mochlet.app (hardened runtime, ad-hoc signed)
+SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=mochlet scripts/release.sh   # signed, notarised zip + DMG
 scripts/dev-run.sh                # build debug and launch; USE_XCODE=1 builds with xcodebuild instead
 scripts/test.sh                   # SlimeKit + MochletCore + app tests
 scripts/bootstrap.sh              # installs xcodegen, generates Mochlet.xcodeproj (optional)
@@ -203,12 +214,16 @@ open "mochlet://debug/meeting?start=1&$T"                  # stop=1 · mark=text
 .build/debug/mochlet-cli diarize call.wav                    # who speaks when on one recording, with the similarity matrix behind it
 open "mochlet://debug/signals?run=1&$T"                    # fetch every source and run the pipeline; digest=1 · detect=https://… · add=feed|list · import=/path/sources.json
 open "mochlet://debug/signals?pushtest=1&$T"               # POST two items to the local endpoint with the stored token (newtoken=1 makes one); push=1 reads inbox/*.json
+open "mochlet://debug/diag?perms=1&$T"                     # permission states → result.txt; logs=1 exports the log, clean=1 runs housekeeping, whatsnew=1 shows the card
 open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach
 open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/knowledge/vision-pro.md&$T"   # kb?find=… · ask=… · file=1 · lint=1 · url=… · text=…
 open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/ingest/sample.pptx&force=1&question=1&$T"   # re-chew, always ask; pick=inbox · move=slug · window=1 · retry=1
 ```
+
+How the pieces fit is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the manual pass before a
+release is [docs/VERIFY.md](docs/VERIFY.md).
 
 `scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay
 and socket; `scripts/test-hook.sh` checks the relay against a fake socket (`scripts/fake-socket.py`).

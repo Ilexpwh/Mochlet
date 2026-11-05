@@ -50,7 +50,7 @@ enum KeychainStore {
             status = SecItemAdd(add as CFDictionary, nil)
         }
         if status != errSecSuccess {
-            NSLog("keychain set failed (\(status)); using the secrets file")
+            MochletLogger(category: "app").error("keychain set failed (\(status)); using the secrets file")
             var f = fallback()
             f[account] = value
             writeFallback(f)

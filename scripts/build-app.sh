@@ -30,8 +30,10 @@ cp "$BIN/mochlet-cli" "$APP/Contents/Helpers/mochlet-cli"
 
 sed -e 's/\$(EXECUTABLE_NAME)/Mochlet/g' -e 's/\$(DEVELOPMENT_LANGUAGE)/en/g' Resources/Info.plist > "$APP/Contents/Info.plist"
 HASH=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_NUMBER=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" "$APP/Contents/Info.plist" >/dev/null
 /usr/libexec/PlistBuddy -c "Add :MochletGitHash string $HASH" "$APP/Contents/Info.plist" >/dev/null
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist" >/dev/null
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 ICONSET="build/$CONFIG/AppIcon.iconset"
@@ -47,8 +49,10 @@ for b in "$BIN"/*.bundle; do
 done
 
 if [ "$CONFIG" = "release" ]; then
-  for h in mochlet-hook mochlet-mcp mochlet-cli; do codesign --force --sign "$IDENTITY" --options runtime --timestamp=none "$APP/Contents/Helpers/$h"; done
-  codesign --force --sign "$IDENTITY" --options runtime --timestamp=none --entitlements Mochlet.entitlements "$APP"
+  # Hardened runtime; a secure timestamp only with a real identity (ad hoc signatures cannot carry one).
+  TS="--timestamp=none"; [ "$IDENTITY" != "-" ] && TS="--timestamp"
+  for h in mochlet-hook mochlet-mcp mochlet-cli; do codesign --force --sign "$IDENTITY" --options runtime $TS "$APP/Contents/Helpers/$h"; done
+  codesign --force --sign "$IDENTITY" --options runtime $TS --entitlements Mochlet.entitlements "$APP"
 else
   for h in mochlet-hook mochlet-mcp mochlet-cli; do codesign --force --sign "$IDENTITY" "$APP/Contents/Helpers/$h"; done
   codesign --force --sign "$IDENTITY" --entitlements Mochlet.entitlements "$APP"

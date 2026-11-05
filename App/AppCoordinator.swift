@@ -58,6 +58,7 @@ final class AppCoordinator {
     let notch = NotchStore()
     let slime = SlimeBridge()
     let plans = PlanStore()
+    let permissions = PermissionCenter()
     private(set) var sessions: SessionStore!
     private(set) var approvals: ApprovalCenter!
     private(set) var questions: QuestionCenter!
@@ -90,6 +91,7 @@ final class AppCoordinator {
     }
 
     func start() {
+        MochletLogger(category: "app").notice("Mochlet \(WhatsNew.version) (\(Bundle.main.infoDictionary?["MochletGitHash"] as? String ?? "dev")) starting on macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         slime.apply(settings: settings)
         slime.sound.preload()
         slime.onEvent = { [weak self] e in self?.handle(e) }
@@ -135,12 +137,19 @@ final class AppCoordinator {
         DispatchQueue.main.asyncAfter(deadline: .now() + (settings.greetOnLaunch ? 2.8 : 0.6)) {
             MainActor.assumeIsolated { AppCoordinator.shared.desktop.restoreIfEnabled() }
         }
+        Diagnostics.startJanitor()
+        if settings.lastSeenVersion != WhatsNew.version {
+            DispatchQueue.main.asyncAfter(deadline: .now() + (settings.greetOnLaunch ? 4.2 : 1.2)) {
+                MainActor.assumeIsolated { AppCoordinator.shared.openWhatsNew() }
+            }
+        }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { AppCoordinator.shared.applySettings() }
         }
     }
 
     func stop() {
+        MochletLogger(category: "app").notice("Mochlet stopping")
         hooks?.stop()
         knowledge?.stop()
         HotKeyCenter.shared.stop()
@@ -452,6 +461,21 @@ final class AppCoordinator {
 
     func openSignals() {
         window.send(.openExternally(.signals))
+    }
+
+    /// The What's new card (once per version after the greeting; any time from Settings → General).
+    func openWhatsNew() {
+        guard !(approvals.count > 0) else { return }      // never over an approval
+        window.send(.openExternally(.whatsNew))
+    }
+
+    func dismissWhatsNew() {
+        settings.lastSeenVersion = WhatsNew.version
+        window.send(.collapse)
+    }
+
+    func openGuide() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/Ilexpwh/Mochlet#readme")!)
     }
 
     // MARK: - Hot keys

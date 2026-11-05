@@ -70,8 +70,32 @@ enum DebugCommands {
                 result = shot(app, name: safeName(arg("name")), full: arg("full") == "1")
             }
         case "settings":
-            // settings?tab=general|agents|chat|projects|knowledge|voice|signals | close=1
+            // settings?tab=general|agents|chat|projects|knowledge|voice|signals | close=1 | scroll=bottom|top
             if arg("close") != nil { app.settingsWindow?.close() } else { app.openSettings(tab: arg("tab")) }
+            if let where_ = arg("scroll"), let content = app.settingsWindow?.window?.contentView {
+                func scrollViews(_ v: NSView) -> [NSScrollView] { (v as? NSScrollView).map { [$0] } ?? [] + v.subviews.flatMap(scrollViews) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    for sv in scrollViews(content) {
+                        guard let doc = sv.documentView else { continue }
+                        let y = where_ == "bottom" ? max(0, doc.frame.height - sv.contentView.bounds.height) : 0
+                        sv.contentView.scroll(to: NSPoint(x: 0, y: sv.documentView?.isFlipped == true ? y : 0))
+                        sv.reflectScrolledClipView(sv.contentView)
+                    }
+                }
+            }
+        case "diag":
+            // diag?logs=1 (export, result = path) | clean=1 (housekeeping, result = files/bytes) | perms=1 (result = rows) | whatsnew=1
+            if arg("logs") != nil {
+                do { result = try Diagnostics.exportLogs().path } catch { result = "export failed: \(error.localizedDescription)" }
+            } else if arg("clean") != nil {
+                let s = Diagnostics.housekeeping()
+                result = "removed \(s.files) files, \(s.bytes) bytes"
+            } else if arg("perms") != nil {
+                app.permissions.refresh()
+                result = app.permissions.rows.map { "\($0.kind.rawValue)=\($0.status.label)" }.joined(separator: " | ")
+            } else if arg("whatsnew") != nil {
+                app.openWhatsNew()
+            }
         case "fsm":
             let input: NotchFSM.Input?
             switch arg("input") ?? "" {
@@ -486,6 +510,8 @@ enum DebugCommands {
                         "summary": mt.last?.summary?.overview ?? "", "recent": mt.recent.count, "ask": mt.detection?.appName ?? "", "systemAudio": mt.systemAudioError ?? "ok",
                         "micLevel": mt.micLevel, "systemLevel": mt.systemLevel] as [String: Any]
         d["signals"] = app.signals!.debugState()
+        app.permissions.refresh()
+        d["permissions"] = Dictionary(uniqueKeysWithValues: app.permissions.rows.map { ($0.kind.rawValue, $0.status.label) })
         let v = app.voice!
         d["voice"] = ["state": v.state.description, "caption": v.caption, "transcript": v.transcript, "heard": v.lastHeard, "action": v.lastAction ?? "", "error": v.error ?? "",
                       "locale": v.localeID, "pending": v.pending?.question ?? "", "assets": v.assetState.map { "\($0)" } ?? "", "download": v.downloadProgress ?? -1,

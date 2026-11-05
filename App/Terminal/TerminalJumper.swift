@@ -42,7 +42,7 @@ final class TerminalJumper {
             var error: NSDictionary?
             let script = NSAppleScript(source: source)
             let result = script?.executeAndReturnError(&error)
-            if let error { NSLog("jump applescript: \(error)") }
+            if let error { MochletLogger(category: "terminal").error("jump applescript: \(error)") }
             return result?.booleanValue == true
         case .command(let name, let args, let bundleID):
             guard isRunning(bundleID) else { return false }

@@ -40,7 +40,7 @@ enum RelayInstaller {
             return target
         } catch {
             try? fm.removeItem(at: temp)
-            NSLog("\(name) install failed: \(error.localizedDescription)")
+            MochletLogger(category: "hooks").error("\(name) install failed: \(error.localizedDescription)")
             return fm.isExecutableFile(atPath: target.path) ? target : nil
         }
     }

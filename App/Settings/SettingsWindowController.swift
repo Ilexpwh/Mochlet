@@ -261,12 +261,18 @@ struct GeneralSettingsView: View {
                     Text("~/Library/Application Support/Mochlet/Sounds/<name>.wav").font(.caption).textSelection(.enabled)
                 }
                 LabeledContent("Version") {
-                    Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["MochletGitHash"] as? String ?? "dev"))")
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["MochletGitHash"] as? String ?? "dev"))")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("What's new") { app.openWhatsNew() }.controlSize(.small)
+                    }
                 }
             }
+            PermissionsSection(app: app)
+            DiagnosticsSection(app: app)
         }
         .formStyle(.grouped)
+        .onAppear { app.permissions.refresh() }
     }
 }
 

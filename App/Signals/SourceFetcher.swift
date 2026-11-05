@@ -65,6 +65,20 @@ final class SiteRedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Send
             completionHandler(ok ? request : nil)
         }
     }
+
+    /// The name check above can be beaten by a name that resolves differently a moment later, so every
+    /// off-site hop is also checked by the address it actually connected to (on-site hops are the user's).
+    func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
+        for t in metrics.transactionMetrics {
+            guard let url = t.request.url, !SignalText.sameSite(url.absoluteString, site) else { continue }
+            guard let addr = t.remoteAddress, !addr.isEmpty else { lock.withLock { didRefuse = true }; continue }
+            let ok: Bool
+            if addr.contains(":") { ok = HostPolicy.isPublicV6(addr) }
+            else if let v4 = HostPolicy.IPv4(addr) { ok = HostPolicy.isPublic(v4) }
+            else { ok = false }
+            if !ok { lock.withLock { didRefuse = true } }
+        }
+    }
 }
 
 enum SignalFetchError: LocalizedError {

@@ -276,3 +276,42 @@ Seen on this Mac (2026-11-06): 21 feeds fetched in ~30 s; the brain (Claude Code
 scoring call and a few minutes per writing batch, so the first run of a fresh install is 10–20 minutes;
 `openai.com` resolves to a 100.64/10 address on this network, which is why user-configured sources are
 not gated by the public-host policy (only bodies of pushed-in items are).
+
+## Polish and release (M11)
+
+1. What's new: on the first launch of a version the card appears after the greeting (title, four
+   lines, Got it / Settings / Guide); Got it marks the version seen. Settings → General → Version →
+   What's new shows it again.
+2. Permissions: Settings → General → Permissions lists Microphone, System audio recording,
+   Accessibility, Screen recording, Automation (per running terminal and browser) and Launch at
+   login with a coloured dot and the state (allowed / denied / not asked yet / asked when first
+   needed). Ask puts the system prompt up where macOS has one; Open goes to the right System
+   Settings pane; Refresh re-reads everything. After a meeting the System audio row says whether
+   the tap was allowed.
+3. Logs: Settings → General → Diagnostics → Export logs writes `~/Library/Logs/Mochlet/
+   mochlet-<stamp>.log` (first line: version, build hash, macOS) and reveals it; the rolling
+   `mochlet.log` is there as well. Open Logs folder / Open ~/Mochlet / Open support folder reveal
+   the folders; Measure lists the size of each data folder; Clean up now reports what it removed.
+4. Housekeeping runs a minute after launch and daily: exported logs older than 14 days, debug
+   screenshots older than 7, processed inbox files older than 30, cached pages older than 30.
+5. Release: `scripts/release.sh` (ad hoc) produces `build/release/Mochlet-2.0.0.zip` and `.dmg`;
+   with `SIGN_IDENTITY` and `NOTARY_PROFILE` it signs, notarises and staples both.
+6. Idle: `scripts/measure-idle.sh 120` with the island collapsed and Settings closed stays under
+   1 % of a core.
+
+Scripted version:
+
+```sh
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/diag?whatsnew=1&$T"; open "mochlet://debug/shot?name=whatsnew&$T"
+open "mochlet://debug/diag?perms=1&$T"; cat ~/Library/Logs/Mochlet/debug/result.txt     # microphone=… | systemAudio=… | …
+open "mochlet://debug/diag?logs=1&$T"; cat "$(cat ~/Library/Logs/Mochlet/debug/result.txt)" | head
+open "mochlet://debug/diag?clean=1&$T"; cat ~/Library/Logs/Mochlet/debug/result.txt     # removed n files, m bytes
+open "mochlet://debug/settings?tab=general&scroll=bottom&$T"; open "mochlet://debug/shot?name=settings-general&window=settings&$T"
+scripts/release.sh && ls build/release
+```
+
+Seen on this Mac (2026-11-06): the unified log store cannot be read back here (`log show` and
+`OSLogStore` both answer "Operation not permitted"), which is why Mochlet keeps its own rolling log
+file and exports from it.
+

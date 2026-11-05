@@ -5,7 +5,7 @@ import MochletServices
 import SlimeKit
 import os
 
-private let logger = Logger(subsystem: "com.ilexpwh.Mochlet", category: "signals")
+private let logger = MochletLogger(category: "signals")
 
 /// AI signals: `~/Mochlet/signals/{sources.json, rubric.md, inbox/}` and `signals.sqlite` under
 /// Application Support. A 60 s tick fetches the sources that are due (three at a time), runs the

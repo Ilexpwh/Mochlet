@@ -5,7 +5,7 @@ import MochletServices
 import SlimeKit
 import os
 
-private let logger = Logger(subsystem: "com.ilexpwh.Mochlet", category: "meeting")
+private let logger = MochletLogger(category: "meeting")
 
 /// The meeting note-taker: triple-click (or the detector's card) starts a recording of your microphone
 /// and of what the Mac plays, transcribed live; stop writes the transcript, the summary, the knowledge
@@ -217,6 +217,7 @@ final class MeetingController {
                 self.mic = capture
                 self.tap = tapError == nil ? t : nil
                 self.systemAudioError = tapError
+                PermissionCenter.recordSystemAudio(granted: tapError == nil)
             } catch {
                 undo()
                 guard self.state == .starting else { return }

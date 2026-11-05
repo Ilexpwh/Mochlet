@@ -107,7 +107,10 @@ private let rdf = """
 @Test func onlyWebLinksAreSignals() {
     #expect(SignalText.isWebURL("https://openai.com/index/x") && SignalText.isWebURL("http://example.org"))
     #expect(!SignalText.isWebURL("file:///etc/passwd") && !SignalText.isWebURL("javascript:alert(1)") && !SignalText.isWebURL("mailto:a@b.c") && !SignalText.isWebURL("x-apple.systempreferences:"))
-    #expect(SignalText.sameSite("https://www.openai.com/a", "https://openai.com/news/rss.xml") && !SignalText.sameSite("https://evil.example/a", "https://openai.com/rss"))
+    #expect(SignalText.sameSite("https://www.openai.com/a", "https://openai.com/news/rss.xml") && SignalText.sameSite("https://openai.com/a", "https://www.openai.com/rss"))
+    #expect(SignalText.sameSite("https://blog.openai.com/a", "https://openai.com/rss") && !SignalText.sameSite("https://openai.com/a", "https://blog.openai.com/rss"))
+    #expect(!SignalText.sameSite("https://evil.example/a", "https://openai.com/rss") && !SignalText.sameSite("https://evil.github.io/a", "https://foo.github.io/feed"))
+    #expect(!SignalText.sameSite("https://notopenai.com/a", "https://openai.com/rss") && !SignalText.sameSite("http://10.0.1.2/a", "http://10.0.1.1/feed") && SignalText.sameSite("http://10.0.1.1/a", "http://10.0.1.1/feed"))
     #expect(WebListExtractor.resolve("file:///tmp/x", base: URL(string: "https://a.b/")) == nil)
     #expect(WebListExtractor.resolve("/p", base: URL(string: "https://a.b/")) == "https://a.b/p")
     let items = ExternalItem.parse(.array([.object(["title": .string("ok"), "url": .string("https://a.b/1")]), .object(["title": .string("bad"), "url": .string("file:///x")])]))

@@ -19,19 +19,23 @@ enum SignalFetch {
 
     /// `publicOnly` gates the host and every redirect (for URLs that did not come from the user's own
     /// configuration, such as items pushed in by another program); sources.json is the user's choice.
+    /// `site` (a URL the user configured) lets a fetch of one of that site's own pages follow redirects
+    /// only within the site or to public hosts, never onto a private address somewhere else.
     static func get(_ url: URL, etag: String? = nil, lastModified: String? = nil, accept: String? = nil, headers: [String: String] = [:],
-                    maxBytes: Int = 5_000_000, publicOnly: Bool = false) async throws -> Result {
+                    maxBytes: Int = 5_000_000, publicOnly: Bool = false, site: String? = nil) async throws -> Result {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https", url.host != nil else { throw SignalFetchError.noResponse(url.absoluteString) }
         if publicOnly, !(await HostPolicy.allows(url)) { throw SignalFetchError.privateHost(url.host ?? "") }
+        if let site, !publicOnly, !SignalText.sameSite(url.absoluteString, site), !(await HostPolicy.allows(url)) { throw SignalFetchError.privateHost(url.host ?? "") }
         var req = URLRequest(url: url)
         req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         if let accept { req.setValue(accept, forHTTPHeaderField: "Accept") }
         if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
         if let lastModified { req.setValue(lastModified, forHTTPHeaderField: "If-Modified-Since") }
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
-        let guardian = publicOnly ? RedirectGuard() : nil
+        let guardian: URLSessionTaskDelegate? = publicOnly ? RedirectGuard() : site.map { SiteRedirectGuard(site: $0) }
         let (data, resp) = try await StaticFetcher.session.data(for: req, delegate: guardian)
-        if guardian?.sawPrivateAddress == true { throw SignalFetchError.privateHost(url.host ?? "") }
+        if (guardian as? RedirectGuard)?.sawPrivateAddress == true { throw SignalFetchError.privateHost(url.host ?? "") }
+        if let g = guardian as? SiteRedirectGuard, g.refused { throw SignalFetchError.privateHost(url.host ?? "") }
         guard let http = resp as? HTTPURLResponse else { throw SignalFetchError.noResponse(url.host ?? "") }
         if http.statusCode == 304 {
             return Result(data: Data(), status: 304, etag: etag, lastModified: lastModified, contentType: nil, charset: nil, finalURL: http.url ?? url)
@@ -41,6 +45,25 @@ enum SignalFetch {
         return Result(data: data, status: http.statusCode,
                       etag: http.value(forHTTPHeaderField: "ETag"), lastModified: http.value(forHTTPHeaderField: "Last-Modified"),
                       contentType: http.value(forHTTPHeaderField: "Content-Type")?.lowercased(), charset: http.textEncodingName, finalURL: http.url ?? url)
+    }
+}
+
+/// Redirects while reading a user-configured site's own page: stay on the site or go to a public host.
+final class SiteRedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private let site: String
+    private let lock = NSLock()
+    private var didRefuse = false
+    var refused: Bool { lock.withLock { didRefuse } }
+    init(site: String) { self.site = site }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        guard let url = request.url else { completionHandler(nil); return }
+        if SignalText.sameSite(url.absoluteString, site) { completionHandler(request); return }
+        Task {
+            let ok = await HostPolicy.allows(url)
+            if !ok { self.lock.withLock { self.didRefuse = true } }
+            completionHandler(ok ? request : nil)
+        }
     }
 }
 
@@ -177,8 +200,8 @@ enum SourceFetcher {
     }
 
     /// Body text for items whose feed gave only a blurb (T1 / T1.5 only): the page's main content.
-    static func body(for url: URL, publicOnly: Bool) async throws -> String {
-        let r = try await SignalFetch.get(url, accept: "text/html, */*;q=0.5", maxBytes: 3_000_000, publicOnly: publicOnly)
+    static func body(for url: URL, publicOnly: Bool, site: String? = nil) async throws -> String {
+        let r = try await SignalFetch.get(url, accept: "text/html, */*;q=0.5", maxBytes: 3_000_000, publicOnly: publicOnly, site: site)
         guard r.contentType?.contains("html") ?? true else { return "" }
         return String(HTMLToMarkdown.convert(ReaderHeuristics.mainContent(r.text), baseURL: url).prefix(6000))
     }

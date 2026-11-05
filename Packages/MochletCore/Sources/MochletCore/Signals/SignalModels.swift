@@ -276,11 +276,17 @@ public enum SignalText {
         return scheme == "http" || scheme == "https"
     }
 
-    /// Same site = same registrable-ish domain (last two labels), so `openai.com` covers `www.openai.com`.
-    public static func sameSite(_ a: String?, _ b: String?) -> Bool {
-        guard let a, let b, let ha = URL(string: a)?.host?.lowercased(), let hb = URL(string: b)?.host?.lowercased() else { return false }
-        func base(_ h: String) -> String { let p = h.split(separator: "."); return p.count >= 2 ? p.suffix(2).joined(separator: ".") : h }
-        return base(ha) == base(hb)
+    /// `link` is on `site`'s own site: the same host, or a true subdomain of the site's host (with a
+    /// leading `www.` dropped from the site, so `openai.com/news/rss.xml` covers `www.openai.com`).
+    /// Hosts that are addresses must be identical; no suffix heuristics (`foo.github.io` is not `github.io`).
+    public static func sameSite(_ link: String?, _ site: String?) -> Bool {
+        guard let link, let site, isWebURL(link), isWebURL(site),
+              let hl = URL(string: link)?.host?.lowercased(), var hs = URL(string: site)?.host?.lowercased() else { return false }
+        if hl == hs { return true }
+        let numeric = { (h: String) in h.contains(":") || h.allSatisfy { $0.isNumber || $0 == "." } }
+        if numeric(hl) || numeric(hs) { return false }
+        if hs.hasPrefix("www.") { hs.removeFirst(4) }
+        return hl == hs || hl.hasSuffix("." + hs)
     }
 
     public static func normalizedTitle(_ t: String) -> String {

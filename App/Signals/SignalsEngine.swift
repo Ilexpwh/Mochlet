@@ -197,8 +197,9 @@ actor SignalsEngine {
             // Only a page on the source's own site inherits the trust the user gave that source (its feed host may
             // resolve privately on this network); every other link a feed hands us is fetched as a public URL.
             let src = source(it.sourceID)
-            let ownSite = src != nil && src!.kind != .external && SignalText.sameSite(it.url, src!.url)
-            if let b = try? await SourceFetcher.body(for: u, publicOnly: !ownSite), !b.isEmpty { try? store.setBody(it.id, b); bodies += 1 }
+            let site = src.flatMap { $0.kind == .external ? nil : $0.url }
+            let ownSite = SignalText.sameSite(it.url, site)
+            if let b = try? await SourceFetcher.body(for: u, publicOnly: !ownSite, site: ownSite ? site : nil), !b.isEmpty { try? store.setBody(it.id, b); bodies += 1 }
         }
         if bodies > 0, let again = try? store.items(status: .new, limit: 400) {
             let ids = Set(fresh.map(\.id))

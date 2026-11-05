@@ -110,7 +110,8 @@ final class ProjectsController {
         let displayName = (name?.isEmpty == false ? name! : (normalized as NSString).lastPathComponent)
         let slug = Slug.unique(Slug.make(displayName), taken: Set(file.projects.map(\.slug)))
         let gitRepo = repo ?? Self.gitRemote(at: normalized)
-        let p = Project(slug: slug, name: displayName, paths: [normalized], repo: gitRepo, defaultAgent: defaultAgent, trusted: trusted)
+        let underCloneRoot = normalized.hasPrefix(ProjectResolver.normalize(Self.cloneRoot.path) + "/")
+        let p = Project(slug: slug, name: displayName, paths: [normalized], repo: gitRepo, defaultAgent: defaultAgent, trusted: trusted && !underCloneRoot)
         file.projects.append(p)
         save()
         note = "Added \(displayName)."
@@ -195,8 +196,8 @@ final class ProjectsController {
         let folder = name?.isEmpty == false ? name! : base
         let dest = Self.cloneRoot.appendingPathComponent(folder)
         if FileManager.default.fileExists(atPath: dest.path) {
-            add(path: dest.path, name: name, repo: url)
-            note = "\(folder) already exists; registered it."
+            add(path: dest.path, name: name, repo: url, trusted: false)
+            note = "\(folder) already exists; registered it (untrusted until you say so)."
             return
         }
         try? FileManager.default.createDirectory(at: Self.cloneRoot, withIntermediateDirectories: true)

@@ -72,7 +72,7 @@ public enum JSONListMapper {
             let title = c.titlePaths.lazy.compactMap { value(item, path: $0).string?.trimmed }.first { !$0.isEmpty } ?? ""
             var url = ""
             if let t = c.urlTemplate { url = fill(t, item: item) } else if let p = c.urlPath { url = value(item, path: p).string ?? "" } else { url = item["url"].string ?? item["link"].string ?? "" }
-            guard !title.isEmpty, !url.isEmpty else { return nil }
+            guard !title.isEmpty, SignalText.isWebURL(url) else { return nil }
             let summary = c.summaryPath.flatMap { value(item, path: $0).string } ?? ""
             let id = c.idPath.flatMap { p -> String? in let v = value(item, path: p); return v.string ?? v.int.map(String.init) } ?? url
             var published: Date?
@@ -145,8 +145,8 @@ public enum WebListExtractor {
     public static func resolve(_ href: String, base: URL?) -> String? {
         let h = href.trimmed
         guard !h.isEmpty, !h.hasPrefix("#"), !h.lowercased().hasPrefix("javascript:"), !h.lowercased().hasPrefix("mailto:") else { return nil }
-        if let u = URL(string: h), u.scheme != nil { return u.absoluteString }
-        guard let base, let u = URL(string: h, relativeTo: base)?.absoluteURL else { return nil }
+        if let u = URL(string: h), u.scheme != nil { return SignalText.isWebURL(u.absoluteString) ? u.absoluteString : nil }
+        guard let base, let u = URL(string: h, relativeTo: base)?.absoluteURL, SignalText.isWebURL(u.absoluteString) else { return nil }
         return u.absoluteString
     }
 }

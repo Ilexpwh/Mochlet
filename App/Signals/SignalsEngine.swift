@@ -113,7 +113,7 @@ actor SignalsEngine {
                     let rule = SignalScheduling.backfill(published: it.publishedAt, firstFetch: firstFetch, now: now)
                     guard rule.take else { continue }
                     it.backfill = rule.backfill
-                    if it.title.isEmpty { continue }
+                    if it.title.isEmpty || !SignalText.isWebURL(it.url) { continue }
                     if recent.contains(where: { $0.id != it.id && SimHash.hamming($0.hash, it.simhash) <= 3 }) { continue }
                     if (try? store.insert(it)) == true { created += 1; st.fetched += 1; recent.append((it.id, it.simhash)) }
                 }
@@ -138,7 +138,7 @@ actor SignalsEngine {
         var created = 0
         var recent = (try? store.recentSimhashes(now: now)) ?? []
         for e in items {
-            guard !e.title.isEmpty, !e.url.isEmpty else { continue }
+            guard !e.title.isEmpty, SignalText.isWebURL(e.url) else { continue }
             let it = SignalItem(sourceID: sourceID, externalID: e.externalID ?? e.url, url: e.url, title: e.title, summary: e.summary ?? "",
                                 publishedAt: e.publishedAt.flatMap(FeedParser.date), discoveredAt: now)
             if recent.contains(where: { SimHash.hamming($0.hash, it.simhash) <= 3 }) { continue }
@@ -192,9 +192,13 @@ actor SignalsEngine {
         // 2. Body for T1 / T1.5 items whose feed gave only a blurb.
         var bodies = 0
         for it in fresh where it.body.isEmpty && it.summary.count < 200 && (tiers[it.sourceID] ?? .t2) != .t2 && bodies < 12 {
-            guard let u = URL(string: it.url) else { continue }
+            guard SignalText.isWebURL(it.url), let u = URL(string: it.url) else { continue }
             stage("reading \(u.host ?? "page")")
-            if let b = try? await SourceFetcher.body(for: u, publicOnly: source(it.sourceID)?.kind == .external), !b.isEmpty { try? store.setBody(it.id, b); bodies += 1 }
+            // Only a page on the source's own site inherits the trust the user gave that source (its feed host may
+            // resolve privately on this network); every other link a feed hands us is fetched as a public URL.
+            let src = source(it.sourceID)
+            let ownSite = src != nil && src!.kind != .external && SignalText.sameSite(it.url, src!.url)
+            if let b = try? await SourceFetcher.body(for: u, publicOnly: !ownSite), !b.isEmpty { try? store.setBody(it.id, b); bodies += 1 }
         }
         if bodies > 0, let again = try? store.items(status: .new, limit: 400) {
             let ids = Set(fresh.map(\.id))

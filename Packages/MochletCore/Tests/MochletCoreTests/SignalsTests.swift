@@ -104,6 +104,16 @@ private let rdf = """
     #expect(SignalScheduling.backfill(published: now.addingTimeInterval(-3600), firstFetch: false, now: now) == (true, false))
 }
 
+@Test func onlyWebLinksAreSignals() {
+    #expect(SignalText.isWebURL("https://openai.com/index/x") && SignalText.isWebURL("http://example.org"))
+    #expect(!SignalText.isWebURL("file:///etc/passwd") && !SignalText.isWebURL("javascript:alert(1)") && !SignalText.isWebURL("mailto:a@b.c") && !SignalText.isWebURL("x-apple.systempreferences:"))
+    #expect(SignalText.sameSite("https://www.openai.com/a", "https://openai.com/news/rss.xml") && !SignalText.sameSite("https://evil.example/a", "https://openai.com/rss"))
+    #expect(WebListExtractor.resolve("file:///tmp/x", base: URL(string: "https://a.b/")) == nil)
+    #expect(WebListExtractor.resolve("/p", base: URL(string: "https://a.b/")) == "https://a.b/p")
+    let items = ExternalItem.parse(.array([.object(["title": .string("ok"), "url": .string("https://a.b/1")]), .object(["title": .string("bad"), "url": .string("file:///x")])]))
+    #expect(items.map(\.title) == ["ok"])
+}
+
 @Test func jsonListAndWebListMapping() {
     let json = JSONValue.parse("""
     {"data": {"posts": [{"id": 7, "headline": "GPU prices fall", "slug": "gpu", "ts": 1762400000, "excerpt": "<b>Down</b> 20%"},

@@ -480,7 +480,7 @@ final class SignalsController {
     func openSources() { NSWorkspace.shared.open(Self.sourcesURL) }
     func open(event: SignalEvent) {
         Task { @MainActor in
-            guard let engine, let it = await engine.item(event.topItemID), let u = URL(string: it.url) else { return }
+            guard let engine, let it = await engine.item(event.topItemID), SignalText.isWebURL(it.url), let u = URL(string: it.url) else { return }
             NSWorkspace.shared.open(u)
         }
     }

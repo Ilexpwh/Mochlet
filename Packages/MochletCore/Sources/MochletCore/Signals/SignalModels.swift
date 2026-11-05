@@ -260,7 +260,7 @@ public struct ExternalItem: Codable, Sendable, Equatable {
     public static func parse(_ json: JSONValue) -> [ExternalItem] {
         let list = json["items"].array ?? json.array ?? []
         return list.compactMap { v in
-            guard let title = v["title"].string, !title.isEmpty, let url = v["url"].string, !url.isEmpty else { return nil }
+            guard let title = v["title"].string, !title.isEmpty, let url = v["url"].string, SignalText.isWebURL(url) else { return nil }
             return ExternalItem(title: title, url: url, summary: v["summary"].string, publishedAt: v["published_at"].string ?? v["publishedAt"].string,
                                 source: v["source"].string, externalID: v["external_id"].string ?? v["id"].string)
         }
@@ -269,6 +269,20 @@ public struct ExternalItem: Codable, Sendable, Equatable {
 
 /// Text helpers shared by dedupe, prefilter and clustering.
 public enum SignalText {
+    /// Only http(s) links with a host are signals; feeds and pushed items may carry anything else
+    /// (`file:`, `javascript:`, custom schemes) and nothing downstream should open or fetch those.
+    public static func isWebURL(_ s: String) -> Bool {
+        guard let u = URL(string: s.trimmingCharacters(in: .whitespacesAndNewlines)), let scheme = u.scheme?.lowercased(), let host = u.host, !host.isEmpty else { return false }
+        return scheme == "http" || scheme == "https"
+    }
+
+    /// Same site = same registrable-ish domain (last two labels), so `openai.com` covers `www.openai.com`.
+    public static func sameSite(_ a: String?, _ b: String?) -> Bool {
+        guard let a, let b, let ha = URL(string: a)?.host?.lowercased(), let hb = URL(string: b)?.host?.lowercased() else { return false }
+        func base(_ h: String) -> String { let p = h.split(separator: "."); return p.count >= 2 ? p.suffix(2).joined(separator: ".") : h }
+        return base(ha) == base(hb)
+    }
+
     public static func normalizedTitle(_ t: String) -> String {
         let folded = t.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
         var out = ""

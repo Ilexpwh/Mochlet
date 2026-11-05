@@ -111,7 +111,7 @@ final class SessionStore {
         let main = app.slime.stage.main
         var wanted = Self.mainState(mood)
         // A chat reply in flight shows as thinking unless a session needs the user or failed.
-        if app.chat?.isStreaming == true, wanted == .idle || wanted == .working || wanted == .thinking { wanted = .thinking }
+        if app.chat?.isStreaming == true || app.knowledge?.isAnswering == true, wanted == .idle || wanted == .working || wanted == .thinking { wanted = .thinking }
         if main.agentState != wanted { main.agent(wanted) }
     }
 

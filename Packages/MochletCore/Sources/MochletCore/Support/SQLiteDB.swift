@@ -24,6 +24,10 @@ public enum SQLValue: Sendable, Equatable {
         }
     }
     public var data: Data? { if case .blob(let d) = self { return d } else { return nil } }
+    public var blob: Data? { data }
+
+    public static func integer(_ i: Int) -> SQLValue { .int(Int64(i)) }
+    public static func real(_ d: Double) -> SQLValue { .double(d) }
 }
 
 public struct SQLiteError: Error, CustomStringConvertible {

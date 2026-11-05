@@ -83,3 +83,41 @@ open "mochlet://debug/workon?project=mochlet&task=say%20hello&headless=1&$T"   #
 open "mochlet://debug/chat?text=Reply%20with%20pong&$T"; sleep 10; open "mochlet://debug/state?$T"
 open "mochlet://debug/attach?$T"                                               # frontmost window → chip
 ```
+
+## Knowledge base (M6)
+
+1. First launch creates `~/Mochlet/Knowledge/` with `SCHEMA.md`, `CLAUDE.md`, `AGENTS.md`, `index.md`, `log.md` and the
+   type folders; Settings → Knowledge shows the page count and "Listening on 127.0.0.1:<port>".
+2. Drop `Tests/Fixtures/knowledge/vision-pro.md` on the slime: it chews, the Knowledge card opens with
+   "Filed: Apple Vision Pro 与空间计算", `inbox/apple-vision-pro-….md` exists with the source mirrored under
+   `inbox/references/`, `log.md` has an `ingest |` line and the root `index.md` lists the report.
+3. Drop the same file again: "Already chewed". Drop a PDF: it is mirrored with a stub report (full reading is M7).
+   Drop a link: a draft report with the URL as `resource`.
+4. Ask on the card (or `kb: what does the Vision Pro cost?` in the ask bubble): the answer streams through the chat
+   backend with `[1]` citations; the chips open the report at the cited line (Cursor/VS Code when running);
+   `头显多少钱` works the same way in Chinese.
+5. "File this answer": `syntheses/<question-slug>.md` appears with the citations as `sources[]`, the cited report gains a
+   `## Mentioned in` backlink, `log.md` gets a `query |` line, the slime looks proud.
+6. Lint: the toast gives the count; `meta/lint-<date>.md` lists orphans / broken links / reports never integrated;
+   copy `Tests/Fixtures/knowledge/bundle/` into the folder first to see an orphan and a broken link reported.
+7. Edit a page in Obsidian or any editor: the index picks it up within a few seconds (Settings → Knowledge counts
+   or `kb?find=`), while Mochlet's own writes never trigger a reindex.
+8. `claude mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet-mcp"`, then in Claude Code:
+   "use the mochlet find tool for Vision Pro price" returns the passage with its path; `tree`, `read`, `grep` and
+   `add_resource` work the same way. Quit Mochlet: the tool returns "Mochlet is not running".
+9. Settings → Knowledge → "Keep history with git": a commit appears in `~/Mochlet/Knowledge/.git` after the next drop.
+10. Embeddings: the first index run downloads the language assets; the Search section counts vectors; the toggle off
+    keeps keyword search working.
+
+Scripted version:
+
+```sh
+scripts/smoke-ingest.sh                                      # CLI: bootstrap, ingest, find (en + zh), dedupe, lint
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/knowledge/vision-pro.md&$T"; sleep 2; cat ~/Library/Logs/Mochlet/debug/result.txt
+open "mochlet://debug/kb?find=Vision%20Pro%20price&$T"; sleep 2; cat ~/Library/Logs/Mochlet/debug/result.txt
+open "mochlet://debug/kb?ask=What%20does%20the%20Vision%20Pro%20cost%3F&$T"; sleep 15; open "mochlet://debug/state?$T"
+open "mochlet://debug/kb?file=1&$T"; open "mochlet://debug/kb?lint=1&$T"
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"find","arguments":{"query":"Vision Pro"}}}' \
+  | ~/Library/Application\ Support/Mochlet/bin/mochlet-mcp
+```

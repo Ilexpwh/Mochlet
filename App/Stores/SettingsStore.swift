@@ -41,6 +41,10 @@ final class SettingsStore {
     /// "work on" tasks run as background processes instead of opening a terminal window.
     var headlessTasks: Bool { didSet { defaults.set(headlessTasks, forKey: "headlessTasks") } }
     var windowScreenshots: Bool { didSet { defaults.set(windowScreenshots, forKey: "windowScreenshots") } }
+    /// Knowledge base: on-device vectors, git history, and an optional folder other than ~/Mochlet/Knowledge (needs a relaunch).
+    var knowledgeEmbeddings: Bool { didSet { defaults.set(knowledgeEmbeddings, forKey: "knowledgeEmbeddings") } }
+    var knowledgeGit: Bool { didSet { defaults.set(knowledgeGit, forKey: "knowledgeGit") } }
+    var knowledgeRoot: String { didSet { defaults.set(knowledgeRoot, forKey: "knowledgeRoot") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -73,6 +77,9 @@ final class SettingsStore {
         defaultAgent = defaults.string(forKey: "defaultAgent") ?? "claude"
         headlessTasks = defaults.object(forKey: "headlessTasks") as? Bool ?? false
         windowScreenshots = defaults.object(forKey: "windowScreenshots") as? Bool ?? false
+        knowledgeEmbeddings = defaults.object(forKey: "knowledgeEmbeddings") as? Bool ?? true
+        knowledgeGit = defaults.object(forKey: "knowledgeGit") as? Bool ?? false
+        knowledgeRoot = defaults.string(forKey: "knowledgeRoot") ?? ""
     }
 
     // MARK: Provider base URLs

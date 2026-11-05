@@ -122,6 +122,25 @@ receive JSON (`{}` for plain events, `{"decision":"ask"}` for Antigravity's PreT
 Set `MOCHLET_HOOK_DEBUG=1` to see what the relay did on stderr; `MOCHLET_SOCKET` overrides the
 socket path (used by `scripts/test-hook.sh` with `scripts/fake-socket.py`).
 
+## The knowledge base as an MCP server
+
+Independent of hooks, every agent that speaks MCP can read and extend Mochlet's knowledge base while the
+app runs. The app listens on a loopback port (`POST /mcp`, bearer token, JSON-RPC 2.0 over Streamable HTTP
+without SSE); `~/Library/Application Support/Mochlet/mcp.json` carries `{port, token, pid}` and the stdio
+shim `bin/mochlet-mcp` forwards one JSON line per request, so the standard stdio registration works:
+
+```sh
+claude mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet-mcp"
+codex  mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet-mcp"
+# Cursor / others: a stdio server with that command and no arguments
+```
+
+Tools: `find {query, k, type, project}`, `search {question, k}` (cited answer through the configured chat
+backend), `read {path, lines}`, `list {path}`, `tree {depth}`, `grep {pattern, path, limit}`,
+`add_resource {url | path | text, title, project}`, `projects`, `signals_latest`. Results carry
+`structuredContent` next to the text. With the app closed the shim answers requests with
+`-32000 "Mochlet is not running"`. See [KNOWLEDGE.md](KNOWLEDGE.md) for the bundle layout the tools expose.
+
 ## Socket protocol
 
 One JSON object per connection, newline-terminated, at most 1 MB. Fields the relay adds:

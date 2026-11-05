@@ -52,6 +52,24 @@ it lands in `~/Mochlet/projects.json`, a plain file you can edit. Then:
 - ⌥-drag the slime onto a window, or Attach window in the menu: its title, URL (browsers) and,
   optionally, a screenshot become context for the next message. Dropped text files and links do too.
 
+## Knowledge base
+
+Drop a file, a link or some text on the slime and it chews it into `~/Mochlet/Knowledge/`, an OKF
+Markdown bundle (open it in Obsidian). Text and Markdown are summarised into a `report` page with the
+source mirrored next to it; other kinds are mirrored now and read in full with the ingestion milestone.
+Quick menu → Knowledge (or type `kb: <question>` into the ask bubble) asks the base: the answer streams
+with `[n]` citations whose chips open the page at the line, and "File this answer" keeps it as a
+`syntheses/` page with backlinks. Lint lists orphans, broken links and pages never integrated. Search is
+BM25 over Chinese bigrams and English words plus on-device Apple embeddings. Coding agents reach the same
+pages through MCP:
+
+```sh
+claude mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet-mcp"
+```
+
+Details in [docs/KNOWLEDGE.md](docs/KNOWLEDGE.md); `scripts/smoke-ingest.sh` exercises the engine
+without the app through `mochlet-cli`.
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -112,6 +130,7 @@ open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"   # remove=slug · offer
 open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach
+open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/knowledge/vision-pro.md&$T"   # kb?find=… · ask=… · file=1 · lint=1 · url=… · text=…
 ```
 
 `scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay

@@ -55,7 +55,7 @@ public struct ApprovalRequest: Sendable, Equatable, Identifiable {
         if let edits = input["edits"].array { lines.append("\(edits.count) edits") }
         if let content = input["content"].string { lines.append("\(content.utf8.count) bytes, \(content.components(separatedBy: "\n").count) lines") }
         if let prompt = input.firstString(["prompt", "description", "query"]) { lines.append(OneLine.collapse(prompt, limit: 200)) }
-        if lines.isEmpty, let data = try? input.data(pretty: true, sortedKeys: true), let text = String(data: data, encoding: .utf8), text != "null" {
+        if lines.isEmpty, let text = String(data: input.data(pretty: true, sortedKeys: true), encoding: .utf8), text != "null" {
             return text
         }
         return lines.isEmpty ? tool : lines.joined(separator: "\n")

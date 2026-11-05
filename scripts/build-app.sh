@@ -17,12 +17,16 @@ grep -E "warning: (unre|var|imm)|Build complete" "$LOG" | sort -u || true
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 [ -x "$BIN/Mochlet" ] || { echo "build failed: $BIN/Mochlet missing"; exit 1; }
 [ -x "$BIN/mochlet-hook" ] || { echo "build failed: $BIN/mochlet-hook missing"; exit 1; }
+[ -x "$BIN/mochlet-mcp" ] || { echo "build failed: $BIN/mochlet-mcp missing"; exit 1; }
+[ -x "$BIN/mochlet-cli" ] || { echo "build failed: $BIN/mochlet-cli missing"; exit 1; }
 
 APP="build/$CONFIG/Mochlet.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN/Mochlet" "$APP/Contents/MacOS/Mochlet"
 cp "$BIN/mochlet-hook" "$APP/Contents/Helpers/mochlet-hook"
+cp "$BIN/mochlet-mcp" "$APP/Contents/Helpers/mochlet-mcp"
+cp "$BIN/mochlet-cli" "$APP/Contents/Helpers/mochlet-cli"
 
 sed -e 's/\$(EXECUTABLE_NAME)/Mochlet/g' -e 's/\$(DEVELOPMENT_LANGUAGE)/en/g' Resources/Info.plist > "$APP/Contents/Info.plist"
 HASH=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -43,10 +47,10 @@ for b in "$BIN"/*.bundle; do
 done
 
 if [ "$CONFIG" = "release" ]; then
-  codesign --force --sign "$IDENTITY" --options runtime --timestamp=none "$APP/Contents/Helpers/mochlet-hook"
+  for h in mochlet-hook mochlet-mcp mochlet-cli; do codesign --force --sign "$IDENTITY" --options runtime --timestamp=none "$APP/Contents/Helpers/$h"; done
   codesign --force --sign "$IDENTITY" --options runtime --timestamp=none --entitlements Mochlet.entitlements "$APP"
 else
-  codesign --force --sign "$IDENTITY" "$APP/Contents/Helpers/mochlet-hook"
+  for h in mochlet-hook mochlet-mcp mochlet-cli; do codesign --force --sign "$IDENTITY" "$APP/Contents/Helpers/$h"; done
   codesign --force --sign "$IDENTITY" --entitlements Mochlet.entitlements "$APP"
 fi
 echo "built $APP ($HASH)"

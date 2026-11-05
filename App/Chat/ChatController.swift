@@ -245,6 +245,17 @@ final class ChatController {
         threads.insert(t, at: 0)
     }
 
+    /// A provider for one-off work outside a thread (knowledge answers); nil when the key is missing.
+    func makeProvider(_ kind: ChatProviderKind) -> ChatProvider? {
+        if kind.isCLI {
+            let cli = CLIChatProvider(kind: kind)
+            cli.onRateLimits = { info in Task { @MainActor in AppCoordinator.shared.plans.receive(claudeRateLimitEvent: info) } }
+            return cli
+        }
+        if kind.needsKey, !KeychainStore.has(kind.keychainAccount) { return nil }
+        return httpProvider(kind)
+    }
+
     private func httpProvider(_ kind: ChatProviderKind) -> HTTPChatProvider {
         HTTPChatProvider(kind: kind, baseURL: app.settings.baseURL(for: kind), apiKey: KeychainStore.get(kind.keychainAccount))
     }

@@ -269,6 +269,53 @@ enum DebugCommands {
                     }
                 }
             }
+        case "kb":
+            // kb?find=…[&k=5] | ask=… | reindex=1 | lint=1 | file=1 | add=/path | text=…[&title=] | url=… | open=1
+            // Async commands write "pending" now and overwrite result.txt when done.
+            let resultFile = dir.appendingPathComponent("result.txt")
+            let later: @Sendable (String) -> Void = { text in
+                try? text.write(to: resultFile, atomically: true, encoding: .utf8)
+            }
+            if arg("open") != nil { app.openKnowledge() }
+            if let q = arg("find") {
+                result = "pending find"
+                let k = Int(num("k") ?? 8)
+                Task { @MainActor in
+                    let hits = await AppCoordinator.shared.knowledge.find(q, k: k)
+                    later(hits.isEmpty ? "no hits" : hits.map { "\($0.path):\($0.lineStart) \($0.title) › \($0.headingPath) | \(OneLine.collapse($0.text, limit: 120))" }.joined(separator: "\n"))
+                }
+            } else if let q = arg("ask") {
+                app.openKnowledge(question: q)
+                result = "asking"
+            } else if arg("reindex") != nil {
+                app.knowledge.reindex(force: arg("force") != nil)
+            } else if arg("lint") != nil {
+                app.knowledge.lint()
+                result = "linting"
+            } else if arg("file") != nil {
+                app.knowledge.fileAnswer()
+                result = "filing"
+            } else if let path = arg("add") {
+                result = "pending add"
+                Task { @MainActor in
+                    let f = await AppCoordinator.shared.knowledge.add(.file(URL(fileURLWithPath: path)), from: "debug")
+                    later(f.map { "\($0.existing ? "existing" : "filed") \($0.path) | \($0.title)" } ?? "failed: \(AppCoordinator.shared.knowledge.lastError ?? "?")")
+                    AppCoordinator.shared.openKnowledge()
+                }
+            } else if let text = arg("text") {
+                result = "pending text"
+                let title = arg("title")
+                Task { @MainActor in
+                    let f = await AppCoordinator.shared.knowledge.add(.text(text, title: title), from: "debug")
+                    later(f.map { "\($0.existing ? "existing" : "filed") \($0.path) | \($0.title)" } ?? "failed: \(AppCoordinator.shared.knowledge.lastError ?? "?")")
+                }
+            } else if let u = arg("url"), let url = URL(string: u) {
+                result = "pending url"
+                Task { @MainActor in
+                    let f = await AppCoordinator.shared.knowledge.add(.link(url), from: "debug")
+                    later(f.map { "\($0.existing ? "existing" : "filed") \($0.path) | \($0.title)" } ?? "failed: \(AppCoordinator.shared.knowledge.lastError ?? "?")")
+                }
+            }
         case "quit":
             NSApp.terminate(nil)
         default:
@@ -343,6 +390,13 @@ enum DebugCommands {
                          "terminal": app.projects.preferredTerminal.rawValue,
                          "list": app.projects.projects.map { ["slug": $0.slug, "name": $0.name, "path": $0.primaryPath ?? "", "agent": $0.defaultAgent ?? "", "sessions": $0.lastSessions] as [String: Any] }] as [String: Any]
         d["headless"] = app.headless.runs.map { ["session": $0.key, "agent": $0.value.agent.id, "text": String($0.value.text.suffix(120))] }
+        let kb = app.knowledge!
+        d["knowledge"] = ["root": kb.root.path, "ready": kb.ready, "pages": kb.counts.pages, "chunks": kb.counts.chunks, "references": kb.counts.references,
+                          "embedded": kb.counts.embedded, "pendingEmbeddings": kb.pendingEmbeddings, "status": kb.status ?? "", "error": kb.lastError ?? "",
+                          "question": kb.question, "answering": kb.isAnswering, "answer": String(kb.answerText.suffix(400)),
+                          "citations": kb.citations.map { "[\($0.n)] \($0.path):\($0.lineStart)" }, "filed": kb.answerFiled ?? "",
+                          "lastFiled": kb.lastFiled.map { "\($0.path)" } ?? "", "lint": kb.lastFindings.map { "\($0.kind.rawValue): \($0.path)" },
+                          "mcpPort": kb.mcpPort.map(Int.init) ?? 0, "mcpError": kb.mcpError ?? "", "embeddingNote": kb.embeddingNote ?? "", "chewing": kb.chewing] as [String: Any]
         d["time"] = ISO8601DateFormatter().string(from: Date())
         guard let data = try? JSONSerialization.data(withJSONObject: d, options: [.prettyPrinted, .sortedKeys]) else { return "state failed" }
         try? data.write(to: dir.appendingPathComponent("state.json"))

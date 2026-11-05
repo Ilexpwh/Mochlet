@@ -64,6 +64,7 @@ final class AppCoordinator {
     private(set) var projects: ProjectsController!
     private(set) var chat: ChatController!
     private(set) var headless: HeadlessRunner!
+    private(set) var knowledge: KnowledgeController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -95,6 +96,7 @@ final class AppCoordinator {
         projects = ProjectsController(app: self)
         chat = ChatController(app: self)
         headless = HeadlessRunner(app: self)
+        knowledge = KnowledgeController(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
@@ -102,6 +104,7 @@ final class AppCoordinator {
         sessions.start()
         projects.start()
         chat.start()
+        knowledge.start()
         hooks.start()
         installers.refresh()
         #if DEBUG
@@ -126,6 +129,7 @@ final class AppCoordinator {
 
     func stop() {
         hooks?.stop()
+        knowledge?.stop()
         HotKeyCenter.shared.stop()
     }
 
@@ -194,9 +198,15 @@ final class AppCoordinator {
         window.send(.openExternally(.projects))
     }
 
-    func openSettings() {
+    func openSettings(tab: String? = nil) {
         if settingsWindow == nil { settingsWindow = SettingsWindowController(app: self) }
-        settingsWindow?.show()
+        settingsWindow?.show(tab: tab)
+    }
+
+    func openKnowledge(question: String? = nil) {
+        window.send(.openExternally(.knowledge))
+        window.focusInput()
+        if let question { knowledge.ask(question) }
     }
 
     func quit() {
@@ -235,7 +245,11 @@ final class AppCoordinator {
             return
         }
         if text.hasPrefix("Ask the knowledge base") {
-            toast("The knowledge base arrives with milestone 6.", symbol: "books.vertical")
+            openKnowledge()
+            return
+        }
+        if let q = KnowledgeController.question(in: text) {
+            openKnowledge(question: q)
             return
         }
         openChat()
@@ -352,7 +366,7 @@ final class AppCoordinator {
                 toast("Bring the window to the front, then choose Attach window (or ⌥-drag me onto it).", symbol: action.symbol)
             }
         case .knowledge:
-            toast("Knowledge base arrives with milestone 6.", symbol: action.symbol)
+            openKnowledge()
         case .meetings:
             toggleMeetingNotes()
         case .signals:
@@ -535,35 +549,63 @@ final class AppCoordinator {
         window.hold("drag", false)
     }
 
+    /// Folders become projects; files, links and text are eaten into the knowledge base. While the
+    /// chat card is open, a drop becomes a chat attachment instead.
     func dropped(urls: [URL], text: String?) {
         notch.fileDragOver = false
         window.hold("drag", false)
-        slime.stage.main.drop()
-        let name = urls.first?.lastPathComponent ?? (text.map { String($0.prefix(40)) } ?? "that")
         let isFolder = urls.first.map { (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false } ?? false
-        chewWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.slime.stage.main.ingestionFinished(success: true)
-            if isFolder, let url = urls.first {
+        if isFolder, let url = urls.first {
+            slime.stage.main.drop()
+            chewWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.slime.stage.main.ingestionFinished(success: true)
                 self.projects.offer(folder: url)
                 self.openProjects()
-            } else if let url = urls.first, url.isFileURL {
-                // Text-like files become chat context now; the knowledge base (M6) files everything.
-                self.chat.attachFile(url)
-                self.openChat()
-            } else if let url = urls.first {
-                self.chat.attach(ChatAttachment(kind: .text, title: url.host ?? "link", text: url.absoluteString))
-                self.openChat()
-            } else if let text, !text.isEmpty {
-                self.chat.attach(ChatAttachment(kind: .text, title: String(OneLine.collapse(text, limit: 30)), text: text))
-                self.openChat()
+            }
+            chewWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+            return
+        }
+        if notch.mode == .expanded, notch.view == .chat {
+            if let url = urls.first, url.isFileURL { chat.attachFile(url) }
+            else if let url = urls.first { chat.attach(ChatAttachment(kind: .text, title: url.host ?? "link", text: url.absoluteString)) }
+            else if let text, !text.isEmpty { chat.attach(ChatAttachment(kind: .text, title: String(OneLine.collapse(text, limit: 30)), text: text)) }
+            openChat()
+            return
+        }
+        let resources: [KnowledgeController.Resource]
+        if !urls.isEmpty {
+            resources = urls.map { $0.isFileURL ? .file($0) : .link($0) }
+        } else if let text, !text.isEmpty {
+            if let u = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)), u.scheme?.hasPrefix("http") == true, !text.contains(" ") {
+                resources = [.link(u)]
             } else {
-                self.toast("Chewed “\(name)”.", symbol: "doc.text")
+                resources = [.text(text, title: nil)]
+            }
+        } else {
+            toast("Nothing to chew there.", symbol: "doc.text")
+            return
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            var last: KnowledgeEngine.Filed?
+            for r in resources { if let f = await self.knowledge.add(r, project: self.projectSlug(forDrop: r)) { last = f } }
+            if let f = last {
+                if !f.existing { self.slime.stage.main.trigger(.happy) }
+                self.toast((f.existing ? "Already chewed: " : "Filed: ") + f.title, symbol: f.existing ? "checkmark.circle" : "tray.and.arrow.down", seconds: 3)
+                self.openKnowledge()
+            } else if let e = self.knowledge.lastError {
+                self.toast("Could not file that: \(e)", symbol: "exclamationmark.triangle", seconds: 4)
             }
         }
-        chewWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: work)
+    }
+
+    /// A file dropped from inside a registered project folder is filed under that project.
+    private func projectSlug(forDrop r: KnowledgeController.Resource) -> String? {
+        guard case .file(let url) = r else { return nil }
+        return projects.projects.first { p in p.primaryPath.map { url.path.hasPrefix($0 + "/") } ?? false }?.slug
     }
 }
 

@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import Security
 import simd
 import SlimeKit
 import MochletCore
@@ -26,18 +27,41 @@ enum DebugCommands {
         return d
     }
 
+    /// Per-launch secret: every command must carry `token=<contents of debug/token>` so another
+    /// local process cannot drive the app just by opening a URL. The file is 0600.
+    static let token: String = {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let t = bytes.map { String(format: "%02x", $0) }.joined()
+        let url = dir.appendingPathComponent("token")
+        try? t.write(to: url, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        return t
+    }()
+
+    /// File names for screenshots: letters, digits, `-` and `_` only.
+    static func safeName(_ raw: String?) -> String {
+        let cleaned = (raw ?? "shot").unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) || $0 == "-" || $0 == "_" }
+        let s = String(String.UnicodeScalarView(cleaned)).prefix(48)
+        return s.isEmpty ? "shot" : String(s)
+    }
+
     static func run(_ url: URL, app: AppCoordinator) {
         let cmd = url.pathComponents.dropFirst().first ?? ""
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         func arg(_ k: String) -> String? { items.first { $0.name == k }?.value }
         func num(_ k: String) -> Double? { arg(k).flatMap(Double.init) }
+        guard arg("token") == token else {
+            try? "unauthorised: pass token=$(cat ~/Library/Logs/Mochlet/debug/token)".write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
+            return
+        }
         var result = "ok \(cmd)"
         let stage = app.slime.stage
         switch cmd {
         case "state":
             result = writeState(app)
         case "shot":
-            result = shot(app, name: arg("name") ?? "shot", full: arg("full") == "1")
+            result = shot(app, name: safeName(arg("name")), full: arg("full") == "1")
         case "fsm":
             let input: NotchFSM.Input?
             switch arg("input") ?? "" {

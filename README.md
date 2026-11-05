@@ -68,16 +68,17 @@ Debug builds answer `mochlet://debug/...` URLs, so the app can be exercised and 
 from a terminal (no screen-recording permission needed; it captures its own windows):
 
 ```sh
-open "mochlet://debug/state"                       # ~/Library/Logs/Mochlet/debug/state.json
-open "mochlet://debug/shot?name=home"              # …/debug/home.png (+ home-desktop.png when out)
-open "mochlet://debug/fsm?input=reveal"            # reveal | collapse | hide | click | launch | …
-open "mochlet://debug/view?name=menu"              # home | ask | menu | greeting | …
-open "mochlet://debug/pointer?sx=735&sy=940"       # warp the cursor (screen pts); away=1 to leave
-open "mochlet://debug/click?count=2"               # 1 ask · 2 menu · 3 meeting · 5 split
-open "mochlet://debug/hold?seconds=1.2"
-open "mochlet://debug/drag?sx=1400&sy=60"          # drag the slime out (or back onto the notch)
-open "mochlet://debug/desktop?sx=1400&sy=60"       # fly out / move; on=0 flies home
-open "mochlet://debug/emote?name=love"             # agent?state=working · mini?id=a&state=waiting · split
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)" # per-launch secret, required on every command
+open "mochlet://debug/state?$T"                    # ~/Library/Logs/Mochlet/debug/state.json
+open "mochlet://debug/shot?name=home&$T"           # …/debug/home.png (+ home-desktop.png when out)
+open "mochlet://debug/fsm?input=reveal&$T"         # reveal | collapse | hide | click | launch | …
+open "mochlet://debug/view?name=menu&$T"           # home | ask | menu | greeting | …
+open "mochlet://debug/pointer?sx=735&sy=940&$T"    # warp the cursor (screen pts); away=1 to leave
+open "mochlet://debug/click?count=2&$T"            # 1 ask · 2 menu · 3 meeting · 5 split
+open "mochlet://debug/hold?seconds=1.2&$T"
+open "mochlet://debug/drag?sx=1400&sy=60&$T"       # drag the slime out (or back onto the notch)
+open "mochlet://debug/desktop?sx=1400&sy=60&$T"    # fly out / move; on=0 flies home
+open "mochlet://debug/emote?name=love&$T"          # agent?state=working · mini?id=a&state=waiting · split
 ```
 
 Rendering is one CoreGraphics path driven by a display link; it only redraws frames that

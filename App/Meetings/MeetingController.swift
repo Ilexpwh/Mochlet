@@ -236,7 +236,7 @@ final class MeetingController {
             if self.systemAudioError != nil { self.app.toast("Recording the microphone only: system audio was refused. Allow it in System Settings → Privacy → Screen & System Audio Recording.", symbol: "speaker.slash", seconds: 6) }
             self.locale = await SpeechAssets.locale(for: self.app.settings.voiceLocale)
             self.startLiveLoop()
-            if let detection { logger.info("started from detection: \(detection.reason, privacy: .public)") }
+            if let detection { logger.info("started from detection: \(detection.reason, privacy: .private)") }
         }
     }
 
@@ -353,7 +353,7 @@ final class MeetingController {
             last = finished
             finished.meta = try await fileInKnowledge(finished)
             last = finished
-            if let e = result.meta.processing.error { logger.error("summary: \(e, privacy: .public)") }
+            if let e = result.meta.processing.error { logger.error("summary failed for \(result.meta.id, privacy: .public): \(e, privacy: .private)") }
             current = nil
             state = .review
             stage = ""
@@ -361,7 +361,7 @@ final class MeetingController {
             app.slime.stage.main.trigger(.proud)
             app.slime.sound.play(SoundCue(.finish))
             app.window.send(.openExternally(.meetingLive))
-            logger.info("ready: \(result.meta.title, privacy: .public) (\(result.lines.count) lines, \(result.meta.speakers.count) speakers)")
+            logger.info("ready: \(result.meta.id, privacy: .public) (\(result.lines.count) lines, \(result.meta.speakers.count) speakers)")
         } catch {
             var m = meta
             m.processing.status = .failed
@@ -369,7 +369,7 @@ final class MeetingController {
             try? Self.write(meta: m, in: dir)
             current = m
             fail("Couldn't write the notes: \(ErrorText.describe(error))")
-            logger.error("failed: \(String(describing: error), privacy: .public)")
+            logger.error("failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -522,7 +522,7 @@ final class MeetingController {
             guard let meta, meta.processing.status == .recording || meta.processing.status == .processing else { continue }
             guard fm.fileExists(atPath: micURL.path) else { continue }
             if meta.processing.status == .recording, micSize < 64_000 { try? fm.removeItem(at: dir); continue }
-            logger.info("recovering \(dir.lastPathComponent, privacy: .public)")
+            logger.info("recovering \(dir.lastPathComponent, privacy: .private)")
             await process(meta, in: dir)
             if state == .review { state = .idle; app.window.hold("meeting", false) }
         }

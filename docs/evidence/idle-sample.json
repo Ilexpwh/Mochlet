@@ -1,9 +1,0 @@
-{
-  "pid": 68914,
-  "wall_seconds": 60.01,
-  "cpu_seconds": 0.43,
-  "percent_one_core": 0.717,
-  "rss_mib_start": 125.4,
-  "rss_mib_end": 125.4,
-  "configuration": "Apple Silicon Debug, workspace closed, no active agent/audio; 60 second sample, not soak evidence"
-}

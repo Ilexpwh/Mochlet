@@ -35,16 +35,6 @@ public enum MediaExtractor {
     }
 }
 
-public struct TimedPhrase: Sendable, Equatable {
-    public var start: Double
-    public var end: Double
-    public var text: String
-    public init(start: Double, end: Double, text: String) {
-        self.start = start
-        self.end = end
-        self.text = text
-    }
-}
 
 /// Decodes any AVFoundation-readable file's first audio track to 16 kHz mono float WAV.
 public enum AudioDecoder {
@@ -108,12 +98,10 @@ public enum FileTranscriber {
         let collector = Task {
             var out: [TimedPhrase] = []
             for try await result in transcriber.results where result.isFinal {
-                let text = String(result.text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { continue }
-                let start = result.range.start.seconds
-                let end = result.range.end.seconds
-                out.append(TimedPhrase(start: start, end: end, text: text))
-                if total > 0 { progress?(min(1, end / total)) }
+                let pieces = Self.phrases(from: result.text, fallback: (result.range.start.seconds, result.range.end.seconds))
+                guard let last = pieces.last else { continue }
+                out += pieces
+                if total > 0 { progress?(min(1, last.end / total)) }
             }
             return out
         }
@@ -124,6 +112,38 @@ public enum FileTranscriber {
         }
         phrases = try await collector.value
         return phrases
+    }
+
+    /// A final result is often a long run of speech. It is cut into phrases at sentence punctuation and at
+    /// pauses of 0.6 s or more between words (from the per-word time ranges), so a transcript line is one
+    /// thought and a change of voice has a seam to sit on. A result without word times stays whole.
+    public static func phrases(from text: AttributedString, fallback: (Double, Double)) -> [TimedPhrase] {
+        var out: [TimedPhrase] = []
+        var current = ""
+        var start: Double?
+        var end: Double = 0
+        func flush() {
+            let t = current.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty, let s = start { out.append(TimedPhrase(start: s, end: max(end, s + 0.05), text: t)) }
+            current = ""
+            start = nil
+        }
+        for run in text.runs {
+            let piece = String(text[run.range].characters)
+            if let range = run.audioTimeRange {
+                let s = range.start.seconds, e = range.end.seconds
+                if let from = start, s - end >= 0.6 || e - from > 20 { flush() }
+                if start == nil { start = s; end = e } else { end = max(end, e) }
+            }
+            current += piece
+            if let last = piece.last(where: { !$0.isWhitespace }), ".?!。？！".contains(last), start != nil, end - (start ?? end) >= 0.8 { flush() }
+        }
+        flush()
+        if out.isEmpty {
+            let t = String(text.characters).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { out.append(TimedPhrase(start: fallback.0, end: fallback.1, text: t)) }
+        }
+        return out
     }
 
     /// The current locale when the transcriber supports it, else English; a Chinese system gets zh_CN.

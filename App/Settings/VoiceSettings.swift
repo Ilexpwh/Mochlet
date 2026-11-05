@@ -69,10 +69,7 @@ struct VoiceSettingsView: View {
                 Text("Without a key, Apple's on-device model answers when available, else the brain.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Section("Meetings") {
-                Text("The meeting note-taker (triple-click, live transcript, speaker map, summary) arrives with milestone 9.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
+            MeetingSettingsSection(app: app)
         }
         .formStyle(.grouped)
         .onAppear { v.refreshAssetState() }

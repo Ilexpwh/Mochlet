@@ -274,6 +274,7 @@ enum StaticFetcher {
     static func data(_ url: URL, accept: String? = nil, maxBytes: Int = 10_000_000, publicOnly: Bool = false) async throws -> (Data, HTTPURLResponse) {
         var req = URLRequest(url: url)
         if let accept { req.setValue(accept, forHTTPHeaderField: "Accept") }
+        if publicOnly { req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData }
         if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
         let guardian = publicOnly ? RedirectGuard() : nil
         let (data, resp) = try await session.data(for: req, delegate: guardian)
@@ -305,6 +306,7 @@ enum StaticFetcher {
     static func download(_ url: URL, suggestedName: String, maxBytes: Int = 100_000_000, publicOnly: Bool = false) async throws -> URL {
         var req = URLRequest(url: url)
         req.setValue("application/pdf,*/*", forHTTPHeaderField: "Accept")
+        if publicOnly { req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData }
         if publicOnly, !(await HostPolicy.allows(url)) { throw WebReaderError.privateHost(url.host ?? "") }
         let guardian = publicOnly ? RedirectGuard() : nil
         let (tmp, resp) = try await session.download(for: req, delegate: guardian)

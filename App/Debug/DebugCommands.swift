@@ -13,6 +13,7 @@ import MochletCore
 ///   fsm?input=click|reveal|collapse|hide|pointerEntered|pointerLeft|greetingComplete|launch
 ///   view?name=ask               open an expanded view
 ///   voice?text=…               route words as if spoken (start=1/stop=1 · file=/path.wav · cancel=1 · pick=slug)
+///   meeting?start=1             stop=1 · mark=text · mic=/a.wav&sys=/b.wav (files as a meeting) · detect=1 · rename=p2:Alice · merge=p3:p2
 ///   emote?name=happy            trigger an emote on the main slime
 ///   agent?state=working         set the main slime's agent state
 ///   mini?id=a&state=working     spawn/update a mini     endmini?id=a      remove it
@@ -248,6 +249,29 @@ enum DebugCommands {
             if let slug = arg("remove") { app.projects.remove(slug) }
             if let path = arg("offer") { app.projects.offer(folder: URL(fileURLWithPath: path)); app.openProjects() }
             if arg("open") != nil { app.openProjects() }
+        case "meeting":
+            // meeting?start=1 | stop=1 | mark=text | mic=/a.wav&sys=/b.wav[&title=] (process files as a meeting) | detect=1 | rename=p2:Alice | merge=p3:p2 | open=1 | dismiss=1
+            let m = app.meetings!
+            if arg("start") != nil { m.toggle() }
+            else if arg("stop") != nil { m.stop() }
+            else if let t = arg("mark") { m.mark(t) }
+            else if arg("dismiss") != nil { m.dismiss() }
+            else if arg("open") != nil { app.openMeetings() }
+            else if arg("detect") != nil {
+                let s = m.debugSignal()
+                result = "signal: mic=\(s.micApps) front=\(s.frontBundleID ?? "-") title=\(s.windowTitle ?? "-") url=\(s.browserURL ?? "-") → \(MeetingDetectionRules.evaluate(s).map { "\($0.appName): \($0.reason)" } ?? "no call")"
+            }
+            else if let r = arg("rename"), let c = r.firstIndex(of: ":") { m.rename(String(r[..<c]), to: String(r[r.index(after: c)...])) }
+            else if let r = arg("merge"), let c = r.firstIndex(of: ":") { m.merge(String(r[..<c]), into: String(r[r.index(after: c)...])) }
+            else if let mic = arg("mic") {
+                result = "pending meeting"
+                let resultFile = dir.appendingPathComponent("result.txt")
+                let sys = arg("sys"), title = arg("title")
+                Task { @MainActor in
+                    let line = await m.processFiles(mic: URL(fileURLWithPath: mic), system: sys.map { URL(fileURLWithPath: $0) }, title: title)
+                    try? line.write(to: resultFile, atomically: true, encoding: .utf8)
+                }
+            }
         case "voice":
             // voice?text=…  route an utterance as if spoken | start=1 / stop=1 push-to-talk | file=/path.wav plays the microphone | cancel=1 | pick=slug answers "which project"
             if let t = arg("text") {
@@ -425,6 +449,12 @@ enum DebugCommands {
                          "list": app.projects.projects.map { ["slug": $0.slug, "name": $0.name, "path": $0.primaryPath ?? "", "agent": $0.defaultAgent ?? "", "sessions": $0.lastSessions] as [String: Any] }] as [String: Any]
         d["headless"] = app.headless.runs.map { ["session": $0.key, "agent": $0.value.agent.id, "text": String($0.value.text.suffix(120))] }
         let kb = app.knowledge!
+        let mt = app.meetings!
+        d["meeting"] = ["state": "\(mt.state)", "title": mt.current?.title ?? mt.last?.meta.title ?? "", "elapsed": mt.elapsed, "lines": mt.liveLines.count,
+                        "live": mt.liveLines.suffix(3).map { "\($0.speaker): \($0.text)" }, "stage": mt.stage, "progress": mt.progress, "error": mt.error ?? "",
+                        "folder": mt.last?.folder.path ?? "", "speakers": mt.last?.meta.speakers.map(\.name) ?? [], "kb": mt.last?.meta.kbPath ?? "",
+                        "summary": mt.last?.summary?.overview ?? "", "recent": mt.recent.count, "ask": mt.detection?.appName ?? "", "systemAudio": mt.systemAudioError ?? "ok",
+                        "micLevel": mt.micLevel, "systemLevel": mt.systemLevel] as [String: Any]
         let v = app.voice!
         d["voice"] = ["state": v.state.description, "caption": v.caption, "transcript": v.transcript, "heard": v.lastHeard, "action": v.lastAction ?? "", "error": v.error ?? "",
                       "locale": v.localeID, "pending": v.pending?.question ?? "", "assets": v.assetState.map { "\($0)" } ?? "", "download": v.downloadProgress ?? -1,

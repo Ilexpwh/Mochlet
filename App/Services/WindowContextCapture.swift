@@ -7,7 +7,7 @@ import MochletCore
 /// window list), the browser URL (AppleScript for the big browsers) and, when enabled and
 /// permitted, a downscaled screenshot.
 enum WindowContextCapture {
-    private static let browserScripts: [String: String] = [
+    static let browserScripts: [String: String] = [
         "com.apple.Safari": "tell application \"Safari\" to return URL of current tab of front window",
         "com.google.Chrome": "tell application \"Google Chrome\" to return URL of active tab of front window",
         "company.thebrowser.Browser": "tell application \"Arc\" to return URL of active tab of front window",

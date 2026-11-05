@@ -43,7 +43,7 @@ enum MochletCLI {
     let limit = Int(option("--limit") ?? "500") ?? 500
 
     guard let command = args.first else {
-        print("usage: mochlet-cli reindex|find|grep|lint|ingest|extract|embed|bootstrap [args] [--root dir] [--index file]")
+        print("usage: mochlet-cli reindex|find|grep|lint|ingest|extract|embed|diarize|bootstrap [args] [--root dir] [--index file]")
         exit(2)
     }
     args.removeFirst()
@@ -123,6 +123,43 @@ enum MochletCLI {
             for w in c.warnings { print("warning: \(w)") }
             print("---")
             print(c.markdown)
+        case "diarize":
+            // Who speaks when on one recording, with the numbers behind it: phrases, stretches, the
+            // similarity of every pair of fingerprints, and the labels at the margin (--margin 0.04).
+            guard let file = args.first else { print("diarize needs an audio file"); exit(2) }
+            let url = URL(fileURLWithPath: (file as NSString).expandingTildeInPath)
+            let margin = Float(option("--margin") ?? "") ?? SpeakerClustering.defaultMargin
+            let samples = try ChannelRecorder.readSamples(url)
+            let phrases = try await FileTranscriber.transcribe(url, locale: option("--locale").map { Locale(identifier: $0) })
+            print("\(phrases.count) phrases, \(String(format: "%.1f", Double(samples.count) / SpeakerFeatures.sampleRate)) s")
+            for p in phrases { print("  \(MeetingTime.stamp(p.start))–\(MeetingTime.stamp(p.end))  \(p.text)") }
+            var segments: [(start: Double, end: Double, feature: [Float])] = []
+            for p in phrases {
+                for piece in LiteDiarizer.splitAtPauses(samples: samples, start: p.start, end: p.end) {
+                    if var last = segments.last, last.end - last.start < LiteDiarizer.minVoice, piece.start - last.end < 0.8 {
+                        last.end = max(last.end, piece.end); segments[segments.count - 1] = last
+                    } else { segments.append((piece.start, piece.end, [])) }
+                }
+            }
+            let rate = SpeakerFeatures.sampleRate
+            segments = segments.compactMap { s in
+                let a = max(0, Int(s.start * rate)), b = min(samples.count, Int(s.end * rate))
+                guard b > a else { return nil }
+                let f = SpeakerFeatures.fingerprint(Array(samples[a..<b]))
+                return f.isEmpty ? nil : (s.start, s.end, f)
+            }
+            if let dump = option("--dump") {
+                let rows = segments.map { ["start": $0.start, "end": $0.end, "feature": $0.feature.map(Double.init)] as [String: Any] }
+                try JSONSerialization.data(withJSONObject: rows).write(to: URL(fileURLWithPath: dump))
+            }
+            let labels = SpeakerClustering.cluster(segments.map(\.feature), margin: margin, maxSpeakers: 6)
+            print("\(segments.count) stretches, \(Set(labels).count) speakers at margin \(margin)")
+            let unit = segments.map { TranscriptBuilder.normalized($0.feature) }
+            print("      " + segments.indices.map { String(format: "%5d", $0) }.joined())
+            for (i, seg) in segments.enumerated() {
+                let row = unit.indices.map { String(format: "%5.2f", TranscriptBuilder.dot(unit[i], unit[$0])) }.joined()
+                print(String(format: "%3d s%d ", i, labels[i] + 1) + row + "   \(MeetingTime.stamp(seg.start))–\(MeetingTime.stamp(seg.end))")
+            }
         case "ingest":
             guard let file = args.first else { print("ingest needs a file"); exit(2) }
             let url = URL(fileURLWithPath: (file as NSString).expandingTildeInPath)

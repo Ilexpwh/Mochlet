@@ -53,6 +53,7 @@ final class SettingsStore {
     /// Voice: "auto" or a BCP-47 language (zh-CN, zh-TW, en-US); short spoken confirmations.
     var voiceLocale: String { didSet { defaults.set(voiceLocale, forKey: "voiceLocale") } }
     var voiceSpeakReplies: Bool { didSet { defaults.set(voiceSpeakReplies, forKey: "voiceSpeakReplies") } }
+    var meetingRetention: MeetingRetention { didSet { defaults.set(meetingRetention.rawValue, forKey: "meetingRetention") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -95,6 +96,7 @@ final class SettingsStore {
         knowledgeRobots = defaults.object(forKey: "knowledgeRobots") as? Bool ?? true
         voiceLocale = defaults.string(forKey: "voiceLocale") ?? "auto"
         voiceSpeakReplies = defaults.object(forKey: "voiceSpeakReplies") as? Bool ?? false
+        meetingRetention = MeetingRetention(rawValue: defaults.string(forKey: "meetingRetention") ?? "") ?? .mixed7d
     }
 
     // MARK: Provider base URLs

@@ -70,6 +70,7 @@ final class AppCoordinator {
     private(set) var knowledge: KnowledgeController!
     private(set) var ingest: IngestController!
     private(set) var voice: VoiceController!
+    private(set) var meetings: MeetingController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -104,6 +105,7 @@ final class AppCoordinator {
         knowledge = KnowledgeController(app: self)
         ingest = IngestController(app: self)
         voice = VoiceController(app: self)
+        meetings = MeetingController(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
@@ -112,6 +114,7 @@ final class AppCoordinator {
         projects.start()
         chat.start()
         knowledge.start()
+        meetings.start()
         hooks.start()
         installers.refresh()
         #if DEBUG
@@ -377,7 +380,7 @@ final class AppCoordinator {
         case .saveWindow:
             saveWindowContext()
         case .meetings:
-            toggleMeetingNotes()
+            openMeetings()
         case .signals:
             toast("AI signals arrive with milestone 10.", symbol: action.symbol)
         }
@@ -437,8 +440,11 @@ final class AppCoordinator {
     }
 
     func toggleMeetingNotes() {
-        slime.stage.main.trigger(.confused)
-        toast("The meeting note-taker arrives with milestone 9.", symbol: "waveform")
+        meetings.toggle()
+    }
+
+    func openMeetings() {
+        window.send(.openExternally(.meetingLive))
     }
 
     // MARK: - Hot keys

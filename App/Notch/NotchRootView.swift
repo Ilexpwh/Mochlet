@@ -69,6 +69,9 @@ struct CompactOverlay: View {
             if let p = store.chewProgress {
                 ChewRing(progress: p)
             }
+            if app.meetings.isRecording {
+                RecPill(app: app)
+            }
             PlanPills(app: app)
             if !app.settings.soundEnabled {
                 Image(systemName: "speaker.slash.fill").font(.system(size: 8)).foregroundStyle(.white.opacity(0.4))
@@ -113,6 +116,7 @@ struct ExpandedContent: View {
         case .projects: ProjectsView(app: app)
         case .knowledge: KnowledgeView(app: app)
         case .ingest: IngestView(app: app)
+        case .meetingLive: MeetingView(app: app)
         default: PlaceholderView(view: view)
         }
     }

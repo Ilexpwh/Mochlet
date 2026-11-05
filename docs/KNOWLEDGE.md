@@ -17,7 +17,8 @@ wiki pages the app maintains over them, and a schema file that tells every agent
   meta/         lint-YYYY-MM-DD.md (type: lint)
   projects/     <project-slug>/{index.md, <slug>.md, references/}   reports filed to a project
   notes/YYYY/MM/DD.md          type: note, one `## HH:MM` entry per spoken or typed note
-  meetings/ signals/ memories/  later milestones write here
+  meetings/<date>-<slug>.md     type: meeting: summary + full transcript, resource → ~/Mochlet/Meetings/…/transcript.md
+  signals/ memories/            later milestones write here
 ```
 
 Every directory also gets `.abstract.md` (≤ 256 chars) and `.overview.md` (≤ 4000 chars) sidecars,
@@ -136,3 +137,14 @@ headings, and a second note in the same minute joins the previous entry. The pag
 (`reindex(only:)`), the folder indexes regenerated and `log.md` gets `- HH:MM note | <text> → notes/…`.
 Notes are plain pages: they are found by `find`/`search`, linted, and integrate like anything else when
 you ask the base to.
+
+## Meetings
+
+A finished meeting (`MeetingController`) is filed as `meetings/<date>-<slug>.md` with `type: meeting`,
+`resource` pointing at the Lark-form `transcript.md` under `~/Mochlet/Meetings/`, `tags` from the
+summary's keywords, `sources[transcript]`, and `mochlet: {kind: meeting, dir, started_at, duration_s, app,
+speakers, language}`. The body carries the summary sections (overview, decisions, action items with
+owners, open questions, topics with `HH:MM:SS` stamps, marks) and then the whole transcript as
+`**Name** \`HH:MM:SS\`` lines, so a query lands on the moment something was said. Renaming or merging
+speakers on the card rewrites the page (the log line says "updated"). The page is a normal wiki page:
+indexed, linted, integrable; the audio stays outside the bundle and follows the retention setting.

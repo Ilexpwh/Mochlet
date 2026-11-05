@@ -17,20 +17,40 @@ enum HostPolicy {
         if h == "localhost" || h.hasSuffix(".localhost") || h.hasSuffix(".local") || h.hasSuffix(".internal") || h.hasSuffix(".home.arpa") || h.hasSuffix(".lan") { return false }
         if !h.contains(".") && !h.contains(":") { return false }      // bare intranet names
         if h.contains(":") { return isPublicV6(h) }
-        if let v4 = IPv4(h) { return isPublic(v4) }
-        // Other numeric spellings (octal "0177.0.0.1", decimal "2130706433", hex "0x7f000001", short "127.1") go through inet_aton.
-        if h.allSatisfy({ $0.isNumber || $0 == "." || $0 == "x" || ("a"..."f").contains($0) }), h.first?.isNumber == true {
-            var a = in_addr()
-            if inet_aton(h, &a) == 1 { return isPublic(UInt32(bigEndian: a.s_addr)) }
-        }
+        if let v4 = literalIPv4(h) { return isPublic(v4) }
+        // Looks numeric but is not an address inet_aton accepts: nothing we want to connect to.
+        if looksNumeric(h) { return false }
         return true
+    }
+
+    /// Any IPv4 spelling inet_aton accepts: dotted decimal, octal "0177.0.0.1", decimal "2130706433",
+    /// hex "0x7f000001", short "127.1". nil when it is not a literal.
+    static func literalIPv4(_ h: String) -> UInt32? {
+        if let v4 = IPv4(h) { return v4 }
+        guard looksNumeric(h) else { return nil }
+        var a = in_addr()
+        return inet_aton(h, &a) == 1 ? UInt32(bigEndian: a.s_addr) : nil
+    }
+
+    static func looksNumeric(_ h: String) -> Bool {
+        h.first?.isNumber == true && h.allSatisfy { $0.isNumber || $0 == "." || $0 == "x" || ("a"..."f").contains($0) }
+    }
+
+    /// A literal is what inet_pton / inet_aton accept; anything else is a name to resolve.
+    static func isLiteral(_ host: String) -> Bool {
+        let h = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if h.contains(":") {
+            var z = h
+            if let i = z.firstIndex(of: "%") { z = String(z[..<i]) }
+            var a6 = in6_addr()
+            return inet_pton(AF_INET6, z, &a6) == 1
+        }
+        return literalIPv4(h.lowercased()) != nil
     }
 
     /// Every address the name resolves to must be public (DNS pointing a public name at 127.0.0.1 is the usual trick).
     static func resolvesPublic(_ host: String) async -> Bool {
-        if host.contains(":") || host.first?.isNumber == true && host.allSatisfy({ $0.isNumber || $0 == "." || $0 == "x" || ("a"..."f").contains($0) }) {
-            return isPublicName(host)     // a literal: no lookup to do
-        }
+        if isLiteral(host) { return isPublicName(host) }     // a real literal: no lookup to do
         return await Task.detached(priority: .utility) { () -> Bool in
             var hints = addrinfo(ai_flags: AI_ADDRCONFIG, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM, ai_protocol: 0, ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
             var res: UnsafeMutablePointer<addrinfo>?
@@ -126,7 +146,9 @@ final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
         for t in metrics.transactionMetrics {
-            guard let addr = t.remoteAddress, !addr.isEmpty else { continue }
+            // No address on a transaction (nothing was connected, or it came from a cache) is treated as
+            // private: agent fetches never use the cache, so a real connection always reports one.
+            guard let addr = t.remoteAddress, !addr.isEmpty else { lock.withLock { privateSeen = true }; continue }
             let ok: Bool
             if addr.contains(":") { ok = HostPolicy.isPublicV6(addr) }
             else if let v4 = HostPolicy.IPv4(addr) { ok = HostPolicy.isPublic(v4) }

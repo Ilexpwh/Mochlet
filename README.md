@@ -97,6 +97,25 @@ to a typed decision: a TypeSafe Jev key if you add one (Settings → Voice & Mee
 button), else Apple's on-device model when it is available, else the brain. A missing project is asked
 for with chips; say its name or tap, within 20 s. "Speak short replies" answers "Noted" / "On it" aloud.
 
+## Meetings
+
+Triple-click the slime in a call (or say "start taking meeting notes"): it records your microphone and
+what the Mac plays through a Core Audio process tap (macOS asks once for System Audio Recording; you keep
+hearing the call), transcribes both sides on this Mac as the call runs, and shows the last lines with
+level meters, a Mark button and a note field in the island; the compact strip carries a red REC pill.
+Stop, and it writes `~/Mochlet/Meetings/<date>-<slug>/`: `transcript.md` in the form Lark Minutes
+exports (header, keywords, `Name HH:MM:SS.mmm` turns), `summary.md` (overview, decisions, action items,
+open questions, topics with timestamps, your marks), `meta.json`, `diarization.json`, and a
+`Knowledge/meetings/` page with the summary and the full transcript, so "what did we decide about
+pricing?" has an answer with a timestamp. You are "Me"; the others are told apart on the system channel
+(a light on-device diarizer; the echo of their voices in your microphone is removed) and come back as
+"Person 2, 3…" with the brain's name suggestions to accept, or rename and merge them on the card. Calls
+are noticed on their own: when a known app (Zoom, Teams, Meet, Lark, Webex, Discord, FaceTime…) holds
+the microphone, the slime asks "Capture this meeting?" with Not now / Always / Never per app, quiet
+hours, and a 30-minute snooze; a call that ends is stopped on its own. Audio retention is yours to
+choose (delete, a 7-day AAC mixdown, or keep the WAVs), and a recording cut short by a crash is
+finished on the next launch.
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -156,6 +175,9 @@ open "mochlet://debug/settings?tab=agents&shot=1&$T"
 open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"   # remove=slug · offer=/path · open=1
 open "mochlet://debug/voice?text=记一下，买牛奶&$T"          # route words as if spoken; file=/path.aiff replays audio through the transcriber
 open "mochlet://debug/voice?pick=mochlet&$T"               # answer "which project?" (pick=cancel) · start=1 / stop=1 · cancel=1
+open "mochlet://debug/meeting?mic=/path/me.wav&sys=/path/them.wav&title=Planning&$T"   # two recordings processed as a meeting
+open "mochlet://debug/meeting?start=1&$T"                  # stop=1 · mark=text · detect=1 (what the call detector sees) · rename=p2:Alice · merge=p3:p2
+.build/debug/mochlet-cli diarize call.wav                    # who speaks when on one recording, with the similarity matrix behind it
 open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach

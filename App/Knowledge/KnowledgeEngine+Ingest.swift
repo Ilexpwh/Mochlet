@@ -176,6 +176,19 @@ extension KnowledgeEngine {
         return rel
     }
 
+    /// A meeting's knowledge page under `meetings/<id>.md` (rewritten when speakers are renamed).
+    func fileMeeting(_ doc: OKFDocument, id: String) throws -> String {
+        let i = try open()
+        try ensureDirectory("meetings")
+        let rel = "meetings/\(id).md"
+        let existed = exists(rel)
+        try bundle.write(doc, to: rel)
+        try bundle.appendLog(kind: "meeting", text: "\(OneLine.collapse(doc.frontmatter.title ?? id, limit: 80)) → \(rel)" + (existed ? " (updated)" : ""))
+        try bundle.reindex(into: i, only: [rel])
+        try bundle.regenerateIndexes(from: i)
+        return rel
+    }
+
     func moveReport(_ path: String, toProject project: String?) throws -> Filed {
         let i = try open()
         let doc = try OKFDocument.parse(try bundle.read(path))

@@ -189,6 +189,19 @@ extension KnowledgeEngine {
         return rel
     }
 
+    /// The daily signals digest: `signals/YYYY-MM-DD.md`, indexed, logged as `digest |`.
+    func fileDigest(_ doc: OKFDocument, day: String) throws -> String {
+        let i = try open()
+        try ensureDirectory(BundleLayout.signals)
+        let rel = "\(BundleLayout.signals)/\(day).md"
+        let existed = exists(rel)
+        try bundle.write(doc, to: rel)
+        try bundle.appendLog(kind: "digest", text: "\(OneLine.collapse(doc.frontmatter.title ?? day, limit: 80)) → \(rel)" + (existed ? " (updated)" : ""))
+        try bundle.reindex(into: i, only: [rel])
+        try bundle.regenerateIndexes(from: i)
+        return rel
+    }
+
     func moveReport(_ path: String, toProject project: String?) throws -> Filed {
         let i = try open()
         let doc = try OKFDocument.parse(try bundle.read(path))

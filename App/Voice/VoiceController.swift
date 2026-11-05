@@ -403,7 +403,7 @@ final class VoiceController {
             app.toggleMeetingNotes()
         case .signalsShow:
             done("signals")
-            app.toast("The AI signals digest arrives with milestone 10.", symbol: "antenna.radiowaves.left.and.right")
+            app.openSignals()
         case .dictate:
             done("dictate")
             if app.notch.view == .chat {

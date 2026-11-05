@@ -1,0 +1,5 @@
+{"items": [
+  {"title": "Inbox test: a benchmark for agent reliability", "url": "https://example.org/inbox/agent-benchmark", "summary": "A new benchmark measures how often LLM agents finish long tasks without supervision.", "published_at": "2026-11-06T01:00:00Z", "source": "inbox-test"},
+  {"title": "Inbox test: duplicate of the push item", "url": "https://example.org/inbox/dup", "summary": "Same story twice."},
+  {"title": "Inbox test: duplicate of the push item", "url": "https://example.org/inbox/dup2", "summary": "Same story twice."}
+]}

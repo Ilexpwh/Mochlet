@@ -18,7 +18,8 @@ wiki pages the app maintains over them, and a schema file that tells every agent
   projects/     <project-slug>/{index.md, <slug>.md, references/}   reports filed to a project
   notes/YYYY/MM/DD.md          type: note, one `## HH:MM` entry per spoken or typed note
   meetings/<date>-<slug>.md     type: meeting: summary + full transcript, resource → ~/Mochlet/Meetings/…/transcript.md
-  signals/ memories/            later milestones write here
+  signals/YYYY-MM-DD.md         type: digest: the day's AI signals (热点/Hot · 精选/Selected · 简讯/Briefs), sources = the items' URLs
+  memories/                     later milestones write here
 ```
 
 Every directory also gets `.abstract.md` (≤ 256 chars) and `.overview.md` (≤ 4000 chars) sidecars,
@@ -148,3 +149,20 @@ owners, open questions, topics with `HH:MM:SS` stamps, marks) and then the whole
 `**Name** \`HH:MM:SS\`` lines, so a query lands on the moment something was said. Renaming or merging
 speakers on the card rewrites the page (the log line says "updated"). The page is a normal wiki page:
 indexed, linted, integrable; the audio stays outside the bundle and follows the retention setting.
+
+## Signals
+
+The daily digest (`SignalsController`, written at the time set under Settings → Signals, or on demand) is
+filed as `signals/YYYY-MM-DD.md` with `type: digest`, `tags: [signals, digest]`, `sources[]` = one entry
+per selected item (`id: eN`, the item's URL, its English title) and `mochlet: {kind: digest, window
+{from, to}, items_seen, items, hot, rubric_hash}`. The body opens with the brain's overview (in the
+rubric's first language), then 热点/Hot (events carried by several sources, hotness ≥ 2), 精选/Selected
+(the best item per event, ranked by hotness then score, at most two per source) and 简讯/Briefs (one
+line each). Every entry is bilingual when `rubric.md` lists both `zh` and `en`: the Chinese title as the
+heading with `↑` for rising and `×n` for the number of sources, the English title in italics, both
+summaries, and a `<sub>` line with the reason, the source and the score; `[^eN]` footnotes point at the
+source URLs. Events already shown in the last seven digests come back only with a new party or four
+sources. The `signals_latest` MCP tool returns the newest page; `log.md` gets a `digest |` line. The
+items themselves (scores, writings, embeddings, events, hotness history) live outside the bundle in
+`~/Library/Application Support/Mochlet/signals.sqlite`, which is a cache: delete it and the sources are
+fetched again (30 newest items per source the first time; older ones are kept as history, not scored).

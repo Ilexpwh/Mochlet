@@ -353,7 +353,7 @@ final class MeetingController {
             last = finished
             finished.meta = try await fileInKnowledge(finished)
             last = finished
-            if let e = result.meta.processing.error { logger.error("summary failed for \(result.meta.id, privacy: .public): \(e, privacy: .private)") }
+            if let e = result.meta.processing.error { logger.error("summary failed for \(result.meta.id, privacy: .private(mask: .hash)): \(e, privacy: .private)") }
             current = nil
             state = .review
             stage = ""
@@ -361,7 +361,7 @@ final class MeetingController {
             app.slime.stage.main.trigger(.proud)
             app.slime.sound.play(SoundCue(.finish))
             app.window.send(.openExternally(.meetingLive))
-            logger.info("ready: \(result.meta.id, privacy: .public) (\(result.lines.count) lines, \(result.meta.speakers.count) speakers)")
+            logger.info("ready: \(result.meta.id, privacy: .private(mask: .hash)) (\(result.lines.count) lines, \(result.meta.speakers.count) speakers)")
         } catch {
             var m = meta
             m.processing.status = .failed

@@ -45,8 +45,7 @@ struct SettingsView: View {
             ProjectsSettingsView(app: app).tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
             KnowledgeSettingsView(app: app).tabItem { Label("Knowledge", systemImage: "books.vertical") }.tag("knowledge")
             VoiceSettingsView(app: app).tabItem { Label("Voice & Meetings", systemImage: "waveform") }.tag("voice")
-            ComingView(title: "Signals", text: "The AI signals engine arrives with milestone 10.")
-                .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }.tag("signals")
+            SignalsSettingsView(app: app).tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }.tag("signals")
         }
         .frame(width: 620, height: 500)
         .padding()

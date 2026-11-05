@@ -63,7 +63,15 @@ enum DebugCommands {
         case "state":
             result = writeState(app)
         case "shot":
-            result = shot(app, name: safeName(arg("name")), full: arg("full") == "1")
+            if arg("window") == "settings" {
+                // The Settings window (opened first with settings?tab=).
+                if let w = app.settingsWindow?.window, let img = capture(w, crop: nil) { result = write(img, name: safeName(arg("name"))) } else { result = "no settings window" }
+            } else {
+                result = shot(app, name: safeName(arg("name")), full: arg("full") == "1")
+            }
+        case "settings":
+            // settings?tab=general|agents|chat|projects|knowledge|voice|signals | close=1
+            if arg("close") != nil { app.settingsWindow?.close() } else { app.openSettings(tab: arg("tab")) }
         case "fsm":
             let input: NotchFSM.Input?
             switch arg("input") ?? "" {
@@ -272,6 +280,28 @@ enum DebugCommands {
                     try? line.write(to: resultFile, atomically: true, encoding: .utf8)
                 }
             }
+        case "signals":
+            // signals?run=1 | digest=1 | detect=url | add=feed|list | import=/path.json | newtoken=1 | pushtest=1 | push=1 (inbox file) | status=1 | reload=1
+            let s = app.signals!
+            if arg("run") != nil { s.runNow() }
+            else if arg("digest") != nil { s.composeDigestNow() }
+            else if let u = arg("detect") { s.detect(u) }
+            else if let a = arg("add") { s.addDetected(asList: a == "list") }
+            else if let p = arg("import") { s.importAIHOT(URL(fileURLWithPath: p)) }
+            else if arg("newtoken") != nil { s.regeneratePushToken() }
+            else if arg("pushtest") != nil {
+                // Posts two items to the local endpoint with the stored token; the answer lands in result.txt.
+                result = "pending push"
+                let resultFile = dir.appendingPathComponent("result.txt")
+                Task { @MainActor in
+                    let line = await s.debugPushTest()
+                    try? line.write(to: resultFile, atomically: true, encoding: .utf8)
+                }
+            }
+            else if arg("push") != nil { s.processInbox() }
+            else if arg("reload") != nil { s.reloadRubric() }
+            else if arg("recluster") != nil { s.reclusterNow() }
+            else { s.refreshStatus() }
         case "voice":
             // voice?text=…  route an utterance as if spoken | start=1 / stop=1 push-to-talk | file=/path.wav plays the microphone | cancel=1 | pick=slug answers "which project"
             if let t = arg("text") {
@@ -455,6 +485,7 @@ enum DebugCommands {
                         "folder": mt.last?.folder.path ?? "", "speakers": mt.last?.meta.speakers.map(\.name) ?? [], "kb": mt.last?.meta.kbPath ?? "",
                         "summary": mt.last?.summary?.overview ?? "", "recent": mt.recent.count, "ask": mt.detection?.appName ?? "", "systemAudio": mt.systemAudioError ?? "ok",
                         "micLevel": mt.micLevel, "systemLevel": mt.systemLevel] as [String: Any]
+        d["signals"] = app.signals!.debugState()
         let v = app.voice!
         d["voice"] = ["state": v.state.description, "caption": v.caption, "transcript": v.transcript, "heard": v.lastHeard, "action": v.lastAction ?? "", "error": v.error ?? "",
                       "locale": v.localeID, "pending": v.pending?.question ?? "", "assets": v.assetState.map { "\($0)" } ?? "", "download": v.downloadProgress ?? -1,

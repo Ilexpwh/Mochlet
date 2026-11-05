@@ -26,6 +26,8 @@ final class KnowledgeMCPServer: @unchecked Sendable {
                 }
                 if let reply = await handler.handle(message) { return .json(reply.data()) }
                 return HTTPResponse(status: 202)
+            case ("POST", "/api/ingest/items"):
+                return await SignalsController.handlePush(req)
             case ("GET", "/mcp"), ("DELETE", "/mcp"):
                 return .text("Mochlet speaks JSON-RPC over POST only (no SSE stream, no sessions).", status: 405)
             default:

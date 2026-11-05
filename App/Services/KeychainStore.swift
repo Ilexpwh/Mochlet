@@ -75,6 +75,15 @@ enum KeychainStore {
 
     static func has(_ account: String) -> Bool { !(get(account) ?? "").isEmpty }
 
+    /// Whether an item exists, without reading it: attributes only, so no access prompt even for an
+    /// item another build of the app created.
+    static func exists(_ account: String) -> Bool {
+        let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account,
+                                kSecReturnAttributes as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
+        var out: CFTypeRef?
+        return SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess
+    }
+
     private static func fallback() -> [String: String] {
         guard let data = try? Data(contentsOf: fallbackURL), let d = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
         return d

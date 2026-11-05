@@ -54,6 +54,12 @@ final class SettingsStore {
     var voiceLocale: String { didSet { defaults.set(voiceLocale, forKey: "voiceLocale") } }
     var voiceSpeakReplies: Bool { didSet { defaults.set(voiceSpeakReplies, forKey: "voiceSpeakReplies") } }
     var meetingRetention: MeetingRetention { didSet { defaults.set(meetingRetention.rawValue, forKey: "meetingRetention") } }
+    /// Signals: the engine, the digest time ("HH:mm"), brain calls per day, slime reactions, the inbox watch folder.
+    var signalsEnabled: Bool { didSet { defaults.set(signalsEnabled, forKey: "signalsEnabled") } }
+    var signalsDigestTime: String { didSet { defaults.set(signalsDigestTime, forKey: "signalsDigestTime") } }
+    var signalsDailyBudget: Int { didSet { defaults.set(signalsDailyBudget, forKey: "signalsDailyBudget") } }
+    var signalsReactions: Bool { didSet { defaults.set(signalsReactions, forKey: "signalsReactions") } }
+    var signalsWatchFolder: Bool { didSet { defaults.set(signalsWatchFolder, forKey: "signalsWatchFolder") } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -97,6 +103,11 @@ final class SettingsStore {
         voiceLocale = defaults.string(forKey: "voiceLocale") ?? "auto"
         voiceSpeakReplies = defaults.object(forKey: "voiceSpeakReplies") as? Bool ?? false
         meetingRetention = MeetingRetention(rawValue: defaults.string(forKey: "meetingRetention") ?? "") ?? .mixed7d
+        signalsEnabled = defaults.object(forKey: "signalsEnabled") as? Bool ?? true
+        signalsDigestTime = defaults.string(forKey: "signalsDigestTime") ?? "08:00"
+        signalsDailyBudget = defaults.object(forKey: "signalsDailyBudget") as? Int ?? 200
+        signalsReactions = defaults.object(forKey: "signalsReactions") as? Bool ?? true
+        signalsWatchFolder = defaults.object(forKey: "signalsWatchFolder") as? Bool ?? true
     }
 
     // MARK: Provider base URLs

@@ -116,6 +116,29 @@ hours, and a 30-minute snooze; a call that ends is stopped on its own. Audio ret
 choose (delete, a 7-day AAC mixdown, or keep the WAVs), and a recording cut short by a crash is
 finished on the next launch.
 
+## Signals
+
+Mochlet gathers AI news the way AIHOT does, on this Mac, with no server: `~/Mochlet/signals/sources.json`
+(AIHOT's format, so its `industry/sources.json` imports unchanged; 21 feeds to start, from OpenAI,
+DeepMind, Hugging Face, arXiv cs.AI, Hacker News, The Verge, 量子位, Simon Willison, Import AI and
+others) is fetched every minute where due, three sources at a time, 15 min to 3 h apart depending on
+what each yields. New items are deduplicated (canonical URL, simhash within 72 h), pass a no-model
+prefilter from `rubric.md` (deny list; T2 sources need an industry term), get two independent 0–100
+scores from the brain against the rubric, and the ones above their tier's threshold (T1 60, T1.5 65,
+T2 76; the rubric's frontmatter overrides them) are written in Chinese and English, embedded on device,
+grouped into events (title overlap and centred embeddings propose pairs, the brain confirms them), and
+ranked by hotness: independent sources in 48 h, weighted by tier, halving every 24 h. The Signals card
+(double-click → Signals, or "what's hot") shows today's count and the top events; a story that is
+suddenly everywhere (hotness ≥ 3 while new) makes the slime excited, once an hour at most and never in
+quiet hours. At 08:00 (Settings → Signals) the day's digest goes to `Knowledge/signals/YYYY-MM-DD.md` as
+a `digest` page: 热点/Hot · 精选/Selected · 简讯/Briefs, one line per event with footnotes to the
+sources, an overview from the brain, so it is searchable and Claude Code can read it through the
+`signals_latest` MCP tool. Add a source by URL (feeds and list pages are detected, with a preview),
+import an AIHOT `sources.json`, push items from other programs (`POST /api/ingest/items` on the local
+server with a bearer token, AIHOT's shape, ≤ 50 per call) or drop JSON files into
+`~/Mochlet/signals/inbox/`. `x_search` sources need a SocialData key; WeChat accounts need AIHOT's
+relay and import disabled. A daily budget caps brain calls (T2 waits first).
+
 ## Layout
 
 - `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
@@ -178,6 +201,8 @@ open "mochlet://debug/voice?pick=mochlet&$T"               # answer "which proje
 open "mochlet://debug/meeting?mic=/path/me.wav&sys=/path/them.wav&title=Planning&$T"   # two recordings processed as a meeting
 open "mochlet://debug/meeting?start=1&$T"                  # stop=1 · mark=text · detect=1 (what the call detector sees) · rename=p2:Alice · merge=p3:p2
 .build/debug/mochlet-cli diarize call.wav                    # who speaks when on one recording, with the similarity matrix behind it
+open "mochlet://debug/signals?run=1&$T"                    # fetch every source and run the pipeline; digest=1 · detect=https://… · add=feed|list · import=/path/sources.json
+open "mochlet://debug/signals?pushtest=1&$T"               # POST two items to the local endpoint with the stored token (newtoken=1 makes one); push=1 reads inbox/*.json
 open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
 open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
 open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach

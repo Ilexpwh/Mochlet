@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Sendable JSON tree, so hook payloads can cross actors and sit in stores.
-public enum JSONValue: Sendable, Equatable, Hashable, Codable {
+public enum JSONValue: Sendable, Equatable, Hashable {
     case null
     case bool(Bool)
     case number(Double)
@@ -91,5 +91,60 @@ public enum JSONValue: Sendable, Equatable, Hashable, Codable {
     public func firstString(_ keys: [String]) -> String? {
         for k in keys { if let s = self[k].string, !s.isEmpty { return s } }
         return nil
+    }
+}
+
+/// Codable as the JSON it is (`{"a": 1}` stays `{"a": 1}`), so it can sit inside other Codable types
+/// without the synthesized `{"number": {"_0": 1}}` shape.
+extension JSONValue: Codable {
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let keyed = try? decoder.container(keyedBy: Key.self) {
+            var o: [String: JSONValue] = [:]
+            for k in keyed.allKeys { o[k.stringValue] = try keyed.decode(JSONValue.self, forKey: k) }
+            self = .object(o)
+            return
+        }
+        if var unkeyed = try? decoder.unkeyedContainer() {
+            var a: [JSONValue] = []
+            while !unkeyed.isAtEnd { a.append(try unkeyed.decode(JSONValue.self)) }
+            self = .array(a)
+            return
+        }
+        let single = try decoder.singleValueContainer()
+        if single.decodeNil() { self = .null }
+        else if let b = try? single.decode(Bool.self) { self = .bool(b) }
+        else if let n = try? single.decode(Double.self) { self = .number(n) }
+        else if let s = try? single.decode(String.self) { self = .string(s) }
+        else { throw DecodingError.dataCorruptedError(in: single, debugDescription: "not JSON") }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .null:
+            var c = encoder.singleValueContainer()
+            try c.encodeNil()
+        case .bool(let b):
+            var c = encoder.singleValueContainer()
+            try c.encode(b)
+        case .number(let n):
+            var c = encoder.singleValueContainer()
+            if n == n.rounded(), abs(n) < 1e15 { try c.encode(Int(n)) } else { try c.encode(n) }
+        case .string(let s):
+            var c = encoder.singleValueContainer()
+            try c.encode(s)
+        case .array(let a):
+            var c = encoder.unkeyedContainer()
+            for v in a { try c.encode(v) }
+        case .object(let o):
+            var c = encoder.container(keyedBy: Key.self)
+            for k in o.keys.sorted() { try c.encode(o[k]!, forKey: Key(stringValue: k)) }
+        }
     }
 }

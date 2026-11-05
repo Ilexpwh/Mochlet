@@ -227,3 +227,52 @@ open "mochlet://debug/meeting?mic=$S/mic.aiff&sys=$S/sys.aiff&title=Release%20pl
 open "mochlet://debug/shot?name=meeting-review&$T"
 open "mochlet://debug/meeting?rename=p2:Daniel&$T"; open "mochlet://debug/meeting?detect=1&$T"; cat ~/Library/Logs/Mochlet/debug/result.txt
 ```
+
+## Signals (M10)
+
+1. Launch with a chat backend set (Settings → Chat; the brain). Twenty seconds later the first tick
+   fetches every source (`~/Mochlet/signals/sources.json` is created with the defaults, `rubric.md`
+   next to it). The Signals card (double-click → Signals, or say "what's hot") shows "fetching 21
+   sources", then "scoring 12 items" / "writing 10 items" / "grouping n items" as the pipeline runs;
+   the count on the right is today's items and how many were kept. Each run scores at most five
+   batches (60 items) and the next tick continues; Settings → Signals shows items today · kept ·
+   waiting · brain calls against the daily budget, and every source with its item count, next fetch
+   time or error (a source that fails backs off up to 12 h).
+2. Events: when the same story is written from two sources, the card lists it with its hotness
+   (0.5–1.0 per source, halving daily), `↑` when rising, `×n` sources; the row opens the top item.
+   A story at hotness ≥ 3 that is less than six hours old makes the slime excited with a toast
+   ("Everyone is on it: …"), once an hour, not in quiet hours.
+3. Digest: Settings → Signals → Compose digest (or wait for the daily time). `Knowledge/signals/
+   YYYY-MM-DD.md` appears with the overview, 热点/Hot · 精选/Selected · 简讯/Briefs and `[^eN]`
+   footnotes; `log.md` has `digest | AI 信号 … → signals/….md`; the card's Digest button opens it;
+   "Ask" asks the knowledge base about it; `signals_latest` over MCP returns it.
+4. Sources: type a site URL in Settings → Signals → Detect: a feed URL says "A feed: … n entries"
+   (Add as RSS source); a page lists the feeds it links and, when it has a repeated list of links,
+   "A list: n entries under `selector`" with samples (Add as web list). Import AIHOT… merges a
+   `sources.json` (added / updated / unchanged / disabled for WeChat accounts). Toggle, change the
+   tier or remove a source in the list; Open rubric.md, edit the thresholds or the deny list, Reload
+   rubric.
+5. Push: Create push token, Copy curl example, paste it in a terminal → `{"ok":true,"created":1}`;
+   a wrong token → 401. Drop a JSON file (`{"items": [{"title", "url", "summary"}]}`) into
+   `~/Mochlet/signals/inbox/`: it is read within two seconds and moved to `inbox/done/`.
+6. Quiet: with no chat backend the sources are still fetched and the card says what is missing;
+   items wait three days for a brain and then expire.
+
+Scripted version:
+
+```sh
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/signals?run=1&$T"                    # fetch all + pipeline; poll state.json → signals.running / stage / report
+open "mochlet://debug/view?name=signals&$T"; open "mochlet://debug/shot?name=signals&$T"
+open "mochlet://debug/signals?digest=1&$T"                 # then: cat ~/Mochlet/Knowledge/signals/$(date +%F).md; grep "digest |" ~/Mochlet/Knowledge/log.md
+open "mochlet://debug/signals?detect=https://www.theverge.com/ai-artificial-intelligence&$T"   # state.json → signals.detected (two feeds, a list of 25)
+open "mochlet://debug/signals?import=$PWD/Tests/Fixtures/signals/aihot-sources.json&$T"       # signals.import: "2 added, 1 updated, …, 1 disabled"
+open "mochlet://debug/signals?newtoken=1&$T"; open "mochlet://debug/signals?pushtest=1&$T"; cat ~/Library/Logs/Mochlet/debug/result.txt   # push: 200 {"ok":true,"created":1} | bad token: 401
+cp Tests/Fixtures/signals/inbox-items.json ~/Mochlet/signals/inbox/; sleep 3; ls ~/Mochlet/signals/inbox/done
+open "mochlet://debug/settings?tab=signals&$T"; open "mochlet://debug/shot?name=settings-signals&window=settings&$T"
+```
+
+Seen on this Mac (2026-11-06): 21 feeds fetched in ~30 s; the brain (Claude Code) takes ~25 s per
+scoring call and a few minutes per writing batch, so the first run of a fresh install is 10–20 minutes;
+`openai.com` resolves to a 100.64/10 address on this network, which is why user-configured sources are
+not gated by the public-host policy (only bodies of pushed-in items are).

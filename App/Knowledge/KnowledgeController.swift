@@ -557,7 +557,7 @@ final class KnowledgeController {
         case "signals_latest":
             let digests = (try? await engine.documents(pathPrefix: BundleLayout.signals + "/", types: ["digest"])) ?? []
             guard let latest = digests.sorted(by: { $0.path > $1.path }).first else {
-                return MCPToolResult(text: "No signals digest yet (the AI signals engine arrives with milestone 10).")
+                return MCPToolResult(text: "No signals digest yet: Mochlet writes one daily at the time set under Settings → Signals (or Compose digest there).")
             }
             let text = (try? await engine.read(latest.path)) ?? ""
             return MCPToolResult(text: text, structured: .object(["path": .string(latest.path), "title": .string(latest.title)]))

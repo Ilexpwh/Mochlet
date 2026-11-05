@@ -71,6 +71,7 @@ final class AppCoordinator {
     private(set) var ingest: IngestController!
     private(set) var voice: VoiceController!
     private(set) var meetings: MeetingController!
+    private(set) var signals: SignalsController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
     private var statusItem: StatusItemController!
@@ -106,6 +107,7 @@ final class AppCoordinator {
         ingest = IngestController(app: self)
         voice = VoiceController(app: self)
         meetings = MeetingController(app: self)
+        signals = SignalsController(app: self)
         installers = AgentInstallerController(app: self)
         hooks = HookCenter(app: self)
         statusItem = StatusItemController(app: self)
@@ -115,6 +117,7 @@ final class AppCoordinator {
         chat.start()
         knowledge.start()
         meetings.start()
+        signals.start()
         hooks.start()
         installers.refresh()
         #if DEBUG
@@ -382,7 +385,7 @@ final class AppCoordinator {
         case .meetings:
             openMeetings()
         case .signals:
-            toast("AI signals arrive with milestone 10.", symbol: action.symbol)
+            openSignals()
         }
     }
 
@@ -445,6 +448,10 @@ final class AppCoordinator {
 
     func openMeetings() {
         window.send(.openExternally(.meetingLive))
+    }
+
+    func openSignals() {
+        window.send(.openExternally(.signals))
     }
 
     // MARK: - Hot keys

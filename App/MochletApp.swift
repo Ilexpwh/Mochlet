@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         AppCoordinator.shared.meetings?.shutdown()
+        AppCoordinator.shared.signals?.stop()
         AppCoordinator.shared.stop()
     }
 

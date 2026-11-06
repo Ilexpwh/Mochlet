@@ -29,7 +29,7 @@ final class SlimeBridge {
     }
 
     func apply(settings: SettingsStore) {
-        stage.theme = SlimeTheme.named(settings.themeName)
+        stage.appearance = settings.character.appearance
         stage.maxVisibleMinis = settings.maxVisibleMinis
         stage.reduceMotion = settings.reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         sound.isEnabled = settings.soundEnabled

@@ -6,7 +6,12 @@ import simd
 @MainActor
 public final class SlimeEngine {
     public let profile: SlimeProfile
-    public var theme: SlimeTheme = .rimuru
+    /// Species, colour and clothes. Set by the stage; the renderer reads it next to the frame.
+    public var appearance: SlimeAppearance = .rimuru
+    public var theme: SlimeTheme {
+        get { appearance.palette }
+        set { appearance.palette = newValue }
+    }
     public private(set) var body: SoftBody
     public var eyeRig: EyeRig
     public var gaze = Gaze()

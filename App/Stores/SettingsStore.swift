@@ -14,7 +14,10 @@ final class SettingsStore {
     var autoCloseSeconds: Double { didSet { defaults.set(autoCloseSeconds, forKey: "autoCloseSeconds") } }
     var soundEnabled: Bool { didSet { defaults.set(soundEnabled, forKey: "soundEnabled") } }
     var soundVolume: Double { didSet { defaults.set(soundVolume, forKey: "soundVolume") } }
-    var themeName: String { didSet { defaults.set(themeName, forKey: "themeName") } }
+    /// The slime's look, colour, outfit and sound choices (Settings → Character).
+    var character: CharacterConfig {
+        didSet { if let d = try? JSONEncoder().encode(character) { defaults.set(d, forKey: "character") } }
+    }
     var hotkeysEnabled: Bool { didSet { defaults.set(hotkeysEnabled, forKey: "hotkeysEnabled") } }
     /// nil follows the system Reduce Motion setting.
     var reduceMotionOverride: Bool? { didSet { defaults.set(reduceMotionOverride.map { $0 ? "on" : "off" } ?? "system", forKey: "reduceMotion") } }
@@ -68,7 +71,14 @@ final class SettingsStore {
         autoCloseSeconds = defaults.object(forKey: "autoCloseSeconds") as? Double ?? 15
         soundEnabled = defaults.object(forKey: "soundEnabled") as? Bool ?? true
         soundVolume = defaults.object(forKey: "soundVolume") as? Double ?? 0.5
-        themeName = defaults.string(forKey: "themeName") ?? "rimuru"
+        if let d = defaults.data(forKey: "character"), let c = try? JSONDecoder().decode(CharacterConfig.self, from: d) {
+            character = c
+        } else {
+            // 2.0 stored only a palette name.
+            var c = CharacterConfig()
+            if let old = defaults.string(forKey: "themeName") { c.selectPalette(old) }
+            character = c
+        }
         hotkeysEnabled = defaults.object(forKey: "hotkeysEnabled") as? Bool ?? true
         switch defaults.string(forKey: "reduceMotion") {
         case "on": reduceMotionOverride = true

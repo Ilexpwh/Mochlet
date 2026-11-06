@@ -17,12 +17,15 @@ public struct PlacedSlime: Sendable, Equatable {
     public var scale: Double
     /// Offset of this slime's contact origin from the main origin, in main R units (y down).
     public var offset: SIMD2<Double>
+    /// How this slime is drawn (minis and the ghost carry their own derived appearance).
+    public var appearance: SlimeAppearance
 
-    public init(id: String?, frame: SlimeFrame, scale: Double, offset: SIMD2<Double>) {
+    public init(id: String?, frame: SlimeFrame, scale: Double, offset: SIMD2<Double>, appearance: SlimeAppearance = .rimuru) {
         self.id = id
         self.frame = frame
         self.scale = scale
         self.offset = offset
+        self.appearance = appearance
     }
 }
 
@@ -121,8 +124,19 @@ public final class SlimeStage {
     public var onEvent: ((SlimeEvent) -> Void)?
     public var onMiniEvent: ((String, SlimeEvent) -> Void)?
 
+    /// Species, colour and clothes of the cast: minis get `forMini`, the ghost `forGhost`.
+    public var appearance: SlimeAppearance {
+        didSet {
+            guard appearance != oldValue else { return }
+            main.appearance = appearance
+            for m in minis { m.engine.appearance = appearance.forMini }
+            ghost?.appearance = appearance.forGhost
+        }
+    }
+    /// The palette alone (the old API).
     public var theme: SlimeTheme {
-        didSet { for e in allEngines { e.theme = theme } }
+        get { appearance.palette }
+        set { appearance.palette = newValue }
     }
 
     public var reduceMotion: Bool {
@@ -167,11 +181,15 @@ public final class SlimeStage {
     private var awayAt: Double?
     public var isDraggingOut: Bool { ghost != nil && !ghostReturning }
 
-    public init(seed: UInt64 = 1, theme: SlimeTheme = .rimuru, reduceMotion: Bool = false) {
+    public convenience init(seed: UInt64 = 1, theme: SlimeTheme, reduceMotion: Bool = false) {
+        self.init(seed: seed, appearance: SlimeAppearance(palette: theme), reduceMotion: reduceMotion)
+    }
+
+    public init(seed: UInt64 = 1, appearance: SlimeAppearance = .rimuru, reduceMotion: Bool = false) {
         main = SlimeEngine(profile: .main, seed: seed)
-        self.theme = theme
+        self.appearance = appearance
         self.reduceMotion = reduceMotion
-        main.theme = theme
+        main.appearance = appearance
         main.reduceMotion = reduceMotion
         rng = SeededRandom(seed: seed &+ 0x9E37)
         nextSeed = seed &+ 101
@@ -235,13 +253,13 @@ public final class SlimeStage {
     // MARK: - Output
 
     public func frames() -> [PlacedSlime] {
-        var out: [PlacedSlime] = [PlacedSlime(id: nil, frame: main.frame(), scale: 1, offset: .zero)]
+        var out: [PlacedSlime] = [PlacedSlime(id: nil, frame: main.frame(), scale: 1, offset: .zero, appearance: main.appearance)]
         for m in minis where m.phase != .pinching {
             if m.phase == .live, m.slot >= maxVisibleMinis { continue }
-            out.append(PlacedSlime(id: m.id, frame: m.engine.frame(), scale: liveScale, offset: SIMD2(0, -Double(m.row) * Self.rowLift)))
+            out.append(PlacedSlime(id: m.id, frame: m.engine.frame(), scale: liveScale, offset: SIMD2(0, -Double(m.row) * Self.rowLift), appearance: m.engine.appearance))
         }
         if let g = ghost {
-            out.append(PlacedSlime(id: "ghost", frame: g.frame(), scale: 1, offset: .zero))
+            out.append(PlacedSlime(id: "ghost", frame: g.frame(), scale: 1, offset: .zero, appearance: g.appearance))
         }
         return out
     }
@@ -294,7 +312,7 @@ public final class SlimeStage {
         guard mini(id) == nil else { return nil }
         let engine = SlimeEngine(profile: .mini, seed: nextSeed)
         nextSeed &+= 7919
-        engine.theme = theme
+        engine.appearance = appearance.forMini
         engine.reduceMotion = reduceMotion
         let slot = minis.filter { $0.phase != .merging }.count
         let m = MiniSlime(id: id, engine: engine, slot: slot, at: time)
@@ -555,7 +573,7 @@ public final class SlimeStage {
         guard ghost == nil, split == nil else { return }
         let g = SlimeEngine(profile: .ghost, seed: nextSeed)
         nextSeed &+= 7919
-        g.theme = theme
+        g.appearance = appearance.forGhost
         g.reduceMotion = reduceMotion
         g.opacity = 0.7
         let start = main.body.root

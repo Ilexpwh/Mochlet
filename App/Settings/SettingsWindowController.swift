@@ -14,7 +14,7 @@ final class SettingsWindowController: NSWindowController {
         window.title = "Mochlet Settings"
         window.isReleasedWhenClosed = false
         super.init(window: window)
-        window.contentView = NSHostingView(rootView: SettingsView(app: app))
+        window.contentView = NSHostingView(rootView: SettingsView(app: app, preview: CharacterPreviewModel()))
         window.center()
     }
 
@@ -36,10 +36,12 @@ final class SettingsWindowController: NSWindowController {
 
 struct SettingsView: View {
     let app: AppCoordinator
+    let preview: CharacterPreviewModel
 
     var body: some View {
         TabView(selection: Binding(get: { app.notch.settingsTab }, set: { app.notch.settingsTab = $0 })) {
             GeneralSettingsView(app: app).tabItem { Label("General", systemImage: "slider.horizontal.3") }.tag("general")
+            CharacterSettingsView(app: app, preview: preview).tabItem { Label("Character", systemImage: "face.smiling") }.tag("character")
             AgentsSettingsView(app: app).tabItem { Label("Agents", systemImage: "terminal") }.tag("agents")
             ChatSettingsView(app: app).tabItem { Label("Chat", systemImage: "bubble.left") }.tag("chat")
             ProjectsSettingsView(app: app).tabItem { Label("Projects", systemImage: "folder") }.tag("projects")
@@ -226,26 +228,6 @@ struct GeneralSettingsView: View {
                     Text("\(Int(s.autoCloseSeconds)) s").monospacedDigit().frame(width: 36)
                 }
                 Toggle("Greet me when Mochlet starts", isOn: $s.greetOnLaunch)
-            }
-            Section("Character") {
-                Picker("Colour", selection: $s.themeName) {
-                    ForEach(SlimeTheme.names, id: \.self) { Text($0.capitalized).tag($0) }
-                }
-                .onChange(of: s.themeName) { _, _ in app.applySettings() }
-                Toggle("Sounds", isOn: $s.soundEnabled).onChange(of: s.soundEnabled) { _, _ in app.applySettings() }
-                HStack {
-                    Slider(value: $s.soundVolume, in: 0...1) { Text("Volume") }
-                        .onChange(of: s.soundVolume) { _, _ in app.applySettings() }
-                    Button("Test") { app.slime.sound.play(SoundCue(.greet)) }
-                }
-                Picker("Motion", selection: Binding(get: { s.reduceMotionOverride.map { $0 ? "on" : "off" } ?? "system" },
-                                                    set: { s.reduceMotionOverride = $0 == "system" ? nil : ($0 == "on"); app.applySettings() })) {
-                    Text("Follow system Reduce Motion").tag("system")
-                    Text("Full motion").tag("off")
-                    Text("Reduced motion").tag("on")
-                }
-                Stepper("Visible mini slimes: \(s.maxVisibleMinis)", value: $s.maxVisibleMinis, in: 2...6)
-                    .onChange(of: s.maxVisibleMinis) { _, _ in app.applySettings() }
             }
             Section("System") {
                 Toggle("Launch at login", isOn: Binding(get: { s.launchAtLogin }, set: { s.launchAtLogin = $0 }))

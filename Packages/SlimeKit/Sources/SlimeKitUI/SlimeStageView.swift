@@ -56,7 +56,7 @@ public struct SlimeStageView: View {
                 }
                 stage.advance(to: date.timeIntervalSinceReferenceDate)
                 let placed = drawsGhost ? stage.frames() : stage.frames().filter { $0.id != "ghost" }
-                Self.draw(placed, theme: stage.theme, in: &ctx, origin: o, radius: radius)
+                Self.draw(placed, in: &ctx, origin: o, radius: radius)
                 if let sink { sink.play(stage.drainCues()) } else { _ = stage.drainCues() }
                 let desired = stage.frameInterval
                 if desired != interval {
@@ -71,10 +71,10 @@ public struct SlimeStageView: View {
     }
 
     /// Draws placed slimes: main first, then minis, then the ghost.
-    public static func draw(_ placed: [PlacedSlime], theme: SlimeTheme, in ctx: inout GraphicsContext, origin: CGPoint, radius: CGFloat) {
+    public static func draw(_ placed: [PlacedSlime], in ctx: inout GraphicsContext, origin: CGPoint, radius: CGFloat) {
         for p in placed {
             let o = CGPoint(x: origin.x + CGFloat(p.offset.x) * radius, y: origin.y + CGFloat(p.offset.y) * radius)
-            SlimeRenderer.draw(p.frame, theme: theme, in: &ctx, origin: o, radius: radius * CGFloat(p.scale))
+            SlimeRenderer.draw(p.frame, appearance: p.appearance, in: &ctx, origin: o, radius: radius * CGFloat(p.scale))
         }
     }
 }

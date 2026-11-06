@@ -120,7 +120,7 @@ func bench(_ args: Args) {
         let wall0 = Date.timeIntervalSinceReferenceDate
         while frames < 60 {
             stage.simulate(1.0 / 30.0)
-            let view = StageFrameView(placed: stage.frames(), theme: stage.theme, radius: R, size: size, origin: origin)
+            let view = StageFrameView(placed: stage.frames(), radius: R, size: size, origin: origin)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 1
             renderer.proposedSize = ProposedViewSize(size)
@@ -158,7 +158,7 @@ func renderIcon(_ args: Args) throws {
             RoundedRectangle(cornerRadius: CGFloat(px) * 0.22, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.20), Color(red: 0.03, green: 0.04, blue: 0.08)], startPoint: .top, endPoint: .bottom))
                 .padding(CGFloat(px) * 0.02)
-            SlimeFrameView(frame: frame, theme: engine.theme, radius: R, size: size, origin: origin, background: .clear)
+            SlimeFrameView(frame: frame, appearance: engine.appearance, radius: R, size: size, origin: origin, background: .clear)
         }
         .frame(width: size.width, height: size.height)
         let renderer = ImageRenderer(content: view)

@@ -57,7 +57,7 @@ public extension SlimeFrame {
 
 public extension PlacedSlime {
     func visuallyDiffers(from o: PlacedSlime, pixelsPerUnit ppu: Double, pixelTolerance: Double = 0.3) -> Bool {
-        if id != o.id || abs(scale - o.scale) > 0.004 { return true }
+        if id != o.id || abs(scale - o.scale) > 0.004 || appearance != o.appearance { return true }
         if simd_distance(offset, o.offset) * ppu > pixelTolerance { return true }
         return frame.visuallyDiffers(from: o.frame, pixelsPerUnit: ppu * scale, pixelTolerance: pixelTolerance)
     }

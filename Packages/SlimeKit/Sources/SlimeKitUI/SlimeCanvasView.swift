@@ -37,7 +37,7 @@ public struct SlimeCanvasView: View {
                 }
                 engine.advance(to: date.timeIntervalSinceReferenceDate)
                 let frame = engine.frame()
-                SlimeRenderer.draw(frame, theme: engine.theme, in: &ctx, origin: o, radius: radius)
+                SlimeRenderer.draw(frame, appearance: engine.appearance, in: &ctx, origin: o, radius: radius)
                 let desired = engine.frameInterval
                 if desired != interval {
                     Task { @MainActor in interval = desired }
@@ -53,25 +53,29 @@ public struct SlimeCanvasView: View {
 /// Static drawing of one frame (filmstrips, previews, the app icon).
 public struct SlimeFrameView: View {
     public var frame: SlimeFrame
-    public var theme: SlimeTheme
+    public var appearance: SlimeAppearance
     public var radius: CGFloat
     public var size: CGSize
     public var origin: CGPoint
     public var background: Color
 
-    public init(frame: SlimeFrame, theme: SlimeTheme, radius: CGFloat, size: CGSize, origin: CGPoint, background: Color = .black) {
+    public init(frame: SlimeFrame, appearance: SlimeAppearance, radius: CGFloat, size: CGSize, origin: CGPoint, background: Color = .black) {
         self.frame = frame
-        self.theme = theme
+        self.appearance = appearance
         self.radius = radius
         self.size = size
         self.origin = origin
         self.background = background
     }
 
+    public init(frame: SlimeFrame, theme: SlimeTheme, radius: CGFloat, size: CGSize, origin: CGPoint, background: Color = .black) {
+        self.init(frame: frame, appearance: SlimeAppearance(palette: theme), radius: radius, size: size, origin: origin, background: background)
+    }
+
     public var body: some View {
         Canvas(rendersAsynchronously: false) { ctx, _ in
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(background))
-            SlimeRenderer.draw(frame, theme: theme, in: &ctx, origin: origin, radius: radius)
+            SlimeRenderer.draw(frame, appearance: appearance, in: &ctx, origin: origin, radius: radius)
         }
         .frame(width: size.width, height: size.height)
     }

@@ -153,7 +153,7 @@ struct GhostView: View {
                 let frame = ghost.frame()
                 let centre = CGPoint(x: size / 2, y: size / 2)
                 let origin = CGPoint(x: centre.x - CGFloat(frame.root.x) * radius, y: centre.y - CGFloat(frame.root.y) * radius)
-                SlimeRenderer.draw(frame, theme: stage.theme, in: &ctx, origin: origin, radius: radius)
+                SlimeRenderer.draw(frame, appearance: stage.appearance.forGhost, in: &ctx, origin: origin, radius: radius)
             }
         }
         .frame(width: size, height: size)

@@ -8,9 +8,11 @@ import SlimeKit
 /// Used by the AppKit layer view directly and by the SwiftUI Canvas through `withCGContext`.
 public struct SlimeCGRenderer {
     public let frame: SlimeFrame
-    public let theme: SlimeTheme
+    public let appearance: SlimeAppearance
     public let origin: CGPoint
     public let R: CGFloat
+    /// The palette (colours) of `appearance`.
+    public var theme: SlimeTheme { appearance.palette }
 
     private let rim: RGBA
     private let deep: RGBA
@@ -18,16 +20,25 @@ public struct SlimeCGRenderer {
     private let core: RGBA
     private static let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
-    public init(frame: SlimeFrame, theme: SlimeTheme, origin: CGPoint, radius: CGFloat) {
+    public init(frame: SlimeFrame, appearance: SlimeAppearance, origin: CGPoint, radius: CGFloat) {
         self.frame = frame
-        self.theme = theme
+        self.appearance = appearance
         self.origin = origin
         self.R = radius
+        let theme = appearance.palette
         let t = frame.tint
         rim = theme.rim.mixed(with: t.color, t.opacity).desaturated(t.desaturation)
         deep = theme.deep.mixed(with: t.color, t.opacity * 0.8).desaturated(t.desaturation)
         mid = theme.mid.mixed(with: t.color, t.opacity * 0.6).desaturated(t.desaturation)
         core = theme.core.desaturated(t.desaturation)
+    }
+
+    public init(frame: SlimeFrame, theme: SlimeTheme, origin: CGPoint, radius: CGFloat) {
+        self.init(frame: frame, appearance: SlimeAppearance(palette: theme), origin: origin, radius: radius)
+    }
+
+    public static func draw(_ frame: SlimeFrame, appearance: SlimeAppearance, in cg: CGContext, origin: CGPoint, radius: CGFloat) {
+        SlimeCGRenderer(frame: frame, appearance: appearance, origin: origin, radius: radius).draw(in: cg)
     }
 
     public static func draw(_ frame: SlimeFrame, theme: SlimeTheme, in cg: CGContext, origin: CGPoint, radius: CGFloat) {
@@ -316,10 +327,10 @@ public struct SlimeCGRenderer {
             p.move(to: CGPoint(x: 0.7 * w, y: -0.7 * h)); p.addLine(to: CGPoint(x: -0.7 * w, y: 0.7 * h))
             stroke(p, theme.ink, width: ink, in: cg)
         case .heart:
-            fill(BodyPath.heart(center: CGPoint(x: 0, y: -h * 0.1), size: w * 0.95).cgPath, RGBA(hex: 0xFF5C8A), in: cg)
+            fill(BodyPath.heart(center: CGPoint(x: 0, y: -h * 0.1), size: w * 0.95).cgPath, theme.heart, in: cg)
         case .star:
             let star = BodyPath.star(center: .zero, radius: max(w, h) * 1.05).cgPath
-            fill(star, RGBA(hex: 0xFFC83D), in: cg)
+            fill(star, theme.star, in: cg)
             stroke(star, theme.ink, width: ink * 0.5, in: cg)
         case .flat:
             let p = CGMutablePath()
@@ -365,7 +376,7 @@ public struct SlimeCGRenderer {
                 cg.saveGState()
                 cg.addPath(Self.ellipse(.zero, w, h))
                 cg.clip()
-                fill(Self.ellipse(CGPoint(x: 0, y: h * 0.25 + h * 0.45), w * 0.7, h * 0.45), RGBA(hex: 0xE2607F), 0.9, in: cg)
+                fill(Self.ellipse(CGPoint(x: 0, y: h * 0.25 + h * 0.45), w * 0.7, h * 0.45), theme.tongue, 0.9, in: cg)
                 cg.restoreGState()
             }
         case .o:
@@ -404,7 +415,7 @@ public struct SlimeCGRenderer {
             switch a.kind {
             case .question, .exclamation, .dots:
                 let r = 0.5 * R
-                let fillColor: RGBA = a.kind == .exclamation ? RGBA(hex: 0xFFC14D) : .white
+                let fillColor: RGBA = a.kind == .exclamation ? theme.accent : .white
                 let tail = CGMutablePath()
                 tail.move(to: CGPoint(x: -r * 0.55, y: r * 0.45))
                 tail.addLine(to: CGPoint(x: -r * 0.95, y: r * 0.95))
@@ -489,7 +500,7 @@ public struct SlimeCGRenderer {
                 cg.saveGState()
                 cg.translateBy(x: c.x, y: c.y)
                 cg.rotate(by: p.spin * p.age)
-                fill(BodyPath.star(center: .zero, radius: size * (1 - t * 0.3)).cgPath, RGBA(hex: 0xFFC83D), 1 - t, in: cg)
+                fill(BodyPath.star(center: .zero, radius: size * (1 - t * 0.3)).cgPath, theme.star, 1 - t, in: cg)
                 cg.restoreGState()
             case .zzz:
                 let s = size * (1 + t * 0.9) * 0.5

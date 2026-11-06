@@ -12,7 +12,12 @@ public struct FilmstripOptions: Sendable {
     public var fps = 24.0
     public var radius: CGFloat = 64
     public var seed: UInt64 = 7
-    public var theme = SlimeTheme.rimuru
+    public var appearance = SlimeAppearance.rimuru
+    /// The palette of `appearance` (kept for callers that only pick a colour).
+    public var theme: SlimeTheme {
+        get { appearance.palette }
+        set { appearance.palette = newValue }
+    }
     public var columns = 8
     public var preroll = 0.6
     /// Canvas size in R and the horizontal position of the main contact point (fraction of width).
@@ -188,9 +193,9 @@ public enum Filmstrip {
 
     @MainActor
     public static func render(_ o: FilmstripOptions) throws -> FilmstripResult {
-        let stage = SlimeStage(seed: o.seed, theme: o.theme, reduceMotion: o.reduceMotion)
+        let stage = SlimeStage(seed: o.seed, appearance: o.appearance, reduceMotion: o.reduceMotion)
         let miniEngine: SlimeEngine? = o.mini ? SlimeEngine(profile: .mini, seed: o.seed) : nil
-        miniEngine?.theme = o.theme
+        miniEngine?.appearance = o.appearance.forMini
         if let p = o.pointer {
             stage.pointer(p)
             miniEngine?.pointer(p)
@@ -216,10 +221,10 @@ public enum Filmstrip {
             }
             let drained = miniEngine?.drainCues() ?? stage.drainCues()
             for c in drained { cues.append(String(format: "%.3f %@", t, c.sound.rawValue)) }
-            let placed: [PlacedSlime] = miniEngine.map { [PlacedSlime(id: nil, frame: $0.frame(), scale: 1, offset: .zero)] } ?? stage.frames()
+            let placed: [PlacedSlime] = miniEngine.map { [PlacedSlime(id: nil, frame: $0.frame(), scale: 1, offset: .zero, appearance: $0.appearance)] } ?? stage.frames()
             let frame = placed[0].frame
             let engine = miniEngine ?? stage.main
-            let view = StageFrameView(placed: placed, theme: o.theme, radius: R, size: size, origin: origin)
+            let view = StageFrameView(placed: placed, radius: R, size: size, origin: origin)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 1
             renderer.proposedSize = ProposedViewSize(size)
@@ -302,15 +307,13 @@ public enum Filmstrip {
 /// Static drawing of a set of placed slimes (filmstrips, previews).
 public struct StageFrameView: View {
     public var placed: [PlacedSlime]
-    public var theme: SlimeTheme
     public var radius: CGFloat
     public var size: CGSize
     public var origin: CGPoint
     public var background: Color
 
-    public init(placed: [PlacedSlime], theme: SlimeTheme, radius: CGFloat, size: CGSize, origin: CGPoint, background: Color = .black) {
+    public init(placed: [PlacedSlime], radius: CGFloat, size: CGSize, origin: CGPoint, background: Color = .black) {
         self.placed = placed
-        self.theme = theme
         self.radius = radius
         self.size = size
         self.origin = origin
@@ -320,7 +323,7 @@ public struct StageFrameView: View {
     public var body: some View {
         Canvas(rendersAsynchronously: false) { ctx, _ in
             ctx.fill(Path(CGRect(origin: .zero, size: size)), with: .color(background))
-            SlimeStageView.draw(placed, theme: theme, in: &ctx, origin: origin, radius: radius)
+            SlimeStageView.draw(placed, in: &ctx, origin: origin, radius: radius)
         }
         .frame(width: size.width, height: size.height)
     }

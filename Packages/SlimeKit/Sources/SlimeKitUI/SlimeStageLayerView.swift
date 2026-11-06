@@ -74,6 +74,11 @@ public final class SlimeStageLayerView: NSView {
     public override var isFlipped: Bool { true }
     public override var isOpaque: Bool { false }
 
+    /// The view is a picture, never a mouse target: it usually covers the whole island, and the
+    /// host's own hit view decides what a click on a slime means. Without this every click over
+    /// the island stopped here instead of reaching the SwiftUI buttons drawn underneath.
+    public override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window != nil { start() } else { stop() }
@@ -193,7 +198,7 @@ public final class SlimeStageLayerView: NSView {
         cg.scaleBy(x: scale, y: -scale)
         cg.setAllowsAntialiasing(true)
         cg.setShouldAntialias(true)
-        Self.draw(placed, theme: stage.theme, in: cg, origin: origin(bounds.size), radius: radius)
+        Self.draw(placed, in: cg, origin: origin(bounds.size), radius: radius)
         cg.restoreGState()
         layer.contentsScale = scale
         layer.contentsGravity = .resize
@@ -202,10 +207,10 @@ public final class SlimeStageLayerView: NSView {
     }
 
     /// Draws placed slimes: main first, then minis, then the ghost.
-    public static func draw(_ placed: [PlacedSlime], theme: SlimeTheme, in cg: CGContext, origin: CGPoint, radius: CGFloat) {
+    public static func draw(_ placed: [PlacedSlime], in cg: CGContext, origin: CGPoint, radius: CGFloat) {
         for p in placed {
             let o = CGPoint(x: origin.x + CGFloat(p.offset.x) * radius, y: origin.y + CGFloat(p.offset.y) * radius)
-            SlimeCGRenderer.draw(p.frame, theme: theme, in: cg, origin: o, radius: radius * CGFloat(p.scale))
+            SlimeCGRenderer.draw(p.frame, appearance: p.appearance, in: cg, origin: o, radius: radius * CGFloat(p.scale))
         }
     }
 }

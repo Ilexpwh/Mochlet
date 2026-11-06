@@ -19,6 +19,8 @@ import MochletCore
 ///   mini?id=a&state=working     spawn/update a mini     endmini?id=a      remove it
 ///   split greet sleep wake drop chew(?seconds=) listen(?seconds=)
 ///   press?x=&y=  release  click?x=&y=[&count=1]  hold?x=&y=&seconds=
+///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
+///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | reset=1    change the character
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1
 ///   desktop?on=1|0 | desktop?sx=&sy=
 @MainActor
@@ -140,6 +142,34 @@ enum DebugCommands {
             app.slimePressed(atIsland: islandPoint(app, num("x"), num("y")))
         case "release":
             app.slimeReleased(screen: NSEvent.mouseLocation)
+        case "click" where arg("real") != nil:
+            // Real AppKit dispatch: the panel hit-tests its view tree for a synthesised event exactly as
+            // it does for one from the window server, so this reaches SwiftUI buttons under the slime view.
+            let p = islandPoint(app, num("x"), num("y"))
+            let w = app.window!
+            let r = w.islandScreenRect()
+            let screen = NSPoint(x: r.minX + p.x, y: r.maxY - p.y)
+            if arg("warp") != nil { warp(screen) }
+            let count = Int(num("count") ?? 1)
+            for i in 0..<count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.18) {
+                    MainActor.assumeIsolated { postClick(in: w.window!, screen: screen, clickCount: i + 1) }
+                }
+            }
+            let m = NSEvent.mouseLocation
+            result = "ok click real island (\(Int(p.x)), \(Int(p.y))) screen (\(Int(screen.x)), \(Int(screen.y))) cursor (\(Int(m.x)), \(Int(m.y))) ignoresMouse \(w.window!.ignoresMouseEvents)"
+        case "look":
+            var c = app.settings.character
+            if let name = arg("palette") { c.selectPalette(name) }
+            if num("hue") != nil || num("sat") != nil || num("light") != nil {
+                c.setCustom(hue: num("hue"), saturation: num("sat"), lightness: num("light"))
+            }
+            if let name = arg("look") { c.selectLook(name) }
+            if let m = arg("minis") { c.lighterMinis = m == "lighter" }
+            if arg("reset") != nil { c = CharacterConfig() }
+            app.settings.character = c
+            app.applySettings()
+            result = "ok look \(c.lookName) palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex))"
         case "click":
             let p = islandPoint(app, num("x"), num("y"))
             let count = Int(num("count") ?? 1)
@@ -436,6 +466,19 @@ enum DebugCommands {
         try? result.write(to: dir.appendingPathComponent("result.txt"), atomically: true, encoding: .utf8)
     }
 
+    /// Sends a left mouse down then up at an AppKit screen point through `window`'s own event path.
+    private static func postClick(in window: NSWindow, screen: NSPoint, clickCount: Int) {
+        let wp = window.convertPoint(fromScreen: screen)
+        func event(_ type: NSEvent.EventType) -> NSEvent? {
+            NSEvent.mouseEvent(with: type, location: wp, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: clickCount, pressure: type == .leftMouseDown ? 1 : 0)
+        }
+        if let down = event(.leftMouseDown) { window.sendEvent(down) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            MainActor.assumeIsolated { if let up = event(.leftMouseUp) { window.sendEvent(up) } }
+        }
+    }
+
     /// Moves the real cursor to an AppKit screen point (no permission needed).
     private static func warp(_ p: NSPoint) {
         let top = NSScreen.screens.first?.frame.maxY ?? 0
@@ -474,6 +517,11 @@ enum DebugCommands {
         d["main"] = ["state": main.state.rawValue, "emote": main.emote?.rawValue ?? "none", "root": [main.body.root.x, main.body.root.y],
                      "isAway": main.isAway, "opacity": main.opacity]
         d["minis"] = stage.minis.map { ["id": $0.id, "phase": "\($0.phase)", "slot": $0.slot, "state": $0.engine.state.rawValue] }
+        let c = app.settings.character
+        d["appearance"] = ["look": c.lookName, "palette": c.paletteName, "custom": [c.hue, c.saturation, c.lightness],
+                           "mid": String(format: "#%06X", c.palette.mid.hex), "ink": String(format: "#%06X", c.palette.ink.hex),
+                           "lighterMinis": c.lighterMinis, "stagePalette": main.appearance.palette.name,
+                           "miniPalettes": stage.minis.map { String(format: "#%06X", $0.engine.appearance.palette.mid.hex) }]
         d["miniCount"] = n.miniCount
         d["probe"] = ["fps": app.slime.probe.fps, "msPerDraw": app.slime.probe.msPerDraw, "cpuPercent": app.slime.probe.cpuPercent]
         d["islandView"] = ["ticks": w.debugCounters.ticks, "redraws": w.debugCounters.redraws, "paused": w.debugCounters.paused]

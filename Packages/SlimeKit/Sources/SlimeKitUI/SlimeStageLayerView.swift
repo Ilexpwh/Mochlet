@@ -122,6 +122,7 @@ public final class SlimeStageLayerView: NSView {
         onTick?(self, dt)
         let r = radius
         let o = origin(bounds.size)
+        stage.pixelsPerUnit = Double(r)
         if updatesPointer {
             if let p = pointer() {
                 stage.pointer(SIMD2(Double((p.x - o.x) / r), Double((p.y - o.y) / r)))

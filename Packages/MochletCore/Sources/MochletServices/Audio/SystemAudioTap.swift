@@ -6,7 +6,7 @@ import Foundation
 /// Everything the Mac plays (the other people of a call, whatever the app), through a Core Audio
 /// process tap. macOS asks once for the "System Audio Recording" permission. Nothing is muted: you keep
 /// hearing the call. The tap is rebuilt when the default output device changes (AirPods arriving).
-/// Port of Coucou's SystemAudioTap (MIT).
+/// Core Audio process tap that captures system output for the meeting pipeline.
 public final class SystemAudioTap: @unchecked Sendable {
     public enum TapError: LocalizedError {
         case failed(String, OSStatus)

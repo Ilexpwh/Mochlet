@@ -86,7 +86,7 @@ you said is routed, not just transcribed:
 | You say | It does |
 |---|---|
 | "记一下，明天给老王打电话" · "note to self: buy oat milk" | appends to `Knowledge/notes/YYYY/MM/DD.md` under the minute |
-| "work on mochlet: fix the build" · "让咕咕帮我跑一下测试" · "resume coucou" | opens a terminal with the agent on that project |
+| "work on mochlet: fix the build" · "让咕咕帮我跑一下测试" · "resume mochlet" | opens a terminal with the agent on that project |
 | "read https://arxiv.org/abs/2404.16130" · "把这个链接存起来" (a link on the clipboard) | chews it into the knowledge base |
 | "what did I save about Vision Pro" · "知识库：头显价格" | asks the knowledge base, with citations |
 | "open settings" · "start taking meeting notes" · "what's hot in AI today" | the obvious thing |

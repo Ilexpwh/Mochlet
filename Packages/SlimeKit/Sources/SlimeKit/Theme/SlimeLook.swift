@@ -33,6 +33,8 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
     public var tail: Tail
     public var wings: Wings
     public var antenna: Bool
+    /// The curled drop tip at the top-back of the head (Rimuru's signature).
+    public var tip: Bool
     public var surface: Surface
     public var feel: Feel
     /// 0 = opaque jelly, up to ≈0.4 for a ghost.
@@ -41,7 +43,7 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
     public var id: String { name }
 
     public init(name: String, silhouette: Silhouette = .dome, ears: Ears = .none, horns: Horns = .none, tail: Tail = .none,
-                wings: Wings = .none, antenna: Bool = false, surface: Surface = .plain, feel: Feel = .jelly, transparency: Double = 0) {
+                wings: Wings = .none, antenna: Bool = false, tip: Bool = false, surface: Surface = .plain, feel: Feel = .jelly, transparency: Double = 0) {
         self.name = name
         self.silhouette = silhouette
         self.ears = ears
@@ -49,12 +51,13 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
         self.tail = tail
         self.wings = wings
         self.antenna = antenna
+        self.tip = tip
         self.surface = surface
         self.feel = feel
         self.transparency = transparency
     }
 
-    enum CodingKeys: String, CodingKey { case name, silhouette, ears, horns, tail, wings, antenna, surface, feel, transparency }
+    enum CodingKeys: String, CodingKey { case name, silhouette, ears, horns, tail, wings, antenna, tip, surface, feel, transparency }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -65,6 +68,7 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
         tail = try c.decodeIfPresent(Tail.self, forKey: .tail) ?? .none
         wings = try c.decodeIfPresent(Wings.self, forKey: .wings) ?? .none
         antenna = try c.decodeIfPresent(Bool.self, forKey: .antenna) ?? false
+        tip = try c.decodeIfPresent(Bool.self, forKey: .tip) ?? false
         surface = try c.decodeIfPresent(Surface.self, forKey: .surface) ?? .plain
         feel = try c.decodeIfPresent(Feel.self, forKey: .feel) ?? .jelly
         transparency = try c.decodeIfPresent(Double.self, forKey: .transparency) ?? 0
@@ -72,7 +76,7 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
 
     /// True when nothing but the plain dome is drawn.
     public var isPlain: Bool {
-        silhouette == .dome && ears == .none && horns == .none && tail == .none && wings == .none && !antenna && surface == .plain
+        silhouette == .dome && ears == .none && horns == .none && tail == .none && wings == .none && !antenna && !tip && surface == .plain
     }
 
     /// The same look as a mini slime: ears and horns stay, wings and tails do not fit the row.
@@ -85,7 +89,9 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
 
     // MARK: Presets
 
-    public static let rimuru = SlimeLook(name: "rimuru")
+    /// A plain dome: the engine default and the base every other look builds on.
+    public static let plain = SlimeLook(name: "plain")
+    public static let rimuru = SlimeLook(name: "rimuru", tip: true)
     public static let tempest = SlimeLook(name: "tempest", horns: .dragonPair, tail: .dragon, wings: .dragon, feel: .bouncy)
     public static let demonLord = SlimeLook(name: "demonLord", horns: .demonPair, feel: .firm)
     public static let oni = SlimeLook(name: "oni", horns: .oniSingle)
@@ -98,10 +104,10 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
     public static let crystal = SlimeLook(name: "crystal", silhouette: .spiky, ears: .ice, surface: .crystal, feel: .firm)
     public static let ghost = SlimeLook(name: "ghost", silhouette: .drop, surface: .ghost, feel: .airy, transparency: 0.35)
     public static let honey = SlimeLook(name: "honey", silhouette: .puddle, surface: .honey, feel: .runny)
-    public static let spark = SlimeLook(name: "spark", silhouette: .spiky, antenna: true, surface: .electric, feel: .bouncy)
+    public static let spark = SlimeLook(name: "spark", antenna: true, surface: .electric, feel: .bouncy)
     public static let galaxy = SlimeLook(name: "galaxy", silhouette: .tall, surface: .galaxy, feel: .airy)
 
-    public static let all: [SlimeLook] = [.rimuru, .tempest, .demonLord, .oni, .cat, .fox, .unicorn, .bat, .fairy, .flame, .crystal, .ghost, .honey, .spark, .galaxy]
+    public static let all: [SlimeLook] = [.rimuru, .plain, .tempest, .demonLord, .oni, .cat, .fox, .unicorn, .bat, .fairy, .flame, .crystal, .ghost, .honey, .spark, .galaxy]
 
     public static var names: [String] { all.map(\.name) }
 
@@ -123,6 +129,7 @@ public struct SlimeLook: Sendable, Codable, Equatable, Hashable, Identifiable {
     public static func label(_ name: String) -> String {
         switch name {
         case "rimuru": return "Rimuru"
+        case "plain": return "Plain"
         case "tempest": return "Tempest"
         case "demonLord": return "Demon Lord"
         case "oni": return "Oni"

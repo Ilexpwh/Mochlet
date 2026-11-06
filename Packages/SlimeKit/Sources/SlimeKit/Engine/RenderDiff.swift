@@ -49,6 +49,12 @@ public extension SlimeFrame {
             let a = blobs[i], b = o.blobs[i]
             if moved(a.position, b.position) || diff(a.radius, b.radius, tol) || diff(a.stretch, b.stretch, 0.02) || diff(a.heading, b.heading, 0.02) { return true }
         }
+        if traits.count != o.traits.count { return true }
+        for i in traits.indices {
+            let a = traits[i], b = o.traits[i]
+            if a.kind != b.kind || moved(a.anchor, b.anchor) || diff(a.phase, b.phase, 0.02) || diff(a.scale, b.scale, 0.01)
+                || diff(a.direction.x, b.direction.x, 0.01) || diff(a.direction.y, b.direction.y, 0.01) { return true }
+        }
         if diff(opacity, o.opacity, 0.01) || diff(faceOpacity, o.faceOpacity, 0.01) || diff(glowBoost, o.glowBoost, 0.02) || diff(sizeScale, o.sizeScale, tol) { return true }
         if profile == .ghost, moved(ghostStretch, o.ghostStretch) || diff(ghostHeading, o.ghostHeading, 0.01) { return true }
         return false

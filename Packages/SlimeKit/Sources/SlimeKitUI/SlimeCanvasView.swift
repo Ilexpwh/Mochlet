@@ -30,6 +30,7 @@ public struct SlimeCanvasView: View {
             let date = timeline.date
             Canvas(rendersAsynchronously: false) { ctx, size in
                 let o = origin(size)
+                engine.detail = DetailLevel(pixelsPerUnit: Double(radius))
                 if let p = pointer() {
                     engine.pointer(SIMD2(Double((p.x - o.x) / radius), Double((p.y - o.y) / radius)))
                 } else {

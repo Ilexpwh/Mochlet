@@ -47,6 +47,7 @@ public struct SlimeStageView: View {
                 probe?.begin()
                 let radius = radiusProvider?() ?? radius
                 let o = origin(size)
+                stage.pixelsPerUnit = Double(radius)
                 if updatesPointer {
                     if let p = pointer() {
                         stage.pointer(SIMD2(Double((p.x - o.x) / radius), Double((p.y - o.y) / radius)))

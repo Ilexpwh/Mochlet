@@ -3,7 +3,7 @@ import Foundation
 /// Without headphones, the others' voices come out of the speakers and back into the microphone, and
 /// the recogniser writes them as yours. The Mac's own sound is the reference: where the microphone
 /// holds no more energy than the echo of that sound explains, what it heard is the others, not you.
-/// Pure functions on 16 kHz samples and on 20 ms level frames (port of Coucou's NoteEcho, MIT).
+/// Pure functions on 16 kHz samples and on 20 ms level frames.
 public enum EchoRemoval {
     public static let frameSeconds = 0.02
     /// How much louder than the echo the microphone must be for a phrase to be yours (≈ 10 dB).

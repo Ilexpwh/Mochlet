@@ -1,7 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 
-// Carbon hot keys with press and release (hold-to-talk). Adapted from Mochlet v1 / Coucou (MIT).
+// Carbon hot keys with press and release (hold-to-talk).
 private func mochletHotKeyHandler(_: EventHandlerCallRef?, _ event: EventRef?, _: UnsafeMutableRawPointer?) -> OSStatus {
     guard let event else { return OSStatus(eventNotHandledErr) }
     var key = EventHotKeyID()

@@ -73,7 +73,7 @@ import Foundation
     @Test func looksAndOutfits() {
         #expect(SlimeLook.names == SlimeLook.all.map(\.name))
         #expect(Set(SlimeLook.names).count == SlimeLook.all.count)
-        #expect(SlimeLook.rimuru.isPlain)
+        #expect(SlimeLook.plain.isPlain && !SlimeLook.rimuru.isPlain && SlimeLook.rimuru.tip)
         #expect(!SlimeLook.cat.isPlain)
         #expect(SlimeLook.tempest.mini.wings == .none && SlimeLook.tempest.mini.horns == .dragonPair)
         var custom = SlimeLook.fox

@@ -4,7 +4,7 @@ import Testing
 
 private let projects = [
     Project(slug: "mochlet", name: "Mochlet", aliases: ["slime"], description: "notch slime", paths: ["/tmp/mochlet"]),
-    Project(slug: "coucou", name: "Coucou", aliases: ["咕咕"], description: "", paths: ["/tmp/coucou"]),
+    Project(slug: "lantern", name: "Lantern", aliases: ["灯笼"], description: "", paths: ["/tmp/lantern"]),
 ]
 private let ctx = IntentRouter.Context(clipboardURL: URL(string: "https://example.com/clip"), chatFocused: false, projects: projects)
 
@@ -36,10 +36,10 @@ private let ctx = IntentRouter.Context(clipboardURL: URL(string: "https://exampl
 @Test func prepassProjectCommandsInBothLanguages() {
     let en = IntentRouter.prepass("work on mochlet: fix the build", context: ctx)
     #expect(en?.intent == .projectStart && en?.project?.slug == "mochlet" && en?.task == "fix the build")
-    let zh = IntentRouter.prepass("在 Coucou 项目里加一个设置页", context: ctx)
-    #expect(zh?.intent == .projectStart && zh?.project?.slug == "coucou" && zh?.task == "加一个设置页")
-    let alias = IntentRouter.prepass("让咕咕帮我跑一下测试", context: ctx)
-    #expect(alias?.intent == .projectStart && alias?.project?.slug == "coucou")
+    let zh = IntentRouter.prepass("在 Lantern 项目里加一个设置页", context: ctx)
+    #expect(zh?.intent == .projectStart && zh?.project?.slug == "lantern" && zh?.task == "加一个设置页")
+    let alias = IntentRouter.prepass("让灯笼帮我跑一下测试", context: ctx)
+    #expect(alias?.intent == .projectStart && alias?.project?.slug == "lantern")
     let unknown = IntentRouter.prepass("在家里吃饭", context: ctx)
     #expect(unknown == nil)
     let resume = IntentRouter.prepass("resume mochlet", context: ctx)

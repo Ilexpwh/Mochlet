@@ -18,8 +18,55 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
     public var floorFriction: Double = 0.7
     public var restCenterY: Double = -0.86
     public var restRadius: Double = 1
+    /// Shape of the rest ring (see `RestProfile`).
+    public var silhouette: SlimeLook.Silhouette = .dome
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case pointCount, anchorStiffness, edgeStiffness, bendStiffness, pressure, damping, gravity, rootGravity, floorFriction, restCenterY, restRadius, silhouette
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = SoftBodyParams()
+        pointCount = try c.decodeIfPresent(Int.self, forKey: .pointCount) ?? d.pointCount
+        anchorStiffness = try c.decodeIfPresent(Double.self, forKey: .anchorStiffness) ?? d.anchorStiffness
+        edgeStiffness = try c.decodeIfPresent(Double.self, forKey: .edgeStiffness) ?? d.edgeStiffness
+        bendStiffness = try c.decodeIfPresent(Double.self, forKey: .bendStiffness) ?? d.bendStiffness
+        pressure = try c.decodeIfPresent(Double.self, forKey: .pressure) ?? d.pressure
+        damping = try c.decodeIfPresent(Double.self, forKey: .damping) ?? d.damping
+        gravity = try c.decodeIfPresent(Double.self, forKey: .gravity) ?? d.gravity
+        rootGravity = try c.decodeIfPresent(Double.self, forKey: .rootGravity) ?? d.rootGravity
+        floorFriction = try c.decodeIfPresent(Double.self, forKey: .floorFriction) ?? d.floorFriction
+        restCenterY = try c.decodeIfPresent(Double.self, forKey: .restCenterY) ?? d.restCenterY
+        restRadius = try c.decodeIfPresent(Double.self, forKey: .restRadius) ?? d.restRadius
+        silhouette = try c.decodeIfPresent(SlimeLook.Silhouette.self, forKey: .silhouette) ?? .dome
+    }
+
+    /// These parameters shaped by a look: the silhouette's rest ring and the feel's springs.
+    public func applying(look: SlimeLook, mini: Bool) -> SoftBodyParams {
+        var p = self
+        p.silhouette = look.silhouette
+        p.pointCount = RestProfile.forSilhouette(look.silhouette, mini: mini).pointCount
+        switch look.feel {
+        case .jelly:
+            break
+        case .firm:
+            p.damping = mini ? 12 : 11
+            p.anchorStiffness = 120
+        case .runny:
+            p.pressure = 45
+            p.damping = 6
+            p.gravity = 4
+        case .airy:
+            p.gravity = 0.6
+            p.damping = 7
+        case .bouncy:
+            p.damping = 6.5
+        }
+        return p
+    }
 
     public static let main = SoftBodyParams()
 

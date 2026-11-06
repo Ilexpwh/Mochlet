@@ -16,7 +16,7 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
     /// Minis use the same palette, or a lighter tint of it.
     public var lighterMinis: Bool
 
-    public init(look: SlimeLook = .rimuru, palette: SlimeTheme = .rimuru, outfit: SlimeOutfit = SlimeOutfit(),
+    public init(look: SlimeLook = .plain, palette: SlimeTheme = .rimuru, outfit: SlimeOutfit = SlimeOutfit(),
                 glyphStyle: GlyphStyle = .grown, armsEnabled: Bool = true, lighterMinis: Bool = false) {
         self.look = look
         self.palette = palette
@@ -38,6 +38,7 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
         lighterMinis = try c.decodeIfPresent(Bool.self, forKey: .lighterMinis) ?? false
     }
 
+    /// The plain dome in the Rimuru palette: the engine default (the app's "rimuru" look adds the tip).
     public static let rimuru = SlimeAppearance()
 
     /// The appearance of a mini split from this slime: same species without wings or tail, no

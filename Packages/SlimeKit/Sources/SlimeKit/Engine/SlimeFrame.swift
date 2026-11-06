@@ -44,6 +44,8 @@ public struct AccessoryFrame: Sendable, Equatable {
 public struct Particle: Sendable, Equatable {
     public enum Kind: String, Sendable, Codable {
         case sparkle, heart, star, zzz, drop, dust
+        /// Surface effects: a flame tongue, an electric arc, a glint of light, a honey drip, a soap bubble.
+        case wisp, spark, glint, drip, bubble
     }
 
     public var kind: Kind
@@ -64,12 +66,15 @@ public struct Blob: Sendable, Equatable {
     /// Elongation along `heading` (1 = circle); the cross axis shrinks by the inverse.
     public var stretch: Double
     public var heading: Double
+    /// Droplets get their own gradient and highlight; body features (ears, tails) share the body shading.
+    public var shaded: Bool
 
-    public init(position: SIMD2<Double>, radius: Double, stretch: Double = 1, heading: Double = 0) {
+    public init(position: SIMD2<Double>, radius: Double, stretch: Double = 1, heading: Double = 0, shaded: Bool = true) {
         self.position = position
         self.radius = radius
         self.stretch = stretch
         self.heading = heading
+        self.shaded = shaded
     }
 }
 
@@ -102,6 +107,10 @@ public struct SlimeFrame: Sendable, Equatable {
     public var sizeScale: Double
     public var ghostStretch: SIMD2<Double>
     public var ghostHeading: Double
+    /// Solid species features (horns, wings, inner ears…) placed on the body.
+    public var traits: [TraitFrame] = []
+    /// Engine time of the frame (surface shimmer, twinkle).
+    public var time: Double = 0
 
     /// Topmost y of the ring (most negative).
     public var topY: Double { ring.map(\.y).min() ?? 0 }

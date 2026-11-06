@@ -38,12 +38,11 @@ public struct SoftBody: Sendable {
     public init(params: SoftBodyParams) {
         self.params = params
         let n = max(6, params.pointCount)
-        var ring: [SIMD2<Double>] = []
-        ring.reserveCapacity(n)
-        for i in 0..<n {
-            let theta = -Double.pi / 2 + 2 * Double.pi * Double(i) / Double(n)
-            ring.append(SIMD2(params.restRadius * cos(theta), params.restCenterY + params.restRadius * sin(theta)))
-        }
+        var profile = RestProfile.forSilhouette(params.silhouette)
+        profile.width *= params.restRadius
+        profile.height *= params.restRadius
+        profile.centerY = params.silhouette == .dome ? params.restCenterY : profile.centerY * params.restRadius
+        let ring = profile.ring(count: n)
         restRing = ring
         points = ring
         prev = ring

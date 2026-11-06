@@ -7,7 +7,28 @@ import simd
 public final class SlimeEngine {
     public let profile: SlimeProfile
     /// Species, colour and clothes. Set by the stage; the renderer reads it next to the frame.
-    public var appearance: SlimeAppearance = .rimuru
+    /// A new look reshapes the body (silhouette, feel) and refits the face.
+    public var appearance: SlimeAppearance = .rimuru {
+        didSet { if oldValue.look != appearance.look { applyLook() } }
+    }
+    /// What the host can afford at its pixel size (surface effects and idle flutter need ≥ 24 px/R).
+    public var detail: DetailLevel = .full
+    public private(set) var traitAnim = TraitAnim()
+    private var earTwitch: (side: Double, at: Double)?
+    private var nextEarTwitch: Double = 4
+    private var tailPhase: Double = 0
+    private var tailAmp: Double = 0.18
+    private var wingSpring = Spring1D(value: 0, omega: 14, zeta: 0.6)
+    private var antennaSpring = Spring1D(value: 0, omega: 10, zeta: 0.35)
+    private var prevCentroidX: Double = 0
+    private var prevCentroidY: Double = 0
+    private var haveCentroid = false
+    private var wasAirborne = false
+    /// Follow-through: features lag the body and overshoot on landings.
+    private var tailSpring = Spring1D(value: 0, omega: 12, zeta: 0.3)
+    private var earSpring = Spring1D(value: 0, omega: 18, zeta: 0.3)
+    private var tipSpring = Spring1D(value: 0, omega: 16, zeta: 0.28)
+    private var nextSurfaceEmit: Double = 1
     public var theme: SlimeTheme {
         get { appearance.palette }
         set { appearance.palette = newValue }
@@ -123,7 +144,7 @@ public final class SlimeEngine {
 
     public init(profile: SlimeProfile = .main, seed: UInt64 = 1) {
         self.profile = profile
-        var b = SoftBody(params: profile.body)
+        var b = SoftBody(params: profile.body.applying(look: SlimeLook.rimuru, mini: profile.kind == .mini))
         b.floorEnabled = profile.floorEnabled
         body = b
         eyeRig = profile.eyeRig
@@ -196,10 +217,15 @@ public final class SlimeEngine {
         body.lean = lean.value
         body.offset = SIMD2(shakeX.value, shakeY.value)
         body.sizeScale = sizeScale.value
+        if appearance.look.feel == .airy, !body.airborne {
+            // Airy slimes hover a touch above their contact patch.
+            body.offset.y -= 0.04 + 0.025 * sin(2 * .pi * 0.45 * time)
+        }
         let events = body.step(h: h)
         for e in events {
             if case .landed(let speed) = e { landed(speed: speed) }
         }
+        tickTraits()
         if let d = pendingDust {
             if body.bottomY > -0.02 {
                 let c = body.centroid
@@ -1047,6 +1073,10 @@ public final class SlimeEngine {
             case .heart: g = -0.15
             case .zzz: g = -0.05
             case .sparkle: g = 0
+            case .wisp: g = -0.5
+            case .spark, .glint: g = 0
+            case .drip: g = 2.5
+            case .bubble: g = -0.08
             }
             p.velocity.y += g * h
             p.position += p.velocity * h
@@ -1101,6 +1131,7 @@ public final class SlimeEngine {
     private func frame(alpha: Double) -> SlimeFrame {
         let ring = body.interpolated(alpha: alpha)
         let bf = BodyFrame.fit(reference: body.referenceRing, referenceCentroid: body.referenceCentroid, current: ring)
+        let rig = TraitRig.build(look: appearance.look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
         let yaw = gaze.yaw
         let pitch = gaze.pitch
         let open = blink.openness
@@ -1155,7 +1186,131 @@ public final class SlimeEngine {
             blush: blush.value, blushCenters: blushCenters, blushForeshorten: blushFore,
             core: coreSpring.value, coreBoost: coreBoost, gaze: SIMD2(yaw, pitch),
             highlightShift: SIMD2(-0.08 * yaw, 0.06 * pitch), tint: tint, accessories: acc, particles: particles,
-            blobs: blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
-            ghostStretch: ghostStretch, ghostHeading: ghostHeading)
+            blobs: blobs + rig.blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
+            ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, time: time)
+    }
+
+    // MARK: - Looks
+
+    /// Reshapes the body for the look's silhouette and feel and refits the face to it.
+    private func applyLook() {
+        let mini = profile.kind == .mini
+        let want = profile.body.applying(look: appearance.look, mini: mini)
+        if want.silhouette != body.params.silhouette || want.pointCount != body.params.pointCount {
+            var b = SoftBody(params: want)
+            b.floorEnabled = profile.floorEnabled
+            b.teleport(root: body.root)
+            b.lean = body.lean
+            b.squash = body.squash
+            b.sizeScale = body.sizeScale
+            b.gravityScale = body.gravityScale
+            body = b
+            coreSpring = Spring2D(value: b.centroid, omega: 18, zeta: 0.5)
+        } else if want != body.params {
+            body.setParams(want)
+        }
+        eyeRig = profile.eyeRig.fitted(to: RestProfile.forSilhouette(appearance.look.silhouette, mini: mini))
+    }
+
+    /// Ear twitches, tail wag, wing flap, antenna lag and surface particles.
+    private func tickTraits() {
+        let look = appearance.look
+        guard !look.isPlain else { return }
+        let rich = detail >= .medium
+        let vx = haveCentroid ? (body.centroid.x - prevCentroidX) / h : 0
+        let vy = haveCentroid ? (body.centroid.y - prevCentroidY) / h : 0
+        let landed = wasAirborne && !body.airborne
+        wasAirborne = body.airborne
+        if look.ears == .cat || look.ears == .fox {
+            earSpring.target = clamp(-vy * 0.05, -0.5, 0.5)
+            if landed { earSpring.velocity += 5 }
+            earSpring.advance(h)
+            Self.settle(&earSpring)
+            traitAnim.earFlop = earSpring.value
+            if let t = earTwitch {
+                let u = (time - t.at) / 0.28
+                let a = u < 1 ? 0.45 * sin(.pi * u) : 0
+                traitAnim.earTwitch = t.side < 0 ? SIMD2(a, 0) : SIMD2(0, a)
+                if u >= 1 { earTwitch = nil; traitAnim.earTwitch = .zero }
+            } else if rich, time >= nextEarTwitch, state != .sleeping {
+                earTwitch = (rng.unit() < 0.5 ? -1 : 1, time)
+                nextEarTwitch = time + rng.range(4...11)
+            }
+        }
+        if look.tail != .none {
+            let lively = emote != nil || state == .greeting || state == .finished || isHolding
+            let rate = lively ? 3.2 : (rich ? 0.9 : 0)
+            tailAmp = approach(tailAmp, toward: lively ? 0.5 : 0.18, tau: 0.3, dt: h)
+            tailPhase += 2 * .pi * rate * h
+            tailSpring.target = clamp(-vx * 0.22, -0.9, 0.9)
+            if landed { tailSpring.velocity += 6 }
+            tailSpring.advance(h)
+            Self.settle(&tailSpring)
+            traitAnim.tailWag = tailAmp * sin(tailPhase) + tailSpring.value
+        }
+        if look.tip {
+            tipSpring.target = clamp(-vx * 0.18, -0.8, 0.8)
+            if landed { tipSpring.velocity += 7 }
+            tipSpring.advance(h)
+            Self.settle(&tipSpring)
+            traitAnim.tipLag = tipSpring.value
+        }
+        if look.wings != .none {
+            let flap = body.airborne ? 0.55 * sin(2 * .pi * 5 * time) : 0
+            let idle = rich ? (look.feel == .airy ? 0.22 * sin(2 * .pi * 2.2 * time) : 0.1 * sin(2 * .pi * 0.7 * time)) : 0
+            wingSpring.target = flap + idle
+            wingSpring.advance(h)
+            traitAnim.wingFlap = wingSpring.value
+        }
+        if look.antenna {
+            antennaSpring.target = clamp(-vx * 0.12, -0.7, 0.7) + (rich ? 0.06 * sin(2 * .pi * 0.6 * time) : 0)
+            antennaSpring.advance(h)
+            traitAnim.antenna = antennaSpring.value
+        }
+        prevCentroidX = body.centroid.x
+        prevCentroidY = body.centroid.y
+        haveCentroid = true
+        if rich, look.surface != .plain, time >= nextSurfaceEmit, state != .sleeping, !reduceMotion {
+            emitSurfaceParticle(look.surface)
+            nextSurfaceEmit = time + rng.range(0.5...0.9)
+        }
+    }
+
+    /// Snaps a spring to rest once it is still, so an idle frame compares equal and is not redrawn.
+    private static func settle(_ s: inout Spring1D) {
+        if abs(s.value - s.target) < 1e-3, abs(s.velocity) < 1e-3 { s.value = s.target; s.velocity = 0 }
+    }
+
+    private func emitSurfaceParticle(_ surface: SlimeLook.Surface) {
+        let n = body.count
+        let c = body.centroid
+        func ringPoint(_ angle: Double) -> (SIMD2<Double>, SIMD2<Double>) {
+            let p = body.points[TraitRig.index(angle: angle, count: n)]
+            return (p, TraitRig.unit(p - c))
+        }
+        switch surface {
+        case .plain:
+            break
+        case .fire:
+            let (p, _) = ringPoint(-.pi / 2 + rng.range(-0.5...0.5))
+            spawn(.wisp, at: p + SIMD2(0, -0.1), velocity: SIMD2(rng.range(-0.15...0.15), -0.55), life: rng.range(0.6...0.9), size: rng.range(0.14...0.22))
+        case .electric:
+            let (p, nrm) = ringPoint(rng.range(-2.6...0.4))
+            spawn(.spark, at: p + nrm * 0.04, velocity: nrm * 0.3, life: 0.22, size: rng.range(0.14...0.22))
+        case .crystal, .galaxy:
+            let off = SIMD2(rng.range(-0.55...0.55), rng.range(-0.55...0.35))
+            spawn(.glint, at: c + off, velocity: .zero, life: rng.range(0.7...1.0), size: rng.range(0.08...0.14))
+        case .honey:
+            let side = rng.unit() < 0.5 ? -1.0 : 1.0
+            let (p, _) = ringPoint(.pi / 2 - side * 0.75)
+            spawn(.drip, at: p + SIMD2(0, 0.02), velocity: SIMD2(0, 0.05), life: rng.range(1.4...2.0), size: rng.range(0.1...0.15))
+        case .bubble:
+            let off = SIMD2(rng.range(-0.45...0.45), rng.range(-0.3...0.4))
+            spawn(.bubble, at: c + off, velocity: SIMD2(rng.range(-0.05...0.05), -0.2), life: rng.range(1.2...1.8), size: rng.range(0.05...0.11))
+        case .ghost:
+            let side = rng.unit() < 0.5 ? -1.0 : 1.0
+            let (p, _) = ringPoint(.pi / 2 - side * 0.9)
+            spawn(.dust, at: p + SIMD2(0, -0.05), velocity: SIMD2(side * 0.08, -0.14), life: 1.2, size: 0.12)
+        }
     }
 }

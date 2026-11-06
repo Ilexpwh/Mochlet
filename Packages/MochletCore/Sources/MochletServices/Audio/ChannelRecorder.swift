@@ -41,7 +41,7 @@ public final class Resampler16k: @unchecked Sendable {
 
 /// One side of a call (your microphone, or what the Mac plays): written to a 16 kHz WAV file as it
 /// comes, with the stretch not transcribed yet kept in memory for the live transcript.
-/// Port of Coucou's ChannelRecorder (MIT).
+/// Per-channel ring recorder for the meeting pipeline.
 public final class ChannelRecorder: @unchecked Sendable {
     public static let sampleRate = 16_000.0
 

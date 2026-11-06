@@ -41,6 +41,20 @@ public struct EyeRig: Sendable, Codable, Equatable {
         return r
     }
 
+    /// This rig scaled to another rest outline, so eyes, mouth and blush sit on a puddle or a
+    /// tall drop the way they sit on the dome.
+    public func fitted(to profile: RestProfile) -> EyeRig {
+        var r = self
+        let kx = profile.width
+        let ky = (profile.height - profile.centerY) / 1.86
+        if abs(kx - 1) < 1e-9, abs(ky - 1) < 1e-9 { return self }
+        let k = (kx * ky).squareRoot()
+        r.sphereCenter = SIMD2(sphereCenter.x, sphereCenter.y * ky)
+        r.sphereRadius = sphereRadius * k
+        r.eyeRadius = eyeRadius * k
+        return r
+    }
+
     public struct Projection: Sendable, Equatable {
         /// Point on the unit sphere (x right, y down), to be scaled by `sphereRadius`.
         public var position: SIMD2<Double>

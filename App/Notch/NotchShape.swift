@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The island outline. `topRadius` ≥ 0 gives convex rounded top corners (expanded); < 0 gives
-/// concave "ears" that blend the compact strip into the notch. Port of Coucou's IslandShape (MIT).
+/// concave "ears" that blend the compact strip into the notch.
 struct NotchShape: Shape {
     var width: CGFloat
     var height: CGFloat

@@ -49,7 +49,8 @@ func renderFilmstrip(_ args: Args) throws {
     o.fps = args.double("fps", 24)
     o.radius = CGFloat(args.double("radius", 64))
     o.seed = UInt64(args.int("seed", 7))
-    o.theme = SlimeTheme.named(args.string("theme", "rimuru"))
+    o.theme = SlimeTheme.named(args.string("palette", args.string("theme", "rimuru")))
+    o.appearance.look = SlimeLook.named(args.string("look", "rimuru"))
     o.columns = args.int("columns", 8)
     o.preroll = args.double("preroll", 0.6)
     o.widthR = args.double("width", 4.4)
@@ -192,16 +193,25 @@ do {
         bench(args)
     case "icon":
         try renderIcon(args)
+    case "render-catalog":
+        let out = URL(fileURLWithPath: args.string("out", "./out/catalog.png"))
+        let palettes = args.values["palettes"].map { $0.split(separator: ",").map { SlimeTheme.named(String($0)) } } ?? [.rimuru, .ruby, .obsidian]
+        let looks = args.values["looks"].map { $0.split(separator: ",").map { SlimeLook.named(String($0)) } } ?? SlimeLook.all
+        let sheet = try Catalog.render(palettes: palettes, looks: looks, radius: CGFloat(args.double("radius", 56)))
+        try FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Filmstrip.writePNG(sheet, to: out)
+        print("wrote \(out.path) (\(sheet.width)x\(sheet.height))")
     default:
         print("""
         slimekit-tools render-filmstrip --state <state|emote|pinch|sessions|ghost|ghostdrop> | --script "t:action,…"
-                       [--frames 48] [--fps 24] [--radius 64] [--seed 7] [--out dir] [--theme name] [--pointer x,y] [--mini]
+                       [--frames 48] [--fps 24] [--radius 64] [--seed 7] [--out dir] [--palette name] [--look name] [--pointer x,y] [--mini]
                        [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion]
         slimekit-tools gen-sounds --out <dir>
         slimekit-tools lab
         slimekit-tools play <sound>
         slimekit-tools bench [--seconds 20]
         slimekit-tools icon --out <AppIcon.appiconset>
+        slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--radius 56]
         actions:
         \(Filmstrip.actionHelp)
         """)

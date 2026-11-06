@@ -1,7 +1,7 @@
 import Foundation
 
 /// Resting island dimensions: the physical notch when the screen has one, else a small bar.
-/// Port of Coucou's IslandScreenGeometry (MIT).
+/// Screen-space geometry of the notch island.
 public struct NotchGeometry: Sendable, Equatable {
     public static let fallbackNotchWidth: Double = 184
     public static let noNotchWidth: Double = 80

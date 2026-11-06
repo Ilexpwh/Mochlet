@@ -125,6 +125,19 @@ public final class SlimeStage {
     public var onMiniEvent: ((String, SlimeEvent) -> Void)?
 
     /// Species, colour and clothes of the cast: minis get `forMini`, the ghost `forGhost`.
+    /// Pixels per main R the host draws at; sets each engine's detail level (minis scale with it).
+    public var pixelsPerUnit: Double = 56 {
+        didSet { if pixelsPerUnit != oldValue { applyDetail() } }
+    }
+
+    private func applyDetail() {
+        let d = DetailLevel(pixelsPerUnit: pixelsPerUnit)
+        main.detail = d
+        ghost?.detail = d
+        let md = DetailLevel(pixelsPerUnit: pixelsPerUnit * liveScale)
+        for m in minis { m.engine.detail = md }
+    }
+
     public var appearance: SlimeAppearance {
         didSet {
             guard appearance != oldValue else { return }
@@ -313,6 +326,7 @@ public final class SlimeStage {
         let engine = SlimeEngine(profile: .mini, seed: nextSeed)
         nextSeed &+= 7919
         engine.appearance = appearance.forMini
+        engine.detail = DetailLevel(pixelsPerUnit: pixelsPerUnit * liveScale)
         engine.reduceMotion = reduceMotion
         let slot = minis.filter { $0.phase != .merging }.count
         let m = MiniSlime(id: id, engine: engine, slot: slot, at: time)
@@ -574,6 +588,7 @@ public final class SlimeStage {
         let g = SlimeEngine(profile: .ghost, seed: nextSeed)
         nextSeed &+= 7919
         g.appearance = appearance.forGhost
+        g.detail = DetailLevel(pixelsPerUnit: pixelsPerUnit)
         g.reduceMotion = reduceMotion
         g.opacity = 0.7
         let start = main.body.root

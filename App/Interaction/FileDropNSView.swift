@@ -1,7 +1,7 @@
 import AppKit
 
 /// Drag destination for files, URLs and text, below the gesture view. `hitTest` returns nil so it
-/// never steals mouse events; AppKit routes drags to it regardless. Port of Coucou (MIT).
+/// never steals mouse events; AppKit routes drags to it regardless.
 final class FileDropNSView: NSView {
     var onDragEntered: ((CGPoint) -> Void)?
     var onDragUpdated: ((CGPoint) -> Void)?

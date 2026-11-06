@@ -11,7 +11,7 @@ struct CharacterSettingsView: View {
     let preview: CharacterPreviewModel
 
     private static let paletteColumns = [GridItem(.adaptive(minimum: 36), spacing: 8)]
-    private static let lookColumns = [GridItem(.adaptive(minimum: 96), spacing: 6)]
+    private static let lookColumns = [GridItem(.adaptive(minimum: 84), spacing: 6)]
 
     var body: some View {
         @Bindable var s = app.settings
@@ -39,13 +39,11 @@ struct CharacterSettingsView: View {
             Section("Look") {
                 LazyVGrid(columns: Self.lookColumns, alignment: .leading, spacing: 6) {
                     ForEach(SlimeLook.names, id: \.self) { name in
-                        LookChip(name: name, selected: s.character.lookName == name) {
+                        LookChip(name: name, palette: s.character.palette, selected: s.character.lookName == name) {
                             s.character.selectLook(name)
                         }
                     }
                 }
-                Text("Species shapes, ears, horns, tails, wings and surfaces arrive with the next update; the choice is kept.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Colour") {
                 LazyVGrid(columns: Self.paletteColumns, alignment: .leading, spacing: 8) {
@@ -123,21 +121,52 @@ struct PaletteSwatch: View {
 }
 
 /// A look preset as a selectable chip.
+/// A look preset as a live thumbnail in the current colour, with its name underneath.
 struct LookChip: View {
     let name: String
+    let palette: SlimeTheme
     let selected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(SlimeLook.label(name))
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
+            VStack(spacing: 2) {
+                Group {
+                    if let image = LookThumbnails.shared.image(for: name, palette: palette) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(height: 46)
+                Text(SlimeLook.label(name))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 6).padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
+        .help(SlimeLook.label(name))
+    }
+}
+
+/// Look thumbnails rendered once per look and palette (a settled slime at R 16, 2× backing).
+@MainActor
+final class LookThumbnails {
+    static let shared = LookThumbnails()
+    private var images: [String: NSImage] = [:]
+
+    func image(for name: String, palette: SlimeTheme) -> NSImage? {
+        let key = "\(name)|\(palette.mid.hex)|\(palette.core.hex)|\(palette.ink.hex)"
+        if let cached = images[key] { return cached }
+        guard let cg = Catalog.thumbnail(look: SlimeLook.named(name), palette: palette, radius: 16, scale: 2) else { return nil }
+        let image = NSImage(cgImage: cg, size: NSSize(width: CGFloat(cg.width) / 2, height: CGFloat(cg.height) / 2))
+        if images.count > 150 { images.removeAll() }
+        images[key] = image
+        return image
     }
 }
 
@@ -209,7 +238,14 @@ final class CharacterPreviewHostView: NSView {
         slimeView.pointer = { [weak self] in self?.pointer }
         slimeView.idleInterval = 1.0 / 30.0
         slimeView.include = { $0.id != "ghost" }
+        slimeView.autoresizingMask = [.width, .height]
         addSubview(slimeView)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        slimeView.frame = bounds
+        slimeView.invalidate()
     }
 
     @available(*, unavailable)

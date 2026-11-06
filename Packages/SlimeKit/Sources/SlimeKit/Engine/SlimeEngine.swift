@@ -28,6 +28,21 @@ public final class SlimeEngine {
     private var tailSpring = Spring1D(value: 0, omega: 12, zeta: 0.3)
     private var earSpring = Spring1D(value: 0, omega: 18, zeta: 0.3)
     private var tipSpring = Spring1D(value: 0, omega: 16, zeta: 0.28)
+    private var hatSpring = Spring2D(value: .zero, omega: 20, zeta: 0.32)
+
+    /// What the slime is busy with, as the host sees it; with `dressForOccasion` it adds a prop
+    /// or a piece of clothing on top of the chosen outfit (never stored).
+    public enum Occasion: String, Sendable, CaseIterable { case reading, call, rest, working }
+    public var occasion: Occasion?
+
+    /// The chosen outfit plus the situational piece for the current state and occasion.
+    public var resolvedOutfit: SlimeOutfit {
+        var o = appearance.outfit
+        guard appearance.dressForOccasion, profile.kind == .main else { return o }
+        if o.eyewear == .none, state == .chewing || occasion == .reading { o.eyewear = .roundGlasses }
+        if o.headwear == .none, state == .sleeping { o.headwear = .nightcap }
+        return o
+    }
     private var nextSurfaceEmit: Double = 1
     public var theme: SlimeTheme {
         get { appearance.palette }
@@ -1131,7 +1146,9 @@ public final class SlimeEngine {
     private func frame(alpha: Double) -> SlimeFrame {
         let ring = body.interpolated(alpha: alpha)
         let bf = BodyFrame.fit(reference: body.referenceRing, referenceCentroid: body.referenceCentroid, current: ring)
-        let rig = TraitRig.build(look: appearance.look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
+        var rig = TraitRig.build(look: appearance.look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
+        let worn = resolvedOutfit
+        rig.traits += OutfitRig.build(outfit: worn, ring: ring, anim: traitAnim, detail: detail, mini: profile.kind == .mini)
         let yaw = gaze.yaw
         let pitch = gaze.pitch
         let open = blink.openness
@@ -1187,7 +1204,7 @@ public final class SlimeEngine {
             core: coreSpring.value, coreBoost: coreBoost, gaze: SIMD2(yaw, pitch),
             highlightShift: SIMD2(-0.08 * yaw, 0.06 * pitch), tint: tint, accessories: acc, particles: particles,
             blobs: blobs + rig.blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
-            ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, time: time)
+            ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, outfit: worn, time: time)
     }
 
     // MARK: - Looks
@@ -1215,12 +1232,28 @@ public final class SlimeEngine {
     /// Ear twitches, tail wag, wing flap, antenna lag and surface particles.
     private func tickTraits() {
         let look = appearance.look
-        guard !look.isPlain else { return }
         let rich = detail >= .medium
         let vx = haveCentroid ? (body.centroid.x - prevCentroidX) / h : 0
         let vy = haveCentroid ? (body.centroid.y - prevCentroidY) / h : 0
         let landed = wasAirborne && !body.airborne
         wasAirborne = body.airborne
+        prevCentroidX = body.centroid.x
+        prevCentroidY = body.centroid.y
+        haveCentroid = true
+        if !resolvedOutfit.isEmpty {
+            // Breathing moves the centroid a hair; only real motion drags the hat, so idle settles to zero.
+            let dx = abs(vx) < 0.25 ? 0 : vx
+            let dy = abs(vy) < 0.25 ? 0 : vy
+            hatSpring.target = SIMD2(clamp(-dx * 0.05, -0.08, 0.08), clamp(-dy * 0.04, -0.08, 0.08))
+            if landed { hatSpring.velocity.y -= 1.6 }
+            hatSpring.advance(h)
+            hatSpring.value = SIMD2(clamp(hatSpring.value.x, -0.08, 0.08), clamp(hatSpring.value.y, -0.08, 0.08))
+            if simd_length(hatSpring.value - hatSpring.target) < 1e-3, simd_length(hatSpring.velocity) < 1e-3 { hatSpring.value = hatSpring.target; hatSpring.velocity = .zero }
+            traitAnim.hat = hatSpring.value
+        } else {
+            traitAnim.hat = .zero
+        }
+        guard !look.isPlain else { return }
         if look.ears == .cat || look.ears == .fox {
             earSpring.target = clamp(-vy * 0.05, -0.5, 0.5)
             if landed { earSpring.velocity += 5 }
@@ -1267,9 +1300,6 @@ public final class SlimeEngine {
             antennaSpring.advance(h)
             traitAnim.antenna = antennaSpring.value
         }
-        prevCentroidX = body.centroid.x
-        prevCentroidY = body.centroid.y
-        haveCentroid = true
         if rich, look.surface != .plain, time >= nextSurfaceEmit, state != .sleeping, !reduceMotion {
             emitSurfaceParticle(look.surface)
             nextSurfaceEmit = time + rng.range(0.5...0.9)

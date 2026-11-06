@@ -63,6 +63,7 @@ extension SlimeCGRenderer {
             switch t.kind {
             case .wing(let w): drawWing(w, t, in: cg)
             case .fin: drawFin(t, in: cg)
+            case .wrapBack(let w): drawWrapBack(w, t, in: cg)
             default: break
             }
         }
@@ -149,7 +150,10 @@ extension SlimeCGRenderer {
             case .antennaBall: drawAntennaBall(t, in: cg)
             case .tailTip(let k): drawTailTip(k, t, in: cg)
             case .gloss: drawGloss(t, in: cg)
-            case .wing, .fin: break
+            case .headwear(let h): drawHeadwear(h, t, in: cg)
+            case .wrapFront(let w): drawWrapFront(w, t, in: cg)
+            case .charm(let c): drawCharm(c, t, in: cg)
+            case .wing, .fin, .wrapBack: break
             }
         }
     }

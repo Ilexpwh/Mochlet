@@ -26,6 +26,10 @@ public struct TraitFrame: Sendable, Equatable {
         case fin
         /// A small specular on a goo feature (ear, tail, tip, flame).
         case gloss
+        case headwear(SlimeOutfit.Headwear)
+        case wrapBack(SlimeOutfit.Wrap)
+        case wrapFront(SlimeOutfit.Wrap)
+        case charm(SlimeOutfit.Charm)
     }
 
     public var kind: Kind
@@ -54,6 +58,8 @@ public struct TraitAnim: Sendable, Equatable {
     public var earFlop: Double = 0
     /// The drop tip lags behind the body (clockwise positive).
     public var tipLag: Double = 0
+    /// Headwear offset from the crown of the head (R units): hats lag and bounce.
+    public var hat = SIMD2<Double>(0, 0)
     public init() {}
 }
 
@@ -88,12 +94,12 @@ public enum TraitRig {
         return ((i % n) + n) % n
     }
 
-    static func unit(_ v: SIMD2<Double>) -> SIMD2<Double> {
+    public static func unit(_ v: SIMD2<Double>) -> SIMD2<Double> {
         let l = simd_length(v)
         return l > 1e-9 ? v / l : SIMD2(0, -1)
     }
 
-    static func rotate(_ v: SIMD2<Double>, by a: Double) -> SIMD2<Double> {
+    public static func rotate(_ v: SIMD2<Double>, by a: Double) -> SIMD2<Double> {
         let c = cos(a), s = sin(a)
         return SIMD2(v.x * c - v.y * s, v.x * s + v.y * c)
     }

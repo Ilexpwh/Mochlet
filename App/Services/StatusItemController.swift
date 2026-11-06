@@ -36,6 +36,8 @@ final class StatusItemController: NSObject {
         sound.target = self
         menu.addItem(sound)
         menu.addItem(.separator())
+        for item in app.appearanceMenuItems() { menu.addItem(item) }
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(settings), keyEquivalent: ",").target = self
         menu.addItem(withTitle: "Quit Mochlet", action: #selector(quit), keyEquivalent: "q").target = self
         return menu

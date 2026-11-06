@@ -15,18 +15,21 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
     public var armsEnabled: Bool
     /// Minis use the same palette, or a lighter tint of it.
     public var lighterMinis: Bool
+    /// Situational pieces (reading glasses while eating, a nightcap asleep) over the chosen outfit.
+    public var dressForOccasion: Bool
 
     public init(look: SlimeLook = .plain, palette: SlimeTheme = .rimuru, outfit: SlimeOutfit = SlimeOutfit(),
-                glyphStyle: GlyphStyle = .grown, armsEnabled: Bool = true, lighterMinis: Bool = false) {
+                glyphStyle: GlyphStyle = .grown, armsEnabled: Bool = true, lighterMinis: Bool = false, dressForOccasion: Bool = true) {
         self.look = look
         self.palette = palette
         self.outfit = outfit
         self.glyphStyle = glyphStyle
         self.armsEnabled = armsEnabled
         self.lighterMinis = lighterMinis
+        self.dressForOccasion = dressForOccasion
     }
 
-    enum CodingKeys: String, CodingKey { case look, palette, outfit, glyphStyle, armsEnabled, lighterMinis }
+    enum CodingKeys: String, CodingKey { case look, palette, outfit, glyphStyle, armsEnabled, lighterMinis, dressForOccasion }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -36,6 +39,7 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
         glyphStyle = try c.decodeIfPresent(GlyphStyle.self, forKey: .glyphStyle) ?? .grown
         armsEnabled = try c.decodeIfPresent(Bool.self, forKey: .armsEnabled) ?? true
         lighterMinis = try c.decodeIfPresent(Bool.self, forKey: .lighterMinis) ?? false
+        dressForOccasion = try c.decodeIfPresent(Bool.self, forKey: .dressForOccasion) ?? true
     }
 
     /// The plain dome in the Rimuru palette: the engine default (the app's "rimuru" look adds the tip).

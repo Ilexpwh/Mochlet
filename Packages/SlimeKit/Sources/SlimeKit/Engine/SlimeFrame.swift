@@ -109,6 +109,8 @@ public struct SlimeFrame: Sendable, Equatable {
     public var ghostHeading: Double
     /// Solid species features (horns, wings, inner ears…) placed on the body.
     public var traits: [TraitFrame] = []
+    /// The clothes actually worn this frame: the chosen outfit plus any situational piece.
+    public var outfit = SlimeOutfit()
     /// Engine time of the frame (surface shimmer, twinkle).
     public var time: Double = 0
 

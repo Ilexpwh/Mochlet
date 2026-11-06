@@ -51,6 +51,7 @@ func renderFilmstrip(_ args: Args) throws {
     o.seed = UInt64(args.int("seed", 7))
     o.theme = SlimeTheme.named(args.string("palette", args.string("theme", "rimuru")))
     o.appearance.look = SlimeLook.named(args.string("look", "rimuru"))
+    if let set = args.values["outfit"], let outfit = SlimeOutfit.set(named: set) { o.appearance.outfit = outfit }
     o.columns = args.int("columns", 8)
     o.preroll = args.double("preroll", 0.6)
     o.widthR = args.double("width", 4.4)
@@ -197,7 +198,13 @@ do {
         let out = URL(fileURLWithPath: args.string("out", "./out/catalog.png"))
         let palettes = args.values["palettes"].map { $0.split(separator: ",").map { SlimeTheme.named(String($0)) } } ?? [.rimuru, .ruby, .obsidian]
         let looks = args.values["looks"].map { $0.split(separator: ",").map { SlimeLook.named(String($0)) } } ?? SlimeLook.all
-        let sheet = try Catalog.render(palettes: palettes, looks: looks, radius: CGFloat(args.double("radius", 56)))
+        let outfit = args.values["outfit"].flatMap { SlimeOutfit.set(named: $0) } ?? SlimeOutfit()
+        let sheet: CGImage
+        if args.values["sets"] != nil {
+            sheet = try Catalog.renderSets(look: looks.first ?? .rimuru, palette: palettes.first ?? .rimuru, radius: CGFloat(args.double("radius", 56)))
+        } else {
+            sheet = try Catalog.render(palettes: palettes, looks: looks, outfit: outfit, radius: CGFloat(args.double("radius", 56)))
+        }
         try FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Filmstrip.writePNG(sheet, to: out)
         print("wrote \(out.path) (\(sheet.width)x\(sheet.height))")
@@ -211,7 +218,7 @@ do {
         slimekit-tools play <sound>
         slimekit-tools bench [--seconds 20]
         slimekit-tools icon --out <AppIcon.appiconset>
-        slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--radius 56]
+        slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--outfit king] [--sets 1] [--radius 56]
         actions:
         \(Filmstrip.actionHelp)
         """)

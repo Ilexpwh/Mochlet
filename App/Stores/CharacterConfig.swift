@@ -57,7 +57,7 @@ struct CharacterConfig: Codable, Equatable, Sendable {
     }
 
     var appearance: SlimeAppearance {
-        SlimeAppearance(look: resolvedLook, palette: palette, outfit: outfit, glyphStyle: glyphStyle, armsEnabled: armsEnabled, lighterMinis: lighterMinis)
+        SlimeAppearance(look: resolvedLook, palette: palette, outfit: outfit, glyphStyle: glyphStyle, armsEnabled: armsEnabled, lighterMinis: lighterMinis, dressForOccasion: dressForOccasion)
     }
 
     // MARK: Edits

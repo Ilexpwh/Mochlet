@@ -133,6 +133,7 @@ public struct SlimeCGRenderer {
         drawBackTraits(in: cg)
         drawBodyFill(in: cg, bodyPath: bodyPath, goo: !liveBlobs.isEmpty)
         drawFace(in: cg, bodyPath: bodyPath)
+        drawEyewear(in: cg)
         drawFrontTraits(in: cg)
         drawAccessories(in: cg)
         drawParticles(in: cg)

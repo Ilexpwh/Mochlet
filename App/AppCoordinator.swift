@@ -7,7 +7,7 @@ import MochletCore
 import MochletServices
 
 enum MenuAction: String, CaseIterable, Identifiable {
-    case jumpToTerminal, newSession, projects, knowledge, signals, meetings, attachWindow, saveWindow, desktop, sound, settings, pauseObservation, quit
+    case jumpToTerminal, newSession, projects, knowledge, signals, meetings, attachWindow, saveWindow, desktop, sound, dressUp, settings, pauseObservation, quit
 
     var id: String { rawValue }
 
@@ -23,6 +23,7 @@ enum MenuAction: String, CaseIterable, Identifiable {
         case .saveWindow: return "Save window to knowledge"
         case .desktop: return "Let me out"
         case .sound: return "Sound"
+        case .dressUp: return "Dress up"
         case .settings: return "Settings"
         case .pauseObservation: return "Pause observation"
         case .quit: return "Quit"
@@ -41,6 +42,7 @@ enum MenuAction: String, CaseIterable, Identifiable {
         case .saveWindow: return "square.and.arrow.down.on.square"
         case .desktop: return "arrow.up.left.and.arrow.down.right"
         case .sound: return "speaker.wave.2"
+        case .dressUp: return "tshirt"
         case .settings: return "gearshape"
         case .pauseObservation: return "pause.circle"
         case .quit: return "power"
@@ -353,6 +355,9 @@ final class AppCoordinator {
             settings.soundEnabled.toggle()
             applySettings()
             toast(settings.soundEnabled ? "Sounds on" : "Sounds off", symbol: settings.soundEnabled ? "speaker.wave.2" : "speaker.slash")
+        case .dressUp:
+            window.send(.collapse)
+            openSettings(tab: "character")
         case .settings:
             window.send(.collapse)
             openSettings()
@@ -558,6 +563,10 @@ final class AppCoordinator {
         let menu = NSMenu()
         for a in MenuAction.allCases {
             if a == .quit || a == .settings { menu.addItem(.separator()) }
+            if a == .dressUp {
+                for item in appearanceMenuItems() { menu.addItem(item) }
+                continue
+            }
             let item = NSMenuItem(title: title(for: a), action: #selector(MenuTarget.fire(_:)), keyEquivalent: "")
             item.representedObject = a.rawValue
             item.target = MenuTarget.shared
@@ -565,6 +574,55 @@ final class AppCoordinator {
             menu.addItem(item)
         }
         return menu
+    }
+
+    /// "Dress up ▸" (outfit sets) and "Look ▸" (species presets) submenus, shared by the
+    /// right-click menu and the status item.
+    func appearanceMenuItems() -> [NSMenuItem] {
+        let dress = NSMenuItem(title: "Dress up", action: nil, keyEquivalent: "")
+        dress.image = NSImage(systemSymbolName: "tshirt", accessibilityDescription: nil)
+        let dressMenu = NSMenu()
+        for set in SlimeOutfit.sets {
+            let item = NSMenuItem(title: set.label, action: #selector(AppearanceMenuTarget.fire(_:)), keyEquivalent: "")
+            item.representedObject = "set:" + set.name
+            item.target = AppearanceMenuTarget.shared
+            item.state = settings.character.outfit == set.outfit ? .on : .off
+            dressMenu.addItem(item)
+        }
+        dressMenu.addItem(.separator())
+        let more = NSMenuItem(title: "Wardrobe…", action: #selector(AppearanceMenuTarget.fire(_:)), keyEquivalent: "")
+        more.representedObject = "wardrobe"
+        more.target = AppearanceMenuTarget.shared
+        dressMenu.addItem(more)
+        dress.submenu = dressMenu
+
+        let look = NSMenuItem(title: "Look", action: nil, keyEquivalent: "")
+        look.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)
+        let lookMenu = NSMenu()
+        for name in SlimeLook.names {
+            let item = NSMenuItem(title: SlimeLook.label(name), action: #selector(AppearanceMenuTarget.fire(_:)), keyEquivalent: "")
+            item.representedObject = "look:" + name
+            item.target = AppearanceMenuTarget.shared
+            item.state = settings.character.lookName == name ? .on : .off
+            lookMenu.addItem(item)
+        }
+        look.submenu = lookMenu
+        return [dress, look]
+    }
+
+    func chooseOutfitSet(_ name: String) {
+        guard let outfit = SlimeOutfit.set(named: name) else { return }
+        settings.character.outfit = outfit
+        applySettings()
+        slime.stage.main.trigger(.happy)
+        toast(name == "none" ? "Undressed" : "Dressed as \(SlimeOutfit.sets.first { $0.name == name }?.label ?? name)", symbol: "tshirt")
+    }
+
+    func chooseLook(_ name: String) {
+        settings.character.selectLook(name)
+        applySettings()
+        slime.stage.main.trigger(.excited)
+        toast("Now a \(SlimeLook.label(name)) slime", symbol: "sparkles")
     }
 
     /// ⌥-drop of the slime on another app's window: its title, URL and (optionally) a screenshot
@@ -678,5 +736,17 @@ final class MenuTarget: NSObject {
     @objc func fire(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let a = MenuAction(rawValue: raw) else { return }
         AppCoordinator.shared.menu(a)
+    }
+}
+
+@MainActor final class AppearanceMenuTarget: NSObject {
+    static let shared = AppearanceMenuTarget()
+
+    @objc func fire(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        let app = AppCoordinator.shared
+        if raw.hasPrefix("set:") { app.chooseOutfitSet(String(raw.dropFirst(4))) }
+        else if raw.hasPrefix("look:") { app.chooseLook(String(raw.dropFirst(5))) }
+        else if raw == "wardrobe" { app.openSettings(tab: "character") }
     }
 }

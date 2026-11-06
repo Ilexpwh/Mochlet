@@ -45,6 +45,30 @@ struct CharacterSettingsView: View {
                     }
                 }
             }
+            Section("Outfit") {
+                LazyVGrid(columns: Self.lookColumns, alignment: .leading, spacing: 6) {
+                    ForEach(SlimeOutfit.sets) { set in
+                        OutfitChip(set: set, look: s.character.resolvedLook, palette: s.character.palette, selected: s.character.outfit == set.outfit) {
+                            s.character.outfit = set.outfit
+                        }
+                    }
+                }
+                Picker("Headwear", selection: $s.character.outfit.headwear) {
+                    ForEach(SlimeOutfit.Headwear.allCases, id: \.self) { Text(Wardrobe.label($0.rawValue)).tag($0) }
+                }
+                Picker("Eyewear", selection: $s.character.outfit.eyewear) {
+                    ForEach(SlimeOutfit.Eyewear.allCases, id: \.self) { Text(Wardrobe.label($0.rawValue)).tag($0) }
+                }
+                Picker("Wrap", selection: $s.character.outfit.wrap) {
+                    ForEach(SlimeOutfit.Wrap.allCases, id: \.self) { Text(Wardrobe.label($0.rawValue)).tag($0) }
+                }
+                Picker("Charm", selection: $s.character.outfit.charm) {
+                    ForEach(SlimeOutfit.Charm.allCases, id: \.self) { Text(Wardrobe.label($0.rawValue)).tag($0) }
+                }
+                Toggle("Dress for the occasion", isOn: $s.character.dressForOccasion)
+                Text("Reading glasses while it eats a file, a nightcap when it sleeps; never saved to the outfit.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Colour") {
                 LazyVGrid(columns: Self.paletteColumns, alignment: .leading, spacing: 8) {
                     ForEach(SlimeTheme.all, id: \.name) { t in
@@ -153,6 +177,51 @@ struct LookChip: View {
     }
 }
 
+/// An outfit set as a thumbnail of the current look wearing it.
+struct OutfitChip: View {
+    let set: SlimeOutfit.Set
+    let look: SlimeLook
+    let palette: SlimeTheme
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Group {
+                    if let image = LookThumbnails.shared.image(for: look, palette: palette, outfit: set.outfit) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(height: 46)
+                Text(set.label)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 6).padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(selected ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .help(set.label)
+    }
+}
+
+enum Wardrobe {
+    /// "royalCape" → "Royal cape".
+    static func label(_ raw: String) -> String {
+        if raw == "none" { return "None" }
+        var out = ""
+        for ch in raw {
+            if ch.isUppercase { out += " " + ch.lowercased() } else { out.append(ch) }
+        }
+        return out.prefix(1).uppercased() + out.dropFirst()
+    }
+}
+
 /// Look thumbnails rendered once per look and palette (a settled slime at R 16, 2× backing).
 @MainActor
 final class LookThumbnails {
@@ -160,9 +229,13 @@ final class LookThumbnails {
     private var images: [String: NSImage] = [:]
 
     func image(for name: String, palette: SlimeTheme) -> NSImage? {
-        let key = "\(name)|\(palette.mid.hex)|\(palette.core.hex)|\(palette.ink.hex)"
+        image(for: SlimeLook.named(name), palette: palette, outfit: SlimeOutfit())
+    }
+
+    func image(for look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit) -> NSImage? {
+        let key = "\(look.name)|\(look.presetName ?? "custom")|\(palette.mid.hex)|\(palette.core.hex)|\(palette.ink.hex)|\(outfit.headwear)|\(outfit.eyewear)|\(outfit.wrap)|\(outfit.charm)"
         if let cached = images[key] { return cached }
-        guard let cg = Catalog.thumbnail(look: SlimeLook.named(name), palette: palette, radius: 16, scale: 2) else { return nil }
+        guard let cg = Catalog.thumbnail(look: look, palette: palette, outfit: outfit, radius: 16, scale: 2) else { return nil }
         let image = NSImage(cgImage: cg, size: NSSize(width: CGFloat(cg.width) / 2, height: CGFloat(cg.height) / 2))
         if images.count > 150 { images.removeAll() }
         images[key] = image

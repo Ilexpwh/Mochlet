@@ -20,7 +20,7 @@ import MochletCore
 ///   split greet sleep wake drop chew(?seconds=) listen(?seconds=)
 ///   press?x=&y=  release  click?x=&y=[&count=1]  hold?x=&y=&seconds=
 ///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
-///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | reset=1    change the character
+///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | reset=1
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1
 ///   desktop?on=1|0 | desktop?sx=&sy=
 @MainActor
@@ -72,19 +72,25 @@ enum DebugCommands {
                 result = shot(app, name: safeName(arg("name")), full: arg("full") == "1")
             }
         case "settings":
-            // settings?tab=general|agents|chat|projects|knowledge|voice|signals | close=1 | scroll=bottom|top
+            // settings?tab=general|agents|chat|projects|knowledge|voice|signals | close=1 | scroll=bottom|top|<points>
             if arg("close") != nil { app.settingsWindow?.close() } else { app.openSettings(tab: arg("tab")) }
             if let where_ = arg("scroll"), let content = app.settingsWindow?.window?.contentView {
                 func scrollViews(_ v: NSView) -> [NSScrollView] { (v as? NSScrollView).map { [$0] } ?? [] + v.subviews.flatMap(scrollViews) }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     for sv in scrollViews(content) {
                         guard let doc = sv.documentView else { continue }
-                        let y = where_ == "bottom" ? max(0, doc.frame.height - sv.contentView.bounds.height) : 0
+                        let maxY = max(0, doc.frame.height - sv.contentView.bounds.height)
+                        let y = where_ == "bottom" ? maxY : min(maxY, CGFloat(Double(where_) ?? 0))
                         sv.contentView.scroll(to: NSPoint(x: 0, y: sv.documentView?.isFlipped == true ? y : 0))
                         sv.reflectScrolledClipView(sv.contentView)
                     }
                 }
             }
+        case "menu":
+            // menu: the right-click menu's titles, submenus flattened, to prove the Dress up / Look menus build
+            result = app.contextMenu().items.map { item in
+                item.isSeparatorItem ? "—" : item.title + (item.submenu.map { " ▸ " + $0.items.filter { !$0.isSeparatorItem }.map { ($0.state == .on ? "*" : "") + $0.title }.joined(separator: "/") } ?? "")
+            }.joined(separator: " | ")
         case "diag":
             // diag?logs=1 (export, result = path) | clean=1 (housekeeping, result = files/bytes) | perms=1 (result = rows) | whatsnew=1
             if arg("logs") != nil {
@@ -166,10 +172,17 @@ enum DebugCommands {
             }
             if let name = arg("look") { c.selectLook(name) }
             if let m = arg("minis") { c.lighterMinis = m == "lighter" }
+            if let set = arg("outfit") { c.outfit = SlimeOutfit.set(named: set) ?? SlimeOutfit() }
+            if let h = arg("headwear") { c.outfit.headwear = SlimeOutfit.Headwear(rawValue: h) ?? .none }
+            if let e = arg("eyewear") { c.outfit.eyewear = SlimeOutfit.Eyewear(rawValue: e) ?? .none }
+            if let w = arg("wrap") { c.outfit.wrap = SlimeOutfit.Wrap(rawValue: w) ?? .none }
+            if let ch = arg("charm") { c.outfit.charm = SlimeOutfit.Charm(rawValue: ch) ?? .none }
+            if let d = arg("dress") { c.dressForOccasion = d == "1" }
+            if let o = arg("occasion") { app.slime.stage.main.occasion = SlimeEngine.Occasion(rawValue: o) }
             if arg("reset") != nil { c = CharacterConfig() }
             app.settings.character = c
             app.applySettings()
-            result = "ok look \(c.lookName) palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex))"
+            result = "ok look \(c.lookName) outfit \(c.outfit.setName ?? "custom") palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex))"
         case "click":
             let p = islandPoint(app, num("x"), num("y"))
             let count = Int(num("count") ?? 1)

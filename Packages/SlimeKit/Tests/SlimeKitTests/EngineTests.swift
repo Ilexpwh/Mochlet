@@ -233,7 +233,7 @@ import simd
         e.cue(.plip)
         let cues = e.drainCues().filter { $0.sound == .plip }
         #expect(cues.count == 2)
-        #expect(SlimeSound.allCases.count == 28)
+        #expect(SlimeSound.allCases.count == 44)
     }
 
     @Test func framesAreDeterministicForASeed() {

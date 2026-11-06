@@ -34,6 +34,8 @@ final class SlimeBridge {
         stage.reduceMotion = settings.reduceMotionOverride ?? NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         sound.isEnabled = settings.soundEnabled
         sound.masterVolume = settings.soundVolume
+        sound.pack = SoundPack(rawValue: settings.character.soundPack) ?? .puni
+        sound.voiceEnabled = settings.character.voiceSqueaks
     }
 
     /// Called when the island changes mode: the slime grows in the expanded island and the mini

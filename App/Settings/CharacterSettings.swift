@@ -87,10 +87,27 @@ struct CharacterSettingsView: View {
             }
             Section("Sounds") {
                 Toggle("Sounds", isOn: $s.soundEnabled).onChange(of: s.soundEnabled) { _, _ in app.applySettings() }
+                Picker("Sound pack", selection: $s.character.soundPack) {
+                    ForEach(SoundPack.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                }
+                .onChange(of: s.character.soundPack) { _, _ in app.applySettings(); app.slime.sound.play(SoundCue(.greet)) }
+                Toggle("Voice squeaks (kyu, pyu, mu)", isOn: $s.character.voiceSqueaks)
+                    .onChange(of: s.character.voiceSqueaks) { _, _ in app.applySettings(); app.slime.sound.play(SoundCue(.greet)) }
                 HStack {
                     Slider(value: $s.soundVolume, in: 0...1) { Text("Volume") }
                         .onChange(of: s.soundVolume) { _, _ in app.applySettings() }
                     Button("Test") { app.slime.sound.play(SoundCue(.greet)) }
+                }
+                DisclosureGroup("All sounds") {
+                    FlowLayout(spacing: 4) {
+                        ForEach(SlimeSound.allCases, id: \.self) { sound in
+                            Button(sound.rawValue) { app.slime.sound.play(SoundCue(sound)) }
+                                .buttonStyle(.bordered).controlSize(.small)
+                                .foregroundStyle(app.slime.sound.pack.voiceSounds.contains(sound) ? Color.accentColor : Color.primary)
+                        }
+                    }
+                    Text("Tinted buttons are voice squeaks. Drop your own WAVs in ~/Library/Application Support/Mochlet/Sounds/<name>.wav (or <pack>/<name>.wav) to replace any of them.")
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Section("Motion") {

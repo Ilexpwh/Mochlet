@@ -56,7 +56,9 @@ public final class SlimeEngine {
     /// What the slime is busy with, as the host sees it; with `dressForOccasion` it adds a prop
     /// or a piece of clothing on top of the chosen outfit (never stored).
     public enum Occasion: String, Sendable, CaseIterable { case reading, call, rest, working }
-    public var occasion: Occasion?
+    public var occasion: Occasion? {
+        didSet { if occasion == .call, oldValue != .call { cue(.ring, gain: 0.6) } }
+    }
 
     /// The chosen outfit plus the situational piece for the current state and occasion.
     public var resolvedOutfit: SlimeOutfit {
@@ -309,6 +311,7 @@ public final class SlimeEngine {
         glowBoost = 1
         if speed > 0.8 {
             cue(.land, gain: clamp(speed / 5, 0.3, 1))
+            if speed > 3.5 { cue(.wobble, gain: 0.35) }
         }
         if speed > 3, !reduceMotion {
             pendingDust = (speed, time + 0.3)
@@ -633,6 +636,7 @@ public final class SlimeEngine {
         chewPhase = .filing
         filingAt = time
         spawnSparkles(count: 1)
+        cue(.pika, gain: 0.5)
     }
 
     private func spawnCrumbs() {
@@ -1001,7 +1005,7 @@ public final class SlimeEngine {
                     self.spawn(.drip, at: at, velocity: SIMD2(side * 0.1, 0.1), life: 0.7, size: 0.14)
                 }
             }
-            cue(.splat, rate: 0.7, gain: 0.6)
+            cue(.squish, rate: 0.7, gain: 0.8)
         case .puff:
             // ふくらむ: cheeks balloon out, a glare, a pout and steam off the top.
             eyeOverride = (.glare, .glare, until)
@@ -1028,7 +1032,7 @@ public final class SlimeEngine {
                                    .init(to: 1, duration: 0.3, ease: .outBack)], at: time)
             if !reduceMotion { shakeKicks([(0, -1.8), (0.07, 1.2)]) }
             addAccessory(.exclamation, owner: .emote)
-            cue(.pop, rate: 0.7)
+            cue(.pyu, gain: 0.8)
         case .cry:
             // Welling eyes, a droopy mouth and tears running down both cheeks.
             eyeOverride = (.teary, .teary, until)
@@ -1045,7 +1049,7 @@ public final class SlimeEngine {
                     }
                 }
             }
-            cue(.sleep, rate: 0.75, gain: 0.6)
+            cue(.mu, rate: 0.8, gain: 0.6)
         case .hum:
             // A note grows out of the head and the body sways to it.
             eyeOverride = (.relaxed, .relaxed, until)
@@ -1053,7 +1057,7 @@ public final class SlimeEngine {
             addAccessory(.note, owner: .emote)
             lean.animate(keys: [.init(to: 0.07, duration: 0.45, ease: .inOutSine), .init(to: -0.07, duration: 0.5, ease: .inOutSine),
                                 .init(to: 0.07, duration: 0.5, ease: .inOutSine), .init(to: style.lean, duration: 0.45, ease: .inOutSine)], at: time)
-            cue(.greet, rate: 1.25, gain: 0.5)
+            cue(.note, gain: 0.6)
         case .cheer:
             eyeOverride = (.happyArc, .happyArc, until)
             mouthOverride = (.grin, until)
@@ -1064,7 +1068,7 @@ public final class SlimeEngine {
                 let a = -2.5 + Double(k) * 0.6
                 spawn(.star, at: c + SIMD2(cos(a), sin(a)) * 1.4, velocity: SIMD2(cos(a), sin(a)) * 0.6, life: 0.8, size: 0.15)
             }
-            cue(.finish)
+            cue(.pika)
         case .hug:
             // A self-hug: arms wrap round the belly, the top bulges into a heart, cheeks warm.
             eyeOverride = (.pleased, .pleased, until)
@@ -1107,7 +1111,7 @@ public final class SlimeEngine {
                                      .init(to: style.mouthOpen, duration: 0.3, ease: .inOutSine)], at: time)
             flatten.animate(keys: [.init(to: 1.25, duration: 0.45, ease: .outQuad), .init(to: 1.25, duration: 0.35, ease: .linear),
                                    .init(to: 0.96, duration: 0.2, ease: .inOutSine), .init(to: 1, duration: 0.2, ease: .outBack)], at: time)
-            cue(.sleep, rate: 1.3, gain: 0.5)
+            cue(.stretch, gain: 0.6)
         case .poked:
             // ツンツン: a side squish away from the finger with "> <" eyes.
             let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
@@ -1116,7 +1120,7 @@ public final class SlimeEngine {
             mouthOpen.animate(to: 0.25, duration: 0.08, at: time)
             if !reduceMotion { body.apply(.slap(side: side, strength: 0.55)) }
             lean.animate(keys: [.init(to: -0.12 * side, duration: 0.1, ease: .outQuad), .init(to: style.lean, duration: 0.45, ease: .outBack)], at: time)
-            cue(.pinch, rate: 1.2, gain: 0.7)
+            cue(.puni)
         }
     }
 
@@ -1168,6 +1172,8 @@ public final class SlimeEngine {
     private func hop(_ v0: Double) {
         guard !reduceMotion, !body.airborne else { return }
         body.apply(.jump(v0: v0))
+        cue(.pyon, rate: clamp(2.4 / v0, 0.8, 1.2), gain: 0.5)
+        if appearance.look.wings != .none { cue(.fuwa, gain: 0.5) }
     }
 
     // MARK: - State machine
@@ -1303,7 +1309,7 @@ public final class SlimeEngine {
                     if !self.reduceMotion { self.body.apply(.landing(speed: 0.9)) }
                     self.glance = (SIMD2(0, -0.7), self.time + 0.45)
                     self.mouthOverride = (.o, self.time + 0.45)
-                    self.cue(.plip)
+                    self.cue(.rustle)
                 }
                 // A beat of hugging the catch (the mask-hug from the references), then eating.
                 scheduler.schedule(at: time + 0.65, tag: Self.stateTag) { [weak self] in
@@ -1312,7 +1318,7 @@ public final class SlimeEngine {
                     self.eyeOverride = (.pleased, .pleased, self.time + 0.55)
                     self.mouthOverride = (.smileTiny, self.time + 0.55)
                     self.blush.animate(to: max(self.baseBlush, 0.5), duration: 0.2, at: self.time)
-                    self.cue(.love, gain: 0.45)
+                    self.cue(.kyu, gain: 0.5)
                 }
                 scheduler.schedule(at: time + 1.2, tag: Self.stateTag) { [weak self] in
                     guard let self else { return }
@@ -1390,6 +1396,7 @@ public final class SlimeEngine {
         guard state == .idle, !isPressed else { return }
         if time - lastInteractionAt > 90, detail >= .medium, occasion == nil, rng.chance(0.35) {
             gesture(.sip, for: 3.0, owner: .state)
+            scheduler.schedule(at: time + 1.1, tag: Self.stateTag) { [weak self] in self?.cue(.sip, gain: 0.5) }
             return
         }
         switch rng.int(0..<3) {
@@ -1447,7 +1454,7 @@ public final class SlimeEngine {
             let left: EyeShape = self.chewSide > 0 ? .squint : .open
             let right: EyeShape = self.chewSide > 0 ? .open : .squint
             self.eyeOverride = (left, right, self.time + 0.4)
-            self.cue(.chew, rate: self.chewSide > 0 ? 1 : 1.06)
+            self.cue(.hamu, rate: self.chewSide > 0 ? 1 : 1.06)
             self.chewSide = -self.chewSide
             if case .biting = self.chewPhase {
                 // Each bite takes 15 % of the file; the host's progress can hold the bites back.

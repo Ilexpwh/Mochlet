@@ -179,12 +179,14 @@ scripts/bootstrap.sh              # installs xcodegen, generates Mochlet.xcodepr
 cd Packages/SlimeKit
 swift run slimekit-tools render-filmstrip --state greeting --out ../../out/greeting
 swift run slimekit-tools lab              # live Emote Lab window with sliders and every state
-swift run slimekit-tools play finish      # audition one synthesised sound
+swift run slimekit-tools play finish      # audition one synthesised sound (play all --pack classic for the 2.0 chimes)
 swift run -c release slimekit-tools bench # engine + draw cost
 ```
 
 Look at `out/<state>/contact.png` and `trace.json` to review motion frame by frame. Sounds can
-be replaced per file in `~/Library/Application Support/Mochlet/Sounds/<name>.wav`.
+be replaced per file in `~/Library/Application Support/Mochlet/Sounds/<name>.wav` (or `<pack>/<name>.wav`
+for one pack only); Settings → Character → Sounds picks the pack (puni squish + squeaks, or classic chimes)
+and whether the slime's voice squeaks play.
 
 ### Driving a debug build without a mouse
 

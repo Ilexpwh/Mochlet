@@ -22,7 +22,7 @@ import MochletCore
 ///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
 ///   arms?pose=<pose>[&seconds=]      one-off arm pose (wave, thumbsUp, cheer, holdSide:phone:-1, hug:heart, hug:self, sip…)
 ///   chew?[kind=pdf][&seconds=]        eat a pretend file; chew?phase=biting:0.5|digesting|filing drives the timeline
-///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | reset=1
+///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | pack=puni|classic | voice=1|0 | reset=1
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1
 ///   desktop?on=1|0 | desktop?sx=&sy=
 @MainActor
@@ -189,10 +189,12 @@ enum DebugCommands {
             if let ch = arg("charm") { c.outfit.charm = SlimeOutfit.Charm(rawValue: ch) ?? .none }
             if let d = arg("dress") { c.dressForOccasion = d == "1" }
             if let o = arg("occasion") { app.slime.stage.main.occasion = SlimeEngine.Occasion(rawValue: o) }
+            if let pk = arg("pack"), SoundPack(rawValue: pk) != nil { c.soundPack = pk }
+            if let v = arg("voice") { c.voiceSqueaks = v == "1" }
             if arg("reset") != nil { c = CharacterConfig() }
             app.settings.character = c
             app.applySettings()
-            result = "ok look \(c.lookName) outfit \(c.outfit.setName ?? "custom") palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex))"
+            result = "ok look \(c.lookName) outfit \(c.outfit.setName ?? "custom") palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex)) pack \(app.slime.sound.pack.rawValue) voice \(app.slime.sound.voiceEnabled)"
         case "click":
             let p = islandPoint(app, num("x"), num("y"))
             let count = Int(num("count") ?? 1)
@@ -546,6 +548,9 @@ enum DebugCommands {
                            "mid": String(format: "#%06X", c.palette.mid.hex), "ink": String(format: "#%06X", c.palette.ink.hex),
                            "lighterMinis": c.lighterMinis, "stagePalette": main.appearance.palette.name,
                            "miniPalettes": stage.minis.map { String(format: "#%06X", $0.engine.appearance.palette.mid.hex) }]
+        d["sound"] = ["pack": app.slime.sound.pack.rawValue, "voice": app.slime.sound.voiceEnabled, "enabled": app.slime.sound.isEnabled,
+                      "volume": app.slime.sound.masterVolume, "plays": app.slime.sound.playCount,
+                      "greet": "\(app.slime.sound.source(of: .greet))", "puni": "\(app.slime.sound.source(of: .puni))"]
         d["miniCount"] = n.miniCount
         d["probe"] = ["fps": app.slime.probe.fps, "msPerDraw": app.slime.probe.msPerDraw, "cpuPercent": app.slime.probe.cpuPercent]
         d["islandView"] = ["ticks": w.debugCounters.ticks, "redraws": w.debugCounters.redraws, "paused": w.debugCounters.paused]

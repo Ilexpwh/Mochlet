@@ -93,15 +93,24 @@ func runLab() {
 }
 
 @MainActor
-func playSound(_ name: String) {
-    guard let s = SlimeSound(rawValue: name) else {
-        print("unknown sound \(name); one of: \(SlimeSound.allCases.map(\.rawValue).joined(separator: " "))")
+func playSound(_ name: String, pack: SoundPack) {
+    let sounds: [SlimeSound]
+    if name == "all" {
+        sounds = SlimeSound.allCases
+    } else if let s = SlimeSound(rawValue: name) {
+        sounds = [s]
+    } else {
+        print("unknown sound \(name); one of: all \(SlimeSound.allCases.map(\.rawValue).joined(separator: " "))")
         return
     }
-    let engine = SoundEngine(overrideFolder: nil)
+    let engine = SoundEngine(overrideFolder: nil, pack: pack)
     engine.masterVolume = 0.6
-    engine.play(SoundCue(s))
-    RunLoop.main.run(until: Date(timeIntervalSinceNow: SoundRecipe.recipe(for: s).duration + 0.3))
+    engine.maxPlaysPerSecond = 100
+    for s in sounds {
+        print(s.rawValue)
+        engine.play(SoundCue(s))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: SoundRecipe.recipe(for: s, in: pack).duration + 0.35))
+    }
 }
 
 /// Engine and draw cost: ms of CPU per simulated second (idle stage) and ms per Canvas draw at R 22 / R 96.
@@ -185,11 +194,12 @@ do {
     case "render-filmstrip":
         try renderFilmstrip(args)
     case "gen-sounds":
-        try SoundGenerator.run(outDir: URL(fileURLWithPath: args.string("out", "./out/sounds")))
+        let packs = args.string("pack", "all") == "all" ? SoundPack.allCases : [SoundPack(rawValue: args.string("pack", "puni")) ?? .puni]
+        try SoundGenerator.run(outDir: URL(fileURLWithPath: args.string("out", "./out/sounds")), packs: packs)
     case "lab":
         runLab()
     case "play":
-        playSound(args.positional.count > 1 ? args.positional[1] : "greet")
+        playSound(args.positional.count > 1 ? args.positional[1] : "greet", pack: SoundPack(rawValue: args.string("pack", "puni")) ?? .puni)
     case "bench":
         bench(args)
     case "icon":
@@ -213,9 +223,9 @@ do {
         slimekit-tools render-filmstrip --state <state|emote|pinch|sessions|ghost|ghostdrop> | --script "t:action,…"
                        [--frames 48] [--fps 24] [--radius 64] [--seed 7] [--out dir] [--palette name] [--look name] [--pointer x,y] [--mini]
                        [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion]
-        slimekit-tools gen-sounds --out <dir>
+        slimekit-tools gen-sounds --out <dir> [--pack puni|classic|all]
         slimekit-tools lab
-        slimekit-tools play <sound>
+        slimekit-tools play <sound|all> [--pack puni|classic]
         slimekit-tools bench [--seconds 20]
         slimekit-tools icon --out <AppIcon.appiconset>
         slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--outfit king] [--sets 1] [--radius 56]

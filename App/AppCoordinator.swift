@@ -167,31 +167,22 @@ final class AppCoordinator {
     /// Expanded views that belong to a session.
     func openSession(_ id: String?) {
         if let id { notch.focusedSessionID = id }
-        window.send(.openExternally(.sessionDetail))
+        window.send(.open(.sessionDetail))
     }
 
     func openDiff(_ id: String) {
         notch.focusedDiffID = id
-        window.send(.openExternally(.diff))
+        window.send(.open(.diff))
     }
 
     /// ⌃⌥A: the card that needs the user, else the most recent session.
     func goToPending() {
-        if approvals.count > 0 { window.send(.openExternally(.approval)); return }
-        if questions.pending != nil { window.send(.openExternally(.question)); return }
+        if approvals.count > 0 { window.send(.open(.approval)); return }
+        if questions.pending != nil { window.send(.open(.question)); return }
         if let c = sessions.pending.first ?? sessions.mostRecent { openSession(c.id) } else { toast("Nothing is waiting for you.", symbol: "checkmark.circle") }
     }
 
-    /// How many plan pills the compact strip shows (its width reserves room for them).
-    func updatePills() {
-        var n = 0
-        if settings.showClaudePlan, plans.claude != nil { n += 1 }
-        if settings.showCodexPlan, plans.codex != nil { n += 1 }
-        if notch.pillCount != n { notch.pillCount = n }
-    }
-
     func applySettings() {
-        updatePills()
         slime.apply(settings: settings)
         window?.applySettings()
         HotKeyCenter.shared.setEnabled(settings.hotkeysEnabled)
@@ -201,7 +192,7 @@ final class AppCoordinator {
     // MARK: - Opening things
 
     func reveal() {
-        window.send(.openExternally(.home))
+        window.send(.open(.home))
     }
 
     func openAsk() {
@@ -210,23 +201,23 @@ final class AppCoordinator {
             return
         }
         notch.askSuggestions = askSuggestions()
-        window.send(.openExternally(.ask))
+        window.send(.open(.ask))
         slime.stage.main.startQuestion()
         window.focusInput()
     }
 
     func openMenu() {
-        window.send(.openExternally(.menu))
+        window.send(.open(.menu))
     }
 
     func openChat() {
-        window.send(.openExternally(.chat))
+        window.send(.open(.chat))
         window.focusInput()
     }
 
     func openProjects(focusNew: Bool = false) {
         notch.projectsFocus = focusNew ? "new" : nil
-        window.send(.openExternally(.projects))
+        window.send(.open(.projects))
     }
 
     func openSettings(tab: String? = nil) {
@@ -235,7 +226,7 @@ final class AppCoordinator {
     }
 
     func openKnowledge(question: String? = nil) {
-        window.send(.openExternally(.knowledge))
+        window.send(.open(.knowledge))
         window.focusInput()
         if let question { knowledge.ask(question) }
     }
@@ -245,6 +236,10 @@ final class AppCoordinator {
     }
 
     func toast(_ text: String, symbol: String? = nil, seconds: Double = 2.6) {
+        if notch.mode == .expanded, notch.view != .toast, window.heldOpen || Date().timeIntervalSince(window.lastInteraction) < 3 {
+            notch.showNote(text)
+            return
+        }
         notch.toast = Toast(text: text, symbol: symbol)
         window.send(.openExternally(.toast))
         toastWork?.cancel()
@@ -468,17 +463,17 @@ final class AppCoordinator {
     }
 
     func openMeetings() {
-        window.send(.openExternally(.meetingLive))
+        window.send(.open(.meetingLive))
     }
 
     func openSignals() {
-        window.send(.openExternally(.signals))
+        window.send(.open(.signals))
     }
 
     /// The What's new card (once per version after the greeting; any time from Settings → General).
     func openWhatsNew() {
         guard !(approvals.count > 0) else { return }      // never over an approval
-        window.send(.openExternally(.whatsNew))
+        window.send(.open(.whatsNew))
     }
 
     func dismissWhatsNew() {
@@ -651,7 +646,7 @@ final class AppCoordinator {
         let o = notch.slimeOrigin
         slime.stage.main.dragEntered(fromDirection: p.x >= o.x ? 1 : -1)
         window.hold("drag", true)
-        window.send(.openExternally(.home))
+        window.send(.open(.home))
     }
 
     func dragExited() {

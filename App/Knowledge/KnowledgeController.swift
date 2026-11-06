@@ -229,7 +229,7 @@ final class KnowledgeController {
         answerFiled = nil
         lastError = nil
         isAnswering = true
-        app.window.hold("knowledge", true)
+        app.window.hold("knowledge", true, scope: .view(.knowledge))
         app.sessions.publish()
         answerTask = Task { [weak self] in
             guard let self else { return }

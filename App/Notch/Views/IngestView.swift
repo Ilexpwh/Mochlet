@@ -67,8 +67,8 @@ private struct JobView: View {
                 if let f = job.filed { Text("Kept as \(f.path)").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(1) }
                 HStack(spacing: 6) {
                     IslandButton("Try again", symbol: "arrow.clockwise") { app.ingest.retry(job.id) }
-                    if let f = job.filed { IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path) } }
-                    IslandButton("Log", symbol: "list.bullet.rectangle") { app.knowledge.openPath("log.md") }
+                    if let f = job.filed { IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path); app.window.send(.acknowledged()) } }
+                    IslandButton("Log", symbol: "list.bullet.rectangle") { app.knowledge.openPath("log.md"); app.window.send(.acknowledged()) }
                 }
             } else {
                 if let s = job.summary, !s.isEmpty {
@@ -81,7 +81,7 @@ private struct JobView: View {
                 }
                 HStack(spacing: 6) {
                     if let f = job.filed {
-                        IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path) }
+                        IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path); app.window.send(.acknowledged()) }
                         IslandButton("Ask", symbol: "sparkles") { app.openKnowledge(question: "What does \"\(OneLine.collapse(f.title, limit: 60))\" say?") }
                         if !app.projects.projects.isEmpty {
                             Menu {

@@ -389,6 +389,12 @@ public final class SlimeStage {
         side * (miniLayout.firstSlot + slotOffset + Double(slot % miniLayout.perRow) * miniLayout.pitch)
     }
 
+    /// Where each mini is and where its slot is, in main R units from the main contact point
+    /// (debug and tests).
+    public func miniOffsets() -> [(id: String, x: Double, slotX: Double, phase: MiniSlime.Phase)] {
+        minis.map { ($0.id, $0.engine.body.root.x * miniScale, slotX($0.slot), $0.phase) }
+    }
+
     /// Flight time for a hop of `distance` (mini R units): longer hops take a little longer.
     private func hopTime(_ distance: Double) -> Double {
         clamp(0.3 + distance / 40, 0.3, 0.6)

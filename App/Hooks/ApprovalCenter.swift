@@ -60,7 +60,7 @@ final class ApprovalCenter {
     private func show() {
         guard !queue.isEmpty else { return }
         app.notch.focusedSessionID = queue.head?.sessionID
-        app.window.hold("approval", true)
+        app.window.hold("approval", true, scope: .card(.approval))
         if !app.questions.isShowing {
             app.window.send(.openExternally(.approval))
         }
@@ -117,7 +117,14 @@ final class ApprovalCenter {
         if queue.isEmpty {
             app.window.hold("approval", false)
             if app.notch.view == .approval, app.notch.mode == .expanded {
-                if app.questions.isShowing { app.window.send(.switchView(.question)) } else if text == nil { app.window.send(.collapse) } else { app.window.send(.switchView(.sessionDetail)) }
+                if app.questions.isShowing {
+                    app.window.send(.switchView(.question))
+                } else if text == nil {
+                    app.window.send(.acknowledged())
+                } else {
+                    app.window.send(.switchView(.sessionDetail))
+                    app.window.send(.acknowledged(delay: 2.4))
+                }
             }
         } else {
             show()

@@ -115,9 +115,9 @@ struct SessionDetailView: View {
                 }
                 .frame(maxHeight: 92)
                 HStack(spacing: 6) {
-                    IslandButton("Terminal", symbol: "terminal") { app.terminal.jump(to: c) }
+                    IslandButton("Terminal", symbol: "terminal") { app.terminal.jump(to: c); app.window.send(.acknowledged()) }
                     if !c.cwd.isEmpty {
-                        IslandButton("Folder", symbol: "folder") { NSWorkspace.shared.open(URL(fileURLWithPath: c.cwd)) }
+                        IslandButton("Folder", symbol: "folder") { NSWorkspace.shared.open(URL(fileURLWithPath: c.cwd)); app.window.send(.acknowledged()) }
                     }
                     if !c.diffs.isEmpty {
                         IslandButton("Diff · \(c.diffs.count)", symbol: "plus.forwardslash.minus") { app.openDiff(c.diffs.last!.id) }
@@ -307,9 +307,7 @@ struct ApprovalView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(GeometryReader { g in
-                Color.clear.onAppear { report(g.size.height) }.onChange(of: g.size.height) { _, h in report(h) }
-            })
+            .reportsIslandHeight(for: .approval)
         } else {
             SessionDetailView(app: app)
         }
@@ -319,12 +317,6 @@ struct ApprovalView: View {
     private func detailHeight(_ r: ApprovalRequest) -> CGFloat {
         let lines = r.isPlan ? 20 : r.detailLineCount
         return min(150, max(18, CGFloat(lines) * 15 + 4))
-    }
-
-    private func report(_ h: CGFloat) {
-        let total = Double(h) + app.notch.geometry.height + 4 + app.notch.contentBottom
-        let clamped = min(360, max(NotchLayout.viewHeight(.approval), total))
-        if app.notch.measuredHeight != clamped { app.notch.measuredHeight = clamped }
     }
 }
 
@@ -388,18 +380,10 @@ struct QuestionView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(GeometryReader { g in
-                Color.clear.onAppear { report(g.size.height) }.onChange(of: g.size.height) { _, h in report(h) }
-            })
+            .reportsIslandHeight(for: .question)
         } else {
             SessionDetailView(app: app)
         }
-    }
-
-    private func report(_ h: CGFloat) {
-        let total = Double(h) + app.notch.geometry.height + 4 + app.notch.contentBottom
-        let clamped = min(360, max(NotchLayout.viewHeight(.question), total))
-        if app.notch.measuredHeight != clamped { app.notch.measuredHeight = clamped }
     }
 }
 
@@ -446,9 +430,12 @@ struct PlanPills: View {
     private func pill(_ name: String, _ u: PlanUsage) -> some View {
         let pct = u.dominantPercent(now: Date())
         return Text("\(name) \(Int(pct.rounded()))%")
-            .font(.system(size: 9, weight: .semibold, design: .rounded))
+            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(.black.opacity(0.85))
-            .padding(.horizontal, 5).padding(.vertical, 1.5)
+            .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Capsule().fill(PlanRows.color(PlanUsage.level(pct))))
     }
 }

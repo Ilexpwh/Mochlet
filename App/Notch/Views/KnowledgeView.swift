@@ -71,7 +71,7 @@ struct KnowledgeView: View {
         }
         .onChange(of: kb.answerText.isEmpty) { _, _ in app.notch.measuredHeight = height(kb) }
         .onChange(of: kb.citations.count) { _, _ in app.notch.measuredHeight = height(kb) }
-        .onChange(of: focused) { _, f in app.window.hold("knowledge-focus", f) }
+        .onChange(of: focused) { _, f in app.window.hold("knowledge-focus", f, scope: .view(.knowledge)) }
         .onDisappear { app.window.hold("knowledge-focus", false) }
     }
 

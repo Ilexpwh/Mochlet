@@ -411,7 +411,7 @@ final class VoiceController {
                 app.openChat()
             } else {
                 app.notch.askText = r.text
-                app.window.send(.openExternally(.ask))
+                app.window.send(.open(.ask))
                 app.window.focusInput()
             }
         }
@@ -428,7 +428,7 @@ final class VoiceController {
         state = .waiting
         lastAction = "asking: \(question)"
         app.window.hold("voice", true)
-        app.window.send(.openExternally(.ask))
+        app.window.send(.open(.ask))
         app.slime.stage.main.startQuestion()
         pendingWork?.cancel()
         pendingWork = Task { @MainActor [weak self] in

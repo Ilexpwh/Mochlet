@@ -1618,7 +1618,6 @@ public final class SlimeEngine {
         let s = profile.kind == .mini ? 0.85 : 1.0
         var acc: [AccessoryFrame] = []
         var extraBlobs: [Blob] = []
-        var grownStrength = 0.0
         accessories.removeAll { r in r.removeAt.map { time - $0 > 0.18 } ?? false }
         let grownStyle = appearance.glyphStyle == .grown && detail >= .medium
         for a in accessories where !(a.kind == .micBars && holdsMic) {
@@ -1628,27 +1627,25 @@ public final class SlimeEngine {
             let grown = grownStyle && a.kind.canGrow
             var anchor: SIMD2<Double>
             var dir = SIMD2<Double>(0, -1)
+            var bead: SIMD2<Double>? = nil
+            var beadR = 0.0
             if grown {
-                // The mark grows out of the top-back of the head on a goo stalk (where the drop tip
-                // sits), swaying a little; the stalk is body material, the glyph is drawn as jelly.
+                // The anime's "!" moment: the mark floats clear of the head, a little right of the
+                // crown and nearly upright, with one small bead sitting on the head under it. No
+                // stalk and no trail; it pops out of the head and settles with a clear gap.
                 let n = ring.count
                 var c = SIMD2<Double>.zero
                 for p in ring { c += p }
                 c /= Double(n)
-                let base = ring[TraitRig.index(angle: -.pi / 2 + 0.72, count: n)]
+                let base = ring[TraitRig.index(angle: -.pi / 2 + 0.45, count: n)]
                 let normal = TraitRig.unit(base - c)
-                // Up and out at about 35° so the mark stays inside the island; the tip lag moves it,
-                // and nothing else does, so the contour cache holds while the slime is still.
-                dir = TraitRig.rotate(TraitRig.unit(normal * 0.85 + SIMD2(0, -0.5)), by: 0.05 + traitAnim.tipLag * 0.5)
-                let heading = atan2(dir.y, dir.x)
+                // Mostly up with a slight outward lean; only the tip lag moves it, so the contour
+                // cache holds while the slime is still.
+                dir = TraitRig.rotate(TraitRig.unit(normal * 0.45 + SIMD2(0, -1)), by: traitAnim.tipLag * 0.35)
                 let grow = max(0, pop)
-                let len = 0.36 * grow * s
-                for (k, r) in [0.24, 0.19, 0.15, 0.12].enumerated() {
-                    let t = 0.08 * s + len * Double(k) / 3
-                    extraBlobs.append(Blob(position: base + dir * t, radius: r * s * max(0.35, grow), stretch: 1.2, heading: heading, shaded: false))
-                }
-                anchor = base + dir * (0.08 * s + len + 0.34 * s * grow)
-                grownStrength = max(grownStrength, grow)
+                anchor = base + dir * (0.2 * s + 0.52 * s * grow)
+                bead = base + dir * (0.1 * s)
+                beadR = 0.085 * s * min(1, grow)
             } else {
                 let local: SIMD2<Double>
                 switch a.kind {
@@ -1662,7 +1659,7 @@ public final class SlimeEngine {
                 anchor = bf.transform(local)
             }
             acc.append(AccessoryFrame(kind: a.kind, anchor: anchor, pop: pop, phase: age, levels: a.kind == .micBars ? micLevels : [],
-                                      grown: grown, direction: dir))
+                                      grown: grown, direction: dir, bead: bead, beadRadius: beadR))
         }
         if let m = morph {
             let k = morphAmount.value
@@ -1678,8 +1675,7 @@ public final class SlimeEngine {
                 }
             }
         }
-        var look = appearance.look
-        if grownStrength > 0.5 { look.tip = false }  // the stalk takes the tip's place
+        let look = appearance.look
         var rig = TraitRig.build(look: look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
         let worn = resolvedOutfit
         rig.traits += OutfitRig.build(outfit: worn, ring: ring, anim: traitAnim, detail: detail, mini: profile.kind == .mini)

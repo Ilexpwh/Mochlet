@@ -3,9 +3,9 @@ import Foundation
 import SwiftUI
 import SlimeKit
 
-// Marks that grow out of the body as slime (`GlyphStyle.grown`): the stalk is part of the goo
-// silhouette (blobs from the engine); the glyph itself is a filled path in the same jelly material
-// with a cel shadow, rim line and highlight, so a "?" reads as a piece of the slime, not a bubble.
+// Marks that pop up above the head as slime (`GlyphStyle.grown`): the glyph is a filled path in
+// the same jelly material with a cel shadow, rim line and highlight, so a "?" reads as a piece of
+// the slime, not a speech bubble. It floats clear of the head over one small bead.
 extension SlimeCGRenderer {
     /// The hooked "?" from the anime as a filled outline, centred on the glyph's middle.
     static func questionGlyph(scale R: CGFloat, stroke w: CGFloat) -> CGPath {

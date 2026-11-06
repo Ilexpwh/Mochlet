@@ -68,7 +68,7 @@ struct ProjectsView: View {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Add project"
-        app.window.hold("panel", true)
+        app.window.hold("panel", true, scope: .view(.projects))
         NSApp.activate()
         panel.begin { resp in
             MainActor.assumeIsolated {

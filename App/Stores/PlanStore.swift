@@ -23,7 +23,6 @@ final class PlanStore {
         if let c = claude, c.fiveHour == u.fiveHour, c.week == u.week, now.timeIntervalSince(c.updatedAt) < 30 { return }
         claude = u
         if let data = try? JSONEncoder().encode(u) { defaults.set(data, forKey: "claudePlanUsage") }
-        AppCoordinator.shared.updatePills()
     }
 
     /// `rate_limit_event` from a `claude -p` run: the same windows in a different shape.
@@ -54,7 +53,6 @@ final class PlanStore {
             await MainActor.run {
                 AppCoordinator.shared.plans.codexLoading = false
                 if let r = result { AppCoordinator.shared.plans.codex = r }
-                AppCoordinator.shared.updatePills()
             }
         }
     }

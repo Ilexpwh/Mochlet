@@ -36,6 +36,8 @@ public extension SlimeFrame {
             let a = accessories[i], b = o.accessories[i]
             if a.kind != b.kind || a.grown != b.grown || moved(a.anchor, b.anchor) || diff(a.pop, b.pop, 0.015) { return true }
             if a.grown, diff(a.direction.x, b.direction.x, 0.01) || diff(a.direction.y, b.direction.y, 0.01) { return true }
+            if let ab = a.bead, let bb = b.bead { if moved(ab, bb) || diff(a.beadRadius, b.beadRadius, tol) { return true } }
+            else if (a.bead == nil) != (b.bead == nil) { return true }
             switch a.kind {
             case .dots, .badge, .recDot, .anger: if diff(a.phase, b.phase, 0.04) { return true }
             case .micBars: for k in a.levels.indices where k < b.levels.count && diff(a.levels[k], b.levels[k], 0.03) { return true }

@@ -27,7 +27,7 @@ struct SignalsView: View {
                     .font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.7)).lineLimit(2)
             } else {
                 ForEach(s.status.hot.prefix(3)) { e in
-                    Button { s.open(event: e) } label: {
+                    Button { s.open(event: e); app.window.send(.acknowledged()) } label: {
                         HStack(spacing: 6) {
                             Text(String(format: "%.1f", e.hotness))
                                 .font(.system(size: 9.5, weight: .bold, design: .rounded))

@@ -47,8 +47,7 @@ final class QuestionCenter {
         app.notch.focusedSessionID = e.sessionID
         app.slime.sound.play(SoundCue(.question))
         app.slime.stage.main.startQuestion()
-        app.window.hold("question", true)
-        app.notch.measuredHeight = nil
+        app.window.hold("question", true, scope: .card(.question))
         app.window.send(.openExternally(.question))
     }
 
@@ -88,7 +87,6 @@ final class QuestionCenter {
         if p.index + 1 < p.question.questions.count {
             p.index += 1
             pending = p
-            app.notch.measuredHeight = nil
         } else {
             send()
         }
@@ -130,10 +128,16 @@ final class QuestionCenter {
         pending = nil
         app.sessions.apply(.questionPending(id: p.event.sessionID, pending: false))
         app.window.hold("question", false)
-        app.notch.measuredHeight = nil
         if let note { app.notch.showNote(note) }
         if app.notch.view == .question, app.notch.mode == .expanded {
-            if app.approvals.count > 0 { app.window.send(.switchView(.approval)) } else if note == nil { app.window.send(.collapse) } else { app.window.send(.switchView(.sessionDetail)) }
+            if app.approvals.count > 0 {
+                app.window.send(.switchView(.approval))
+            } else if note == nil {
+                app.window.send(.acknowledged())
+            } else {
+                app.window.send(.switchView(.sessionDetail))
+                app.window.send(.acknowledged(delay: 2.4))
+            }
         }
     }
 }

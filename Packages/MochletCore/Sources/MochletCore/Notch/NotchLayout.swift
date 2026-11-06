@@ -30,9 +30,8 @@ public struct NotchLayout: Sendable, Equatable {
     /// Mini radius in the tray, in points, and the pitch between minis.
     public static let trayMiniRadius: Double = 14.5
     public static let trayPitch: Double = 36
-    /// Room the compact strip reserves for the one-line ticker.
-    public static let tickerWidth: Double = 200
-    public static let pillWidth: Double = 64
+    /// The compact ticker never grows past this; longer text truncates in the middle.
+    public static let tickerMaxWidth: Double = 240
 
     public var geometry: NotchGeometry
 
@@ -65,24 +64,56 @@ public struct NotchLayout: Sendable, Equatable {
         miniCount == 0 ? 0 : 24 + Double(miniCount) * Self.miniPitchPoints
     }
 
-    /// Right wing of the compact strip: the mini row, then the ticker and plan pills.
-    public func compactRightWing(miniCount: Int, ticker: Bool = false, pills: Int = 0) -> Double {
-        let extra = (ticker ? Self.tickerWidth + 6 : 0) + Double(pills) * Self.pillWidth
+    /// Right wing of the compact strip: the mini row, then whatever the strip overlay measured
+    /// (ticker, chew ring, REC pill, plan pills), so nothing ever wraps or hides under the notch.
+    public func compactRightWing(miniCount: Int, rightContent: Double = 0) -> Double {
+        let extra = rightContent > 0 ? rightContent + 10 : 0
         return max(Self.compactWing, Self.miniRowWidth(miniCount: miniCount) + 12 + extra)
     }
 
+    /// Left wing of the compact strip: the main slime's room, none while it is away on the desktop.
+    public func leftWing(mode: NotchMode, mainAway: Bool) -> Double {
+        mode == .compact && !mainAway ? Self.compactWing : 0
+    }
+
     /// `mainAway`: the main slime lives on the desktop, so the island keeps no room for it.
-    /// `measuredHeight` already includes paddings and the tray.
+    /// `measuredHeight` already includes paddings and the tray. `rightContent` is the measured
+    /// natural width of the compact overlay right of the mini row.
     public func size(mode: NotchMode, view: NotchView, miniCount: Int = 0, measuredHeight: Double? = nil, mainAway: Bool = false,
-                     ticker: Bool = false, pills: Int = 0) -> (width: Double, height: Double) {
+                     rightContent: Double = 0) -> (width: Double, height: Double) {
         switch mode {
         case .hidden:
             return (geometry.width, geometry.height)
         case .compact:
-            let left = mainAway ? 0 : Self.compactWing
-            return (geometry.width + left + compactRightWing(miniCount: miniCount, ticker: ticker, pills: pills), geometry.height)
+            return (geometry.width + leftWing(mode: mode, mainAway: mainAway) + compactRightWing(miniCount: miniCount, rightContent: rightContent), geometry.height)
         case .expanded:
-            return (Self.expandedWidth, measuredHeight ?? (Self.viewHeight(view) + (miniCount > 0 ? Self.trayHeight : 0)))
+            let range = Self.heightRange(view)
+            let natural = Self.viewHeight(view) + (miniCount > 0 ? Self.trayHeight : 0)
+            return (Self.expandedWidth, measuredHeight.map { min(range.upperBound, max(range.lowerBound, $0)) } ?? natural)
+        }
+    }
+
+    /// Left edge of the island inside a container of `containerWidth` whose centre is the notch:
+    /// the notch slot of the compact strip stays on the camera whatever the right wing grows to.
+    public func islandMinX(mode: NotchMode, width: Double, mainAway: Bool, containerWidth: Double) -> Double {
+        guard geometry.hasNotch else { return (containerWidth - width) / 2 }
+        switch mode {
+        case .expanded:
+            return (containerWidth - width) / 2
+        case .hidden, .compact:
+            return containerWidth / 2 - geometry.width / 2 - leftWing(mode: mode, mainAway: mainAway)
+        }
+    }
+
+    /// Bounds for a measured (content-driven) height of each expanded view.
+    public static func heightRange(_ view: NotchView) -> ClosedRange<Double> {
+        let base = viewHeight(view)
+        switch view {
+        case .approval, .question: return base...360
+        case .chat: return base...380
+        case .knowledge: return base...360
+        case .diff: return base...420
+        default: return base...360
         }
     }
 

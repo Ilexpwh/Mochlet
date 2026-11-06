@@ -79,7 +79,7 @@ final class SessionStore {
         case .openIsland(let view, let id):
             app.notch.focusedSessionID = id
             if app.approvals.isShowing || app.questions.isShowing { return }
-            app.window.send(.openExternally(view))
+            app.window.reveal(view)
         case .badge(let id, _):
             app.notch.focusedSessionID = id
         case .mainEmote(let name):

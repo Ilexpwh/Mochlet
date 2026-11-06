@@ -8,10 +8,11 @@ struct NotchRootView: View {
     let app: AppCoordinator
 
     var body: some View {
-        ZStack(alignment: .top) {
+        let store = app.notch
+        ZStack(alignment: .topLeading) {
             Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
             IslandContainer(app: app)
-                .frame(maxWidth: .infinity, alignment: .center)
+                .offset(x: CGFloat(store.liveX))
         }
         .ignoresSafeArea()
         .environment(\.layoutDirection, .leftToRight)
@@ -61,10 +62,11 @@ struct CompactOverlay: View {
             }
             if !store.tickerText.isEmpty {
                 Text(store.tickerText)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.72))
                     .lineLimit(1)
-                    .frame(width: NotchLayout.tickerWidth, alignment: .leading)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: NotchLayout.tickerMaxWidth, alignment: .leading)
             }
             if let p = store.chewProgress {
                 ChewRing(progress: p)
@@ -73,9 +75,11 @@ struct CompactOverlay: View {
                 RecPill(app: app)
             }
             PlanPills(app: app)
-            if !app.settings.soundEnabled {
-                Image(systemName: "speaker.slash.fill").font(.system(size: 8)).foregroundStyle(.white.opacity(0.4))
-            }
+        }
+        .fixedSize()
+        // The strip's right wing follows the measured content, so nothing wraps or hides under the notch.
+        .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { w in
+            if abs(store.compactRightWidth - w) > 0.5 { store.compactRightWidth = w }
         }
         .padding(.leading, store.tickerLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -92,6 +96,9 @@ struct ExpandedContent: View {
             content(store.view)
                 .id(store.view)
                 .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        }
+        .onPreferenceChange(IslandHeightKey.self) { heights in
+            for (v, h) in heights { store.setMeasured(content: h, for: v) }
         }
         .animation(.easeOut(duration: 0.16), value: store.view)
         .padding(.leading, store.contentLeading)
@@ -229,6 +236,8 @@ struct AskBubbleView: View {
             focused = true
             app.window.focusInput()
         }
+        .onChange(of: focused) { _, f in app.window.hold("ask-focus", f, scope: .view(.ask)) }
+        .onDisappear { app.window.hold("ask-focus", false) }
     }
 }
 

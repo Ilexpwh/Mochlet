@@ -118,11 +118,14 @@ enum DebugCommands {
             case "greetingComplete": input = .greetingComplete
             case "launch": input = .launch
             case "userInteracted": input = .userInteracted
+            case "acknowledged": input = .acknowledged(delay: num("delay"))
+            case "pin": input = nil; app.notch.isPinned.toggle(); result = "ok pin \(app.notch.isPinned)"
             default: input = nil
             }
-            if let input { app.window.send(input) } else { result = "unknown input" }
+            if let input { app.window.send(input) } else if !result.hasPrefix("ok pin") { result = "unknown input" }
         case "view":
-            if let v = NotchView(rawValue: arg("name") ?? "") { app.window.send(.openExternally(v)) } else { result = "unknown view" }
+            // view?name=<view>[&by=user]: a notification by default, the user's own opening with by=user
+            if let v = NotchView(rawValue: arg("name") ?? "") { app.window.send(arg("by") == "user" ? .open(v) : .openExternally(v)) } else { result = "unknown view" }
         case "emote":
             if let e = SlimeEmote(rawValue: arg("name") ?? "") { stage.main.trigger(e) } else { result = "unknown emote" }
         case "agent":
@@ -539,10 +542,19 @@ enum DebugCommands {
         d["pointerInside"] = n.pointerInside
         d["isPinned"] = n.isPinned
         d["heldOpen"] = w.heldOpen
+        d["holds"] = w.holds.map { "\($0.key):\($0.scope)" }.sorted()
+        d["pendingCard"] = w.pendingCard?.rawValue ?? "none"
+        d["timers"] = Dictionary(uniqueKeysWithValues: w.timerRemaining.map { ($0.key.rawValue, (($0.value * 10).rounded()) / 10) })
+        d["lastInteractionAgo"] = Date().timeIntervalSince(w.lastInteraction)
+        d["liveX"] = n.liveX
+        d["islandTargetX"] = n.islandTargetX
+        d["compactRightWidth"] = n.compactRightWidth
         d["main"] = ["state": main.state.rawValue, "emote": main.emote?.rawValue ?? "none", "root": [main.body.root.x, main.body.root.y],
                      "isAway": main.isAway, "opacity": main.opacity]
         d["arms"] = ["pose": main.armPose.name, "chew": main.chewPhase?.name ?? "none", "bites": main.bites, "occasion": main.occasion?.rawValue ?? "none"]
-        d["minis"] = stage.minis.map { ["id": $0.id, "phase": "\($0.phase)", "slot": $0.slot, "state": $0.engine.state.rawValue] }
+        let offsets = Dictionary(uniqueKeysWithValues: stage.miniOffsets().map { ($0.id, ($0.x, $0.slotX)) })
+        d["minis"] = stage.minis.map { ["id": $0.id, "phase": "\($0.phase)", "slot": $0.slot, "state": $0.engine.state.rawValue,
+                                       "x": offsets[$0.id]?.0 ?? 0, "slotX": offsets[$0.id]?.1 ?? 0] }
         let c = app.settings.character
         d["appearance"] = ["look": c.lookName, "palette": c.paletteName, "custom": [c.hue, c.saturation, c.lightness],
                            "mid": String(format: "#%06X", c.palette.mid.hex), "ink": String(format: "#%06X", c.palette.ink.hex),

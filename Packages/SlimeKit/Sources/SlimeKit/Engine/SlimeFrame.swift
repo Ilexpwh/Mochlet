@@ -49,11 +49,16 @@ public struct AccessoryFrame: Sendable, Equatable {
     public var phase: Double
     /// Mic levels for `micBars` (5 values 0…1).
     public var levels: [Double]
-    /// The glyph grows out of the body on a goo stalk (the stalk is in `SlimeFrame.blobs`) and is
-    /// drawn as jelly; false draws the speech-bubble style.
+    /// The glyph pops up above the head as a piece of jelly (`GlyphStyle.grown`); false draws the
+    /// speech-bubble style.
     public var grown: Bool = false
-    /// Direction the stalk points (unit, world space); the glyph leans with it.
+    /// Direction the glyph rose in (unit, world space); it leans with it.
     public var direction: SIMD2<Double> = SIMD2(0, -1)
+    /// For a grown glyph: the one small bead sitting on the head under the mark (world, R units),
+    /// as in the anime's "!" moment. Nil for bubble-style accessories.
+    public var bead: SIMD2<Double>? = nil
+    /// Radius of the bead in R units (already scaled by the pop).
+    public var beadRadius: Double = 0
 }
 
 public struct Particle: Sendable, Equatable {

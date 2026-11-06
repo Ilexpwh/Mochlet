@@ -372,7 +372,7 @@ final class IngestController {
     /// The project pick card: chips for the likely projects, the suggestion accepted after 10 s.
     private func askProject(_ id: String, _ q: ProjectQuestion) async -> String? {
         question = Question(jobID: id, question: q, deadline: Date().addingTimeInterval(10))
-        app.window.hold("ingest", true)
+        app.window.hold("ingest", true, scope: .card(.ingest))
         showCard()
         app.slime.stage.main.trigger(.surprised)
         let suggested = q.suggested
@@ -520,7 +520,7 @@ final class IngestController {
     }
 
     private func showCard() {
-        if app.notch.view != .chat || app.notch.mode != .expanded { app.window.send(.openExternally(.ingest)) }
+        if app.notch.view != .chat || app.notch.mode != .expanded { app.window.reveal(.ingest) }
     }
 
     private func scheduleCollapse() {

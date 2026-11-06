@@ -24,7 +24,7 @@ struct ChatView: View {
             app.window.focusInput()
         }
         .onChange(of: chat.messages.count) { _, _ in app.notch.measuredHeight = min(380, max(NotchLayout.viewHeight(.chat), chatHeight(chat))) }
-        .onChange(of: focused) { _, f in app.window.hold("chat-focus", f) }
+        .onChange(of: focused) { _, f in app.window.hold("chat-focus", f, scope: .view(.chat)) }
         .onDisappear { app.window.hold("chat-focus", false) }
     }
 

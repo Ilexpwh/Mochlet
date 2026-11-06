@@ -16,7 +16,8 @@ final class NotchWindowController: NSWindowController {
         var paused: Bool
     }
 
-    static let panelSize = CGSize(width: 720, height: 560)
+    /// The panel is a strip across the top of its screen; the island slides along it.
+    static let panelHeight: CGFloat = 560
     private static let fastPoll: TimeInterval = 1.0 / 60.0
     private static let nearPoll: TimeInterval = 1.0 / 20.0
     private static let idlePoll: TimeInterval = 1.0 / 8.0
@@ -31,7 +32,14 @@ final class NotchWindowController: NSWindowController {
     private var globalKeyMonitor: Any?
     private var localKeyMonitor: Any?
     private(set) var currentScreen: NSScreen?
-    private var heldOpenFlags: Set<String> = []
+    private var heldOpenFlags: [String: NotchFSM.Hold.Scope] = [:]
+    /// When each armed FSM timer fires (for the countdown and the debug dump).
+    private var timerDeadlines: [NotchFSM.TimerID: Date] = [:]
+    /// Last click, key or acknowledged action on the island.
+    private(set) var lastInteraction = Date.distantPast
+    /// Notifications that arrived while the user was busy with a card; shown once it folds.
+    private var pendingReveals: [NotchView] = []
+    private var revealWork: DispatchWorkItem?
     private(set) var dragOut: DragOutSession?
     private var greetingWork: DispatchWorkItem?
     private var hitView: SlimeHitView!
@@ -46,19 +54,19 @@ final class NotchWindowController: NSWindowController {
     private var cSpring = Spring1D(value: NotchLayout.compactCorner, response: 0.5, dampingFraction: 0.72)
     private var rSpring = Spring1D(value: 15, response: 0.5, dampingFraction: 0.72)
     private var oSpring = Spring2D(value: SIMD2(NotchLayout.compactWing / 2, 30), response: 0.5, dampingFraction: 0.72)
+    private var xSpring = Spring1D(value: 0, response: 0.5, dampingFraction: 0.72)
     private var motionSettled = true
 
     init(app: AppCoordinator) {
         self.app = app
         fsm = NotchFSM(config: app.fsmConfig)
         let screen = Self.targetScreen(for: app.settings.displayChoice)
-        let sf = screen.frame
-        let size = Self.panelSize
-        let panel = NotchPanel(contentRect: NSRect(x: sf.midX - size.width / 2, y: sf.maxY - size.height, width: size.width, height: size.height),
-                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let frame = Self.panelFrame(on: screen)
+        let panel = NotchPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init(window: panel)
         currentScreen = screen
         app.notch.geometry = Self.geometry(for: screen)
+        app.notch.containerWidth = Double(frame.width)
         setupPanel()
     }
 
@@ -151,7 +159,7 @@ final class NotchWindowController: NSWindowController {
         let w = app.notch.liveWidth
         let h = app.notch.liveHeight
         let pf = panel.frame
-        return CGRect(x: (pf.width - w) / 2, y: pf.height - h, width: w, height: h)
+        return CGRect(x: app.notch.liveX, y: pf.height - h, width: w, height: h)
     }
 
     /// The island rectangle in screen coordinates.
@@ -210,6 +218,7 @@ final class NotchWindowController: NSWindowController {
         tune(&hSpring, s.height)
         tune(&cSpring, corner)
         tune(&rSpring, Double(app.slime.targetRadius))
+        tune(&xSpring, store.islandTargetX)
         oSpring.omega = omega
         oSpring.zeta = zeta
         oSpring.target = SIMD2(o.x, o.y)
@@ -222,6 +231,7 @@ final class NotchWindowController: NSWindowController {
         hSpring.value = hSpring.target; hSpring.velocity = 0
         cSpring.value = cSpring.target; cSpring.velocity = 0
         rSpring.value = rSpring.target; rSpring.velocity = 0
+        xSpring.value = xSpring.target; xSpring.velocity = 0
         oSpring.value = oSpring.target; oSpring.velocity = .zero
         motionSettled = true
         publishLayout()
@@ -234,6 +244,7 @@ final class NotchWindowController: NSWindowController {
         return abs(wSpring.target - s.width) > 0.01 || abs(hSpring.target - s.height) > 0.01
             || abs(oSpring.target.x - o.x) > 0.01 || abs(oSpring.target.y - o.y) > 0.01
             || abs(rSpring.target - Double(app.slime.targetRadius)) > 0.01
+            || abs(xSpring.target - store.islandTargetX) > 0.01
     }
 
     private func tickLayout(_ dt: Double) {
@@ -242,11 +253,11 @@ final class NotchWindowController: NSWindowController {
             let steps = max(1, Int((dt * 240).rounded(.up)))
             let h = dt / Double(steps)
             for _ in 0..<steps {
-                wSpring.advance(h); hSpring.advance(h); cSpring.advance(h); rSpring.advance(h); oSpring.advance(h)
+                wSpring.advance(h); hSpring.advance(h); cSpring.advance(h); rSpring.advance(h); xSpring.advance(h); oSpring.advance(h)
             }
             func done(_ sp: Spring1D) -> Bool { abs(sp.value - sp.target) < 0.15 && abs(sp.velocity) < 2 }
             let oDone = simd_distance(oSpring.value, oSpring.target) < 0.15 && simd_length(oSpring.velocity) < 2
-            if done(wSpring), done(hSpring), done(cSpring), done(rSpring), oDone {
+            if done(wSpring), done(hSpring), done(cSpring), done(rSpring), done(xSpring), oDone {
                 snapLayout()
             } else {
                 publishLayout()
@@ -266,6 +277,8 @@ final class NotchWindowController: NSWindowController {
         if abs(store.liveWidth - w) > 0.01 { store.liveWidth = w }
         if abs(store.liveHeight - h) > 0.01 { store.liveHeight = h }
         if abs(store.liveCorner - c) > 0.01 { store.liveCorner = c }
+        let x = xSpring.value
+        if abs(store.liveX - x) > 0.01 { store.liveX = x }
         let o = oSpring.value
         if abs(store.liveSlimeOrigin.x - o.x) > 0.01 || abs(store.liveSlimeOrigin.y - o.y) > 0.01 {
             store.liveSlimeOrigin = (o.x, o.y)
@@ -283,17 +296,65 @@ final class NotchWindowController: NSWindowController {
 
     var fsmState: NotchFSM.State { fsm.state }
 
-    var heldOpen: Bool { !heldOpenFlags.isEmpty || app.notch.isPinned || dragOut != nil }
+    /// Everything keeping the island open right now, scoped (see `NotchFSM.Hold`).
+    var holds: Set<NotchFSM.Hold> {
+        var h = Set(heldOpenFlags.map { NotchFSM.Hold($0.key, $0.value) })
+        if app.notch.isPinned { h.insert(NotchFSM.Hold("pin")) }
+        if dragOut != nil { h.insert(NotchFSM.Hold("dragout")) }
+        return h
+    }
 
-    func hold(_ key: String, _ on: Bool) {
-        if on { heldOpenFlags.insert(key) } else { heldOpenFlags.remove(key) }
-        if !on, !heldOpen, !wasInIsland, fsm.state.isExpanded {
+    /// Whether a hold applies in the current state (the global Esc and the debug dump ask).
+    var heldOpen: Bool { fsm.isHeld(holds) }
+
+    /// The card waiting on the user, if any.
+    var pendingCard: NotchView? { fsm.pendingCard(holds) }
+
+    /// `scope`: `.any` for push-to-talk and drags, `.view(v)` for a focused field or a stream that
+    /// only matters while `v` shows, `.card(v)` for a card that waits on the user.
+    func hold(_ key: String, _ on: Bool, scope: NotchFSM.Hold.Scope = .any) {
+        if on { heldOpenFlags[key] = scope } else { heldOpenFlags[key] = nil }
+        if !on, !heldOpen, !wasInIsland, fsm.state.isExpanded, timers.isEmpty {
             send(.pointerLeft)
         }
     }
 
+    /// Seconds left on each armed timer.
+    var timerRemaining: [NotchFSM.TimerID: Double] {
+        let now = Date()
+        return timerDeadlines.mapValues { max(0, $0.timeIntervalSince(now)) }
+    }
+
     func send(_ input: NotchFSM.Input) {
-        apply(fsm.handle(input, heldOpen: heldOpen))
+        switch input {
+        case .userInteracted, .acknowledged, .click, .open: lastInteraction = Date()
+        default: break
+        }
+        apply(fsm.handle(input, holds: holds))
+    }
+
+    /// A notification wants the island. While the user is busy with a card (a hold on it, or an
+    /// interaction in the last three seconds) it waits and shows once the island folds.
+    func reveal(_ view: NotchView) {
+        let busy = fsm.state.isExpanded && (heldOpen || Date().timeIntervalSince(lastInteraction) < 3)
+        if busy, app.notch.view != view {
+            if !pendingReveals.contains(view) { pendingReveals.append(view) }
+            return
+        }
+        send(.openExternally(view))
+    }
+
+    /// A pending card, a queued notification, or nothing: what the island opens next.
+    private func presentPendingReveal() {
+        guard !pendingReveals.isEmpty, app.notch.mode != .expanded else { return }
+        revealWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.app.notch.mode != .expanded, !self.pendingReveals.isEmpty else { return }
+            let v = self.pendingReveals.removeFirst()
+            self.send(.openExternally(v))
+        }
+        revealWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
     }
 
     private func apply(_ effects: [NotchFSM.Effect]) {
@@ -311,16 +372,20 @@ final class NotchWindowController: NSWindowController {
                 let work = DispatchWorkItem { [weak self] in
                     guard let self else { return }
                     self.timers[id] = nil
+                    self.timerDeadlines[id] = nil
                     self.send(.timer(id))
                 }
                 timers[id] = work
+                timerDeadlines[id] = Date().addingTimeInterval(delay)
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
             case .cancel(let id):
                 timers[id]?.cancel()
                 timers[id] = nil
+                timerDeadlines[id] = nil
             case .cancelAll:
                 for (_, w) in timers { w.cancel() }
                 timers.removeAll()
+                timerDeadlines.removeAll()
             case .peek:
                 app.slime.sound.play(SoundCue(.hover, rate: 0.9, gain: 0.5))
             }
@@ -330,6 +395,10 @@ final class NotchWindowController: NSWindowController {
     private func setMode(_ mode: NotchMode, view: NotchView) {
         let store = app.notch
         let prev = store.mode
+        if store.view != view || mode != .expanded {
+            // A height measured by one card never carries into the next.
+            if store.measuredHeight != nil { store.measuredHeight = nil }
+        }
         if store.view != view { store.view = view }
         guard mode != prev else { return }
         store.mode = mode
@@ -350,6 +419,7 @@ final class NotchWindowController: NSWindowController {
         if mode == .expanded, view == .greeting {
             app.slime.stage.main.greet()
         }
+        if prev == .expanded { presentPendingReveal() }
     }
 
     func launchGreeting() {
@@ -429,7 +499,8 @@ final class NotchWindowController: NSWindowController {
     private func adjustPollRate(mouse: NSPoint, panelFrame: NSRect, islandRect: NSRect) {
         let island = islandRect.offsetBy(dx: panelFrame.minX, dy: panelFrame.minY)
         let nearIsland = island.insetBy(dx: -200, dy: -160).contains(mouse)
-        let inBand = panelFrame.insetBy(dx: -120, dy: -120).contains(mouse)
+        // The panel spans the screen, so the "near" band is measured from the island, not the panel.
+        let inBand = island.insetBy(dx: -360, dy: -240).contains(mouse)
         let busy = app.notch.mode == .expanded || dragOut != nil || nearIsland
         let wanted = busy ? Self.fastPoll : inBand ? Self.nearPoll : Self.idlePoll
         if wanted != pollInterval { startPolling(interval: wanted) }
@@ -512,6 +583,11 @@ final class NotchWindowController: NSWindowController {
             app.openSettings()
             return true
         }
+        if mods == .command, event.charactersIgnoringModifiers == "p" {
+            app.notch.isPinned.toggle()
+            send(.userInteracted)
+            return true
+        }
         return false
     }
 
@@ -534,6 +610,11 @@ final class NotchWindowController: NSWindowController {
         return CFUUIDCreateString(nil, uuid) as String
     }
 
+    static func panelFrame(on screen: NSScreen) -> NSRect {
+        let sf = screen.frame
+        return NSRect(x: sf.minX, y: sf.maxY - Self.panelHeight, width: sf.width, height: Self.panelHeight)
+    }
+
     static func geometry(for screen: NSScreen) -> NotchGeometry {
         let visibleMenuBar = screen.frame.maxY - screen.visibleFrame.maxY
         let menuBarHeight = visibleMenuBar > 0 ? visibleMenuBar : NSStatusBar.system.thickness
@@ -551,9 +632,9 @@ final class NotchWindowController: NSWindowController {
     private func relocate(to screen: NSScreen) {
         currentScreen = screen
         app.notch.geometry = Self.geometry(for: screen)
-        let sf = screen.frame
-        let size = panel.frame.size
-        panel.setFrame(NSRect(x: sf.midX - size.width / 2, y: sf.maxY - size.height, width: size.width, height: size.height), display: true)
+        let frame = Self.panelFrame(on: screen)
+        app.notch.containerWidth = Double(frame.width)
+        panel.setFrame(frame, display: true)
         app.slime.apply(mode: app.notch.mode, layout: app.notch.layout)
         if app.notch.mode == .hidden { snapLayout() } else { retarget(closing: false); slimeView.paused = false }
     }

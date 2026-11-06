@@ -608,10 +608,19 @@ public struct SlimeCGRenderer {
     func drawAccessories(in cg: CGContext) {
         for a in frame.accessories where a.pop > 0.01 {
             let p = px(a.anchor)
+            if a.grown, let b = a.bead, a.beadRadius > 1e-3 {
+                // The bead on the head under the mark: the same jelly, with its own rim and glint.
+                let c = px(b), br = CGFloat(a.beadRadius) * R
+                let dot = Self.ellipse(c, br, br)
+                fillRadial(dot, [(core.mixed(with: mid, 0.3), 0), (mid, 0.75), (mid.mixed(with: rim, 0.4), 1)],
+                           center: CGPoint(x: c.x - br * 0.3, y: c.y - br * 0.35), radius: br * 1.3, in: cg)
+                stroke(dot, inkLine, 0.8, width: max(1, 0.03 * R), in: cg)
+                fill(Self.ellipse(CGPoint(x: c.x - br * 0.3, y: c.y - br * 0.35), br * 0.3, br * 0.2), theme.highlight, 0.85, in: cg)
+            }
             cg.saveGState()
             cg.translateBy(x: p.x, y: p.y)
             if a.grown {
-                // Leans with its stalk, grows with the pop.
+                // Leans a little with the direction it rose in, grows with the pop.
                 cg.rotate(by: CGFloat(atan2(a.direction.x, -a.direction.y)) * 0.3)
                 cg.scaleBy(x: CGFloat(a.pop), y: CGFloat(a.pop))
                 drawGrownGlyph(a.kind, in: cg)

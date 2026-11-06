@@ -84,7 +84,7 @@ extension SlimeCGRenderer {
                 break
             }
             tube = shape
-            hole = CGFloat(0.36 * a.reach * bodyScale) * r.R
+            hole = CGFloat(0.3 * a.reach * bodyScale) * r.R
             handR = hr
         }
     }

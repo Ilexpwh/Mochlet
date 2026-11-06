@@ -163,10 +163,10 @@ struct MeetingReviewView: View {
                 }
             }
             HStack(spacing: 6) {
-                IslandButton("Summary", symbol: "doc.text") { m.openSummary() }
-                IslandButton("Transcript", symbol: "text.quote") { m.openTranscript() }
+                IslandButton("Summary", symbol: "doc.text") { m.openSummary(); app.window.send(.acknowledged()) }
+                IslandButton("Transcript", symbol: "text.quote") { m.openTranscript(); app.window.send(.acknowledged()) }
                 IslandButton("Ask", symbol: "questionmark.bubble") { app.openKnowledge(question: "What was decided in the meeting \"\(f.meta.title)\"?") }
-                IslandButton("Folder", symbol: "folder") { m.openFolder() }
+                IslandButton("Folder", symbol: "folder") { m.openFolder(); app.window.send(.acknowledged()) }
                 IslandButton("Done", symbol: "checkmark") { m.dismiss() }
             }
         }
@@ -181,7 +181,7 @@ struct MeetingFailedView: View {
         Text(m.error ?? "").font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.7)).lineLimit(3)
         HStack(spacing: 6) {
             IslandButton("Retry", symbol: "arrow.clockwise") { m.retry() }
-            IslandButton("Folder", symbol: "folder") { m.openFolder() }
+            IslandButton("Folder", symbol: "folder") { m.openFolder(); app.window.send(.acknowledged()) }
             IslandButton("Dismiss", symbol: "xmark") { m.dismiss() }
         }
     }
@@ -195,7 +195,7 @@ struct MeetingIdleView: View {
             MeetingCardTitle(symbol: "waveform", text: "Meeting notes")
             Spacer(minLength: 0)
             IslandButton("Start", symbol: "record.circle") { m.toggle() }
-            IslandButton("Folder", symbol: "folder") { m.openFolder() }
+            IslandButton("Folder", symbol: "folder") { m.openFolder(); app.window.send(.acknowledged()) }
         }
         if m.recent.isEmpty {
             Text("Triple-click me in a call (or I'll ask when I notice one): I record both sides, transcribe on this Mac and file the notes.")

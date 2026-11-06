@@ -117,7 +117,7 @@ final class MeetingController {
             state = .asking
             app.slime.stage.main.startQuestion()
             app.slime.sound.play(SoundCue(.question))
-            app.window.hold("meeting", true)
+            app.window.hold("meeting", true, scope: .card(.meetingLive))
             app.window.send(.openExternally(.meetingLive))
             askWork?.cancel()
             askWork = Task { @MainActor [weak self] in
@@ -182,7 +182,7 @@ final class MeetingController {
         state = .starting
         stage = VoiceCapture.permissionDenied ? "microphone access is off" : "starting the microphone"
         progress = 0
-        app.window.hold("meeting", true)
+        app.window.hold("meeting", true, scope: .view(.meetingLive))
         app.window.send(.openExternally(.meetingLive))
         let fm = FileManager.default
         startTask = Task { @MainActor [weak self] in
@@ -343,7 +343,7 @@ final class MeetingController {
         current = meta
         folder = dir
         error = nil
-        app.window.hold("meeting", true)
+        app.window.hold("meeting", true, scope: .view(.meetingLive))
         let brain = LLMClient.brain(app)
         let locale = await SpeechAssets.locale(for: meta.locale.isEmpty ? app.settings.voiceLocale : meta.locale)
         do {
@@ -361,7 +361,8 @@ final class MeetingController {
             reloadRecent()
             app.slime.stage.main.trigger(.proud)
             app.slime.sound.play(SoundCue(.finish))
-            app.window.send(.openExternally(.meetingLive))
+            app.window.hold("meeting", false)
+            app.window.reveal(.meetingLive)
             logger.info("ready: \(result.meta.id, privacy: .private(mask: .hash)) (\(result.lines.count) lines, \(result.meta.speakers.count) speakers)")
         } catch {
             var m = meta
@@ -598,7 +599,7 @@ final class MeetingController {
         app.slime.stage.main.setRecording(false)
         app.slime.stage.main.trigger(.confused)
         app.toast(message, symbol: "waveform.slash", seconds: 5)
-        app.window.hold("meeting", true)
+        app.window.hold("meeting", true, scope: .view(.meetingLive))
         app.window.send(.openExternally(.meetingLive))
     }
 }

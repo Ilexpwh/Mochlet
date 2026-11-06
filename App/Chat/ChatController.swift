@@ -174,7 +174,7 @@ final class ChatController {
         isStreaming = true
         streamingText = ""
         streamingActivity = []
-        app.window.hold("chat", true)
+        app.window.hold("chat", true, scope: .view(.chat))
         app.sessions.publish()
         let sessionID = kind == .claudeCLI && thread.continuation == nil ? UUID().uuidString : nil
         streamTask = Task { [weak self] in

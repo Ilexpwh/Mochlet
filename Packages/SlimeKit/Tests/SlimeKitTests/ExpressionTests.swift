@@ -28,7 +28,7 @@ import simd
         }
     }
 
-    @Test func grownGlyphStalkTouchesTheRing() {
+    @Test func grownGlyphPopsAboveTheHead() {
         let e = SlimeEngine(profile: .main, seed: 2)
         e.detail = .full
         e.appearance.glyphStyle = .grown
@@ -38,13 +38,15 @@ import simd
         let f = e.frame()
         let q = f.accessories.first { $0.kind == .question }
         #expect(q?.grown == true)
-        let stalk = f.blobs.filter { $0.radius > 1e-3 && !$0.shaded }
-        #expect(stalk.count >= 3)
-        let gap = stalk.map { b in (f.ring.map { simd_distance($0, b.position) }.min() ?? 9) - b.radius }.min() ?? 9
-        #expect(gap < 0.05, "stalk gap \(gap) R")
+        // No stalk and no trail of bubbles: the mark is the only thing added.
+        #expect(f.blobs.filter { $0.radius > 1e-3 && !$0.shaded }.isEmpty)
         #expect((q?.anchor.y ?? 0) < f.topY, "the glyph stands above the head")
-        // The drop tip gives way to the stalk while the mark is up.
-        #expect(f.blobs.filter { $0.radius > 1e-3 && $0.shaded }.isEmpty)
+        let gap = f.ring.map { simd_distance($0, q?.anchor ?? .zero) }.min() ?? 9
+        #expect(gap > 0.4 && gap < 1.1, "the glyph floats just above the head, gap \(gap) R")
+        #expect(q?.pop ?? 0 > 0.95, "fully popped after half a second")
+        // One bead sits on the head under the mark, like the anime's "!".
+        #expect(q?.bead != nil && (q?.beadRadius ?? 0) > 0.05)
+        if let b = q?.bead { #expect((f.ring.map { simd_distance($0, b) }.min() ?? 9) < 0.2, "the bead touches the head") }
     }
 
     @Test func bubbleGlyphsBelowMediumDetail() {

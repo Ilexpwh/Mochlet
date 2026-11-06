@@ -72,7 +72,7 @@ targets:
         CFBundleDisplayName: Mochlet
         CFBundleIdentifier: com.ilexpwh.Mochlet
         CFBundleVersion: "1"
-        CFBundleShortVersionString: "2.0.0"
+        CFBundleShortVersionString: "2.1.0"
         CFBundlePackageType: APPL
         LSUIElement: YES
         LSMinimumSystemVersion: "26.0"

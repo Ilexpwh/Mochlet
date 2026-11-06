@@ -29,10 +29,18 @@ hold everything that does not need a window; the app shell is deliberately thin.
   CoreGraphics): a soft-body ring of Verlet points with anchor, edge, bend and pressure forces,
   a fixed 1/240 s step with render interpolation, eyes projected on a sphere, a blink scheduler,
   gaze smoothing, the state and emote tables, the click grammar, the stage (main, minis, droplets,
-  ghost) and the sound table with synthesised recipes. `SlimeKitUI` renders a `SlimeFrame` with
-  CoreGraphics (metaballs only while blobs exist) and hosts the Emote Lab and filmstrip tool.
-  `SlimeKitAudio` plays the generated WAVs. Everything is seeded and time-injected so filmstrips
-  and tests are reproducible.
+  ghost) and the sound table with synthesised recipes. Character 2 added the appearance model
+  (`SlimeAppearance` = `SlimeLook` species traits and rest profile, `SlimeTheme` palette or a
+  derived hue, `SlimeOutfit`, glyph style, arms), polar rest profiles so a cat is a loaf and a
+  ghost a drop, `ArmRig`/`Props` (pseudopod arms published as goo blobs plus hand anchors, props
+  on a spring), the chewing v2 timeline, grown glyphs, body morphs, 24 emotes, and two sound packs
+  (`SoundPack.puni` squish + formant squeaks, `.classic` chimes; 44 sounds). `SlimeKitUI` renders
+  a `SlimeFrame` with CoreGraphics in layers (back traits, goo contour of ring + arms + stalks via
+  metaballs with a contour cache, surface, face, wrap, headwear on a lagging spring, front traits,
+  props, glyphs, particles), picks a detail level from pixels per R (full ≥ 36, medium ≥ 24, tiny
+  below), and hosts the Emote Lab, filmstrip and catalog tools. `SlimeKitAudio` plays the
+  generated WAVs of the chosen pack (user overrides first). Everything is seeded and
+  time-injected so filmstrips and tests are reproducible.
 - **MochletCore** (`Packages/MochletCore`): two libraries. `MochletCore` is pure logic with no
   AppKit: notch FSM and layout, hook normalisation and session reducer, approval queue, diff engine,
   the config-file editor and one hook spec per agent, terminal jump and launch planners, project

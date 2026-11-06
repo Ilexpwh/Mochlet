@@ -13,12 +13,17 @@ public enum Metaball {
         public var cell: Double = 0.05
         /// Hard cap on grid nodes; the cell grows to respect it.
         public var maxNodes: Int = 60_000
+        /// Points kept per loop (evenly decimated, then smoothed); every point becomes one cubic
+        /// curve that CoreGraphics clips, fills and strokes several times per draw.
+        public var maxPoints: Int = 160
         public init() {}
 
-        /// Cells about two pixels wide at `pixelsPerUnit`, never finer than 0.035 R.
+        /// Cells about two pixels wide at `pixelsPerUnit`, never finer than 0.035 R, and loops of
+        /// about one point per 3 px of outline (64–320): dense enough to draw as straight segments.
         public static func forScale(pixelsPerUnit: Double) -> Options {
             var o = Options()
             o.cell = max(0.035, 2.0 / max(pixelsPerUnit, 1))
+            o.maxPoints = min(320, max(64, Int(pixelsPerUnit * 3.0)))
             return o
         }
     }
@@ -27,6 +32,10 @@ public enum Metaball {
     public static func contour(ring: [SIMD2<Double>], blobs: [Blob], options: Options = Options()) -> [[SIMD2<Double>]] {
         guard ring.count >= 3 else { return [] }
         let pad = 2.6 * options.sigma
+        // Blobs stop contributing two sigmas out (< 1 % of the threshold), which keeps their boxes
+        // small; the ring keeps the longer tail so its band is exact where it matters.
+        let blobPad = 2.0 * options.sigma
+        let blobPad2 = blobPad * blobPad
         var minP = SIMD2<Double>(.infinity, .infinity)
         var maxP = SIMD2<Double>(-.infinity, -.infinity)
         for p in ring { minP = simd_min(minP, p); maxP = simd_max(maxP, p) }
@@ -58,7 +67,7 @@ public enum Metaball {
         }
         var field = [Double](repeating: 0, count: nx * ny)
         let liveBlobs = blobs.filter { $0.radius > 1e-4 }
-        func gate(_ box: (SIMD2<Double>, SIMD2<Double>)) -> (Int, Int, Int, Int) {
+        func gate(_ box: (SIMD2<Double>, SIMD2<Double>), pad: Double = pad) -> (Int, Int, Int, Int) {
             let i0 = max(0, Int((box.0.x - pad - minP.x) / cell))
             let i1 = min(nx - 1, Int((box.1.x + pad - minP.x) / cell) + 1)
             let j0 = max(0, Int((box.0.y - pad - minP.y) / cell))
@@ -67,30 +76,98 @@ public enum Metaball {
         }
         let (ri0, ri1, rj0, rj1) = gate(ringBox)
         if ri0 <= ri1, rj0 <= rj1 {
-            for j in rj0...rj1 {
-                for i in ri0...ri1 {
-                    let p = SIMD2(minP.x + Double(i) * cell, minP.y + Double(j) * cell)
-                    field[j * nx + i] += value(polygonDistance(p, ring))
+            // Ring: the exact distance matters only within `pad` of the boundary, so each edge
+            // visits just the nodes near its own box; inside/outside comes from scan-line parity,
+            // and nodes no edge reached are deep inside (1) or far outside (0). Same contour as the
+            // full polygon distance (the field differs by < 0.001 away from the boundary) at a
+            // fraction of the node-edge visits.
+            let rw = ri1 - ri0 + 1
+            var ringD2 = [Double](repeating: .infinity, count: rw * (rj1 - rj0 + 1))
+            let n = ring.count
+            var jEdge = n - 1
+            for iEdge in 0..<n {
+                let a = ring[iEdge]
+                let b = ring[jEdge]
+                jEdge = iEdge
+                let e = b - a
+                let ee = max(1e-12, simd_dot(e, e))
+                let (i0, i1, j0, j1) = gate((simd_min(a, b), simd_max(a, b)))
+                guard i0 <= i1, j0 <= j1 else { continue }
+                for jj in max(j0, rj0)...min(j1, rj1) {
+                    let py = minP.y + Double(jj) * cell
+                    for ii in max(i0, ri0)...min(i1, ri1) {
+                        let w = SIMD2(minP.x + Double(ii) * cell, py) - a
+                        let t = clamp(simd_dot(w, e) / ee, 0, 1)
+                        let c = w - e * t
+                        let d2 = simd_dot(c, c)
+                        let k = (jj - rj0) * rw + (ii - ri0)
+                        if d2 < ringD2[k] { ringD2[k] = d2 }
+                    }
+                }
+            }
+            var xs: [Double] = []
+            xs.reserveCapacity(8)
+            for jj in rj0...rj1 {
+                let py = minP.y + Double(jj) * cell
+                xs.removeAll(keepingCapacity: true)
+                var jp = n - 1
+                for i in 0..<n {
+                    let a = ring[i]
+                    let b = ring[jp]
+                    jp = i
+                    if (a.y > py) != (b.y > py) {
+                        xs.append(a.x + (py - a.y) / (b.y - a.y) * (b.x - a.x))
+                    }
+                }
+                xs.sort()
+                var k = 0
+                for ii in ri0...ri1 {
+                    let px = minP.x + Double(ii) * cell
+                    while k < xs.count, xs[k] <= px { k += 1 }
+                    let inside = (xs.count - k) & 1 == 1
+                    let d2 = ringD2[(jj - rj0) * rw + (ii - ri0)]
+                    if d2.isFinite {
+                        let d = d2.squareRoot()
+                        field[jj * nx + ii] += value(inside ? -d : d)
+                    } else if inside {
+                        field[jj * nx + ii] += 1
+                    }
                 }
             }
         }
         for (k, b) in liveBlobs.enumerated() {
-            let (i0, i1, j0, j1) = gate(blobBoxes[k])
+            let (i0, i1, j0, j1) = gate(blobBoxes[k], pad: blobPad)
             guard i0 <= i1, j0 <= j1 else { continue }
             let c = cos(-b.heading)
             let s = sin(-b.heading)
             let st = max(0.2, b.stretch)
+            let round = abs(st - 1) < 1e-6
+            let r2out = (b.radius + blobPad) * (b.radius + blobPad)
+            let rIn = b.radius - blobPad
+            let r2in = rIn > 0 ? rIn * rIn : -1
             for j in j0...j1 {
+                let py = minP.y + Double(j) * cell - b.position.y
                 for i in i0...i1 {
-                    let p = SIMD2(minP.x + Double(i) * cell, minP.y + Double(j) * cell) - b.position
-                    let q = SIMD2(p.x * c - p.y * s, p.x * s + p.y * c)
-                    let d = simd_length(SIMD2(q.x / st, q.y * st)) - b.radius
+                    let p = SIMD2(minP.x + Double(i) * cell - b.position.x, py)
+                    let d2: Double
+                    if round {
+                        d2 = simd_dot(p, p)
+                        // Outside the tail: nothing; deep inside: a full 1 without the exp.
+                        if d2 > r2out { continue }
+                        if d2 < r2in { field[j * nx + i] += 1; continue }
+                    } else {
+                        let q = SIMD2(p.x * c - p.y * s, p.x * s + p.y * c)
+                        let e = SIMD2(q.x / st, q.y * st)
+                        d2 = simd_dot(e, e)
+                    }
+                    let d = d2.squareRoot() - b.radius
+                    if d * d > blobPad2, d > 0 { continue }
                     field[j * nx + i] += value(d)
                 }
             }
         }
 
-        return trace(field: field, nx: nx, ny: ny, origin: minP, cell: cell, threshold: 0.5)
+        return trace(field: field, nx: nx, ny: ny, origin: minP, cell: cell, threshold: 0.5, maxPoints: options.maxPoints)
     }
 
     /// Signed distance from `p` to a closed polygon (negative inside).
@@ -119,7 +196,7 @@ public enum Metaball {
     // MARK: - Marching squares
 
     /// Edges are indexed flat: horizontal edge (i, j) = j·nx + i, vertical edge (i, j) = nx·ny + j·nx + i.
-    private static func trace(field: [Double], nx: Int, ny: Int, origin: SIMD2<Double>, cell: Double, threshold: Double) -> [[SIMD2<Double>]] {
+    private static func trace(field: [Double], nx: Int, ny: Int, origin: SIMD2<Double>, cell: Double, threshold: Double, maxPoints: Int) -> [[SIMD2<Double>]] {
         let edgeCount = 2 * nx * ny
         var points = [SIMD2<Double>](repeating: .zero, count: edgeCount)
         var computed = [Bool](repeating: false, count: edgeCount)
@@ -220,7 +297,7 @@ public enum Metaball {
             }
             if loop.count >= 3 {
                 if simd_distance(loop[0], loop[loop.count - 1]) < 1e-9 { loop.removeLast() }
-                loops.append(smooth(decimate(loop, maxPoints: 160)))
+                loops.append(smooth(decimate(loop, maxPoints: maxPoints)))
             }
         }
         loops.sort { area($0) > area($1) }

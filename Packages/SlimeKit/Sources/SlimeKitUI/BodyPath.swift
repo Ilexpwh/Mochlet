@@ -4,6 +4,16 @@ import SlimeKit
 public enum BodyPath {
     /// Closed Catmull-Rom spline through the ring points, as cubic Béziers
     /// (c1 = P1 + (P2 − P0)/6, c2 = P2 − (P3 − P1)/6).
+    /// A dense, already-smoothed loop (a goo contour) as straight segments: cheaper for
+    /// CoreGraphics to clip, fill and stroke than cubics, and indistinguishable at ≈ 3 px spacing.
+    public static func polyline(_ pts: [CGPoint]) -> Path {
+        var path = Path()
+        guard pts.count >= 3 else { return path }
+        path.addLines(pts)
+        path.closeSubpath()
+        return path
+    }
+
     public static func closed(through pts: [CGPoint]) -> Path {
         var path = Path()
         let n = pts.count

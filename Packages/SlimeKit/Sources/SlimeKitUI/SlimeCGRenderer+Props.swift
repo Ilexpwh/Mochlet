@@ -102,17 +102,18 @@ extension SlimeCGRenderer {
         guard !lobes.isEmpty else { return }
         // The body proper: the ring without its goo. A lobe over it (or over the other arm) gets
         // its edge drawn; a lobe in the air is already outlined by the silhouette.
-        let ring = BodyPath.closed(through: frame.ring.map(px)).cgPath.normalized(using: .winding)
+        let ring = BodyPath.closed(through: frame.ring.map(px)).cgPath
         let huge = CGPath(rect: CGRect(x: -1e5, y: -1e5, width: 2e5, height: 2e5), transform: nil)
         let lineW = max(1.0, 0.025 * R)
         let shift = CGAffineTransform(translationX: -0.06 * R * bs, y: -0.09 * R * bs)
-        for (i, lobe) in lobes.enumerated() {
-            let a = lobe.arm
-            // 1. The jelly inside the lobe, clipped to the silhouette, with its own cel shadow:
-            //    the band not covered by a copy of the lobe shifted toward the light.
+        let boxes = lobes.map { $0.tube.boundingBoxOfPath.insetBy(dx: -0.1 * R, dy: -0.1 * R) }
+        var overlapping = false
+        for i in boxes.indices { for k in boxes.indices where k > i && boxes[i].intersects(boxes[k]) { overlapping = true } }
+
+        // 1. The jelly inside the lobe, clipped to the silhouette, with its own cel shadow (the
+        //    band not covered by a copy of the lobe shifted toward the light) and a lit rim.
+        func jelly(_ lobe: Lobe, in cg: CGContext) {
             cg.saveGState()
-            cg.addPath(bodyPath)
-            cg.clip(using: .evenOdd)
             cg.addPath(lobe.tube)
             cg.clip()
             cg.saveGState()
@@ -121,23 +122,30 @@ extension SlimeCGRenderer {
             cg.restoreGState()
             var m = shift
             if let lit = lobe.tube.copy(using: &m) {
-                fill(lobe.tube.subtracting(lit, using: .winding), jellyShade, 0.8, in: cg)
+                cg.saveGState()
+                cg.addPath(huge)
+                cg.addPath(lit)
+                cg.clip(using: .evenOdd)
+                fill(lobe.tube, jellyShade, 0.8, in: cg)
+                cg.restoreGState()
             }
             stroke(lobe.tube, .white, theme.isDark ? 0.22 : 0.16, width: 0.08 * R, in: cg)
             cg.restoreGState()
-
-            // 2. Over the body (or the other arm): a contact shadow just outside the lobe and the
-            //    ink line along its edge, both fading out toward the shoulder, where the lobe
-            //    simply grows out of the jelly.
-            var over = ring
-            for (k, other) in lobes.enumerated() where k != i { over = over.union(other.tube, using: .winding) }
+        }
+        // 2. Over the body (or the other arm): a contact shadow just outside the lobe and the
+        //    ink line along its edge, both fading out toward the shoulder, where the lobe simply
+        //    grows out of the jelly.
+        func edge(_ i: Int, _ lobe: Lobe, in cg: CGContext) {
+            let a = lobe.arm
             cg.saveGState()
-            cg.addPath(over)
+            cg.addPath(ring)
+            for (k, other) in lobes.enumerated() where k != i && boxes[k].intersects(boxes[i]) { cg.addPath(other.tube) }
             cg.clip()
             cg.beginTransparencyLayer(auxiliaryInfo: nil)
             cg.saveGState()
-            cg.addPath(huge.subtracting(lobe.tube, using: .winding))
-            cg.clip()
+            cg.addPath(huge)
+            cg.addPath(lobe.tube)
+            cg.clip(using: .evenOdd)
             stroke(lobe.tube, deep, 0.2, width: 0.16 * R * bs, in: cg)
             cg.restoreGState()
             stroke(lobe.tube, inkLine, 0.75, width: lineW, in: cg)
@@ -147,13 +155,37 @@ extension SlimeCGRenderer {
                                   startCenter: sh, startRadius: 0, endCenter: sh, endRadius: lobe.hole * 2.2, options: [])
             cg.endTransparencyLayer()
             cg.restoreGState()
+        }
+        // 3. A specular on the hand, like the one on the head.
+        func specular(_ lobe: Lobe, in cg: CGContext) {
+            guard detail >= .medium else { return }
+            let h = px(lobe.arm.hand), hr = lobe.handR
+            var t = CGAffineTransform(translationX: h.x - hr * 0.3, y: h.y - hr * 0.38).rotated(by: -0.55)
+            let ell = CGPath(ellipseIn: CGRect(x: -hr * 0.3, y: -hr * 0.15, width: hr * 0.6, height: hr * 0.3), transform: &t)
+            fill(ell, theme.highlight, 0.9, in: cg)
+        }
 
-            // 3. A specular on the hand, like the one on the head.
-            if detail >= .medium {
-                let h = px(a.hand), hr = lobe.handR
-                var t = CGAffineTransform(translationX: h.x - hr * 0.3, y: h.y - hr * 0.38).rotated(by: -0.55)
-                let ell = CGPath(ellipseIn: CGRect(x: -hr * 0.3, y: -hr * 0.15, width: hr * 0.6, height: hr * 0.3), transform: &t)
-                fill(ell, theme.highlight, 0.9, in: cg)
+        if overlapping {
+            // Crossed arms (a hug): each lobe's edge goes on before the next lobe's jelly covers it.
+            for (i, lobe) in lobes.enumerated() {
+                cg.saveGState()
+                cg.addPath(bodyPath)
+                cg.clip(using: .evenOdd)
+                jelly(lobe, in: cg)
+                cg.restoreGState()
+                edge(i, lobe, in: cg)
+                specular(lobe, in: cg)
+            }
+        } else {
+            // Apart: one silhouette clip serves every lobe.
+            cg.saveGState()
+            cg.addPath(bodyPath)
+            cg.clip(using: .evenOdd)
+            for lobe in lobes { jelly(lobe, in: cg) }
+            cg.restoreGState()
+            for (i, lobe) in lobes.enumerated() {
+                edge(i, lobe, in: cg)
+                specular(lobe, in: cg)
             }
         }
     }

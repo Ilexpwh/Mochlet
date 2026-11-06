@@ -88,11 +88,11 @@ public struct SlimeCGRenderer {
         if evenOdd { cg.fillPath(using: .evenOdd) } else { cg.fillPath() }
     }
 
-    func stroke(_ path: CGPath, _ c: RGBA, _ opacity: Double = 1, width: CGFloat, in cg: CGContext) {
+    func stroke(_ path: CGPath, _ c: RGBA, _ opacity: Double = 1, width: CGFloat, join: CGLineJoin = .round, in cg: CGContext) {
         cg.setStrokeColor(cgc(c, opacity))
         cg.setLineWidth(width)
         cg.setLineCap(.round)
-        cg.setLineJoin(.round)
+        cg.setLineJoin(join)
         cg.addPath(path)
         cg.strokePath()
     }
@@ -125,7 +125,7 @@ public struct SlimeCGRenderer {
                 bodyPath = BodyPath.closed(through: frame.ring.map(px)).cgPath
             } else {
                 var p = Path()
-                for loop in loops { p.addPath(BodyPath.closed(through: loop.map(px))) }
+                for loop in loops { p.addPath(BodyPath.polyline(loop.map(px))) }
                 bodyPath = p.cgPath
             }
         }
@@ -198,7 +198,7 @@ public struct SlimeCGRenderer {
         fill(big, shade, 0.92, in: cg)
         var inv = localTransform.inverted()
         if let localBody = bodyPath.copy(using: &inv) {
-            stroke(localBody, core.mixed(with: .white, 0.25), theme.isDark ? 0.35 : 0.55, width: 0.15, in: cg)
+            stroke(localBody, core.mixed(with: .white, 0.25), theme.isDark ? 0.35 : 0.55, width: 0.15, join: goo ? .bevel : .round, in: cg)
         }
         cg.restoreGState()
         cg.restoreGState()
@@ -232,7 +232,7 @@ public struct SlimeCGRenderer {
         }
 
         // Inner rim (half clipped away): the lit edge of the shell.
-        stroke(bodyPath, .white, theme.isDark ? 0.3 : 0.2, width: 0.08 * R, in: cg)
+        stroke(bodyPath, .white, theme.isDark ? 0.3 : 0.2, width: 0.08 * R, join: goo ? .bevel : .round, in: cg)
 
         // Specular highlights, hard-edged, shifted against the gaze: a long oval, a small oval
         // further down the curve, and a dot.
@@ -259,7 +259,7 @@ public struct SlimeCGRenderer {
         cg.restoreGState()
 
         // Outline: a thin line in the body's own ink tint (light on a dark body).
-        stroke(bodyPath, theme.ink.mixed(with: mid, 0.45), 0.75, width: max(1.0, 0.025 * R), in: cg)
+        stroke(bodyPath, theme.ink.mixed(with: mid, 0.45), 0.75, width: max(1.0, 0.025 * R), join: goo ? .bevel : .round, in: cg)
     }
 
     /// The darker jelly mass seen through the shell. It sloshes with the core and its edge

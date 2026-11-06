@@ -27,6 +27,25 @@ Everything starts from the character, not from forms:
 
 The desktop position is remembered across launches ("Let me out" / "Back to the notch" in the menu).
 
+### Looks, colours, outfits, hands and sounds
+
+Settings → Character (also "Look ▸" and "Dress up ▸" in the right-click menu) is where the slime
+becomes yours. Fifteen looks change the body itself: cat and fox (ears that jiggle, a tail that
+wags), tempest and bat (wings that flap on every hop), demon lord, oni and unicorn horns, fairy,
+flame, crystal, ghost, honey, spark and galaxy surfaces. Twelve colours, or a hue / saturation /
+lightness of your own; minis can be a shade lighter. Outfit sets (King, Scholar, Wizard, Santa,
+Summer, Onsen, Night, Idol) or any headwear, eyewear, wrap and charm; with "Dress for the occasion"
+round glasses appear while it reads, a phone while it is on a call, a nightcap while it sleeps.
+
+The character has hands now: a dropped file is caught, hugged, bitten (pages swirl inside while it
+digests) and filed with a gulp; it waves hello, gives a thumbs up to an approval, cheers a hot
+signal, facepalms an error, holds a mic while you talk and sips a mug when left alone. Speech
+marks (`?`, `!`, `♪`) grow out of the body as slime, and twelve extra moods (melt, puff, shock,
+cry, hum, cheer, hug, nod, shake, thumbs up, stretch, poked) answer what happens around it: a
+click pokes it, a denied approval puffs it, a rate limit or a hot Mac melts it. Sounds come in two
+packs, the squishy "puni" foley with tiny voice squeaks (kyu, pyu, mu) and the classic 2.0
+chimes; the voice can be switched off on its own.
+
 ## Watching your coding agents
 
 Install the hooks from Settings → Agents (Claude Code, Codex, Gemini CLI; any other agent can call

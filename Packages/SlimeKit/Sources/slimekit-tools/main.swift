@@ -143,6 +143,112 @@ func bench(_ args: Args) {
         print(String(format: "draw R %.0f: %.2f ms cpu / %.2f ms wall per frame (ImageRenderer, includes rasterisation)", r, cpuMs, wallMs))
     }
     print(String(format: "engine: %.2f ms cpu per simulated second of idle stage (%.3f%% of a core)", engineMs, engineMs / 10))
+    benchScenarios()
+}
+
+/// Per-frame cost of the expensive Character 2 situations at the expanded-island size (R 56):
+/// engine step + frame, and a direct CoreGraphics draw into a bitmap (no SwiftUI).
+@MainActor
+func benchScenarios() {
+    let R: CGFloat = 56
+    let w = Int(R * 4.4)
+    let h = Int(R * 3)
+    guard let cg = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+    let origin = CGPoint(x: CGFloat(w) * 0.42, y: CGFloat(h) - R * 0.25)
+    let scenarios: [(String, (SlimeEngine) -> Void)] = [
+        ("idle", { _ in }),
+        ("hover (eyes follow)", { $0.pointer(SIMD2(0.8, -1.2)) }),
+        ("chewing (arms + file)", { $0.startChewing() }),
+        ("question (grown ?)", { $0.startQuestion() }),
+        ("melt", { $0.trigger(.melt) }),
+        ("cheer (hops + stars)", { $0.trigger(.cheer) }),
+        ("tempest look, idle", { $0.appearance = SlimeAppearance(look: .named("tempest")) }),
+        ("chewing, arms off", { var a = $0.appearance; a.armsEnabled = false; $0.appearance = a; $0.startChewing() }),
+        ("cat look, idle", { $0.appearance = SlimeAppearance(look: .named("cat")) }),
+        ("king outfit, idle", { $0.appearance = SlimeAppearance(outfit: SlimeOutfit.set(named: "king") ?? SlimeOutfit()) }),
+    ]
+    // Contour alone, on a mid-chew frame with both arms and the file out.
+    do {
+        let engine = SlimeEngine(profile: .main, seed: 7)
+        engine.detail = DetailLevel(pixelsPerUnit: Double(R))
+        engine.simulate(1)
+        engine.startChewing()
+        engine.simulate(1.0)
+        let frame = engine.frame()
+        let blobs = frame.blobs.filter { $0.radius > 1e-4 }
+        let opts = Metaball.Options.forScale(pixelsPerUnit: Double(R))
+        let c0 = PerfProbe.processCPUSeconds()
+        var loops = 0
+        for _ in 0..<200 { loops += Metaball.contour(ring: frame.ring, blobs: blobs, options: opts).count }
+        let ms = (PerfProbe.processCPUSeconds() - c0) * 1000 / 200
+        print(String(format: "R 56 contour only, chewing: %d blobs, %.3f ms per contour (cell %.3f R, %d loops)", blobs.count, ms, opts.cell, loops / 200))
+    }
+    // Per-stage split of one draw for the heavy scenarios (fresh frames, so caches work as live).
+    let staged: [(String, (SlimeEngine) -> Void)] = [
+        ("chewing", { $0.startChewing() }),
+        ("cheer", { $0.trigger(.cheer) }),
+        ("question", { $0.startQuestion() }),
+        ("tempest idle", { $0.appearance = SlimeAppearance(look: .named("tempest")) }),
+        ("cat idle", { $0.appearance = SlimeAppearance(look: .named("cat")) }),
+        ("galaxy idle", { $0.appearance = SlimeAppearance(look: .named("galaxy")) }),
+    ]
+    for (name, setup) in staged {
+        let engine = SlimeEngine(profile: .main, seed: 7)
+        engine.detail = DetailLevel(pixelsPerUnit: Double(R))
+        engine.simulate(1)
+        setup(engine)
+        engine.simulate(0.6)
+        var sums: [String: Double] = [:]
+        var order: [String] = []
+        let n = 60
+        for _ in 0..<n {
+            engine.simulate(1.0 / 60.0)
+            let frame = engine.frame()
+            cg.saveGState()
+            cg.clear(CGRect(x: 0, y: 0, width: w, height: h))
+            cg.translateBy(x: 0, y: CGFloat(h))
+            cg.scaleBy(x: 1, y: -1)
+            for (stage, ms) in SlimeCGRenderer.stageTimings(frame, appearance: engine.appearance, in: cg, origin: origin, radius: R) {
+                if sums[stage] == nil { order.append(stage) }
+                sums[stage, default: 0] += ms
+            }
+            cg.restoreGState()
+        }
+        let parts = order.map { String(format: "%@ %.2f", $0, sums[$0]! / Double(n)) }
+        print("R 56 stages " + name.padding(toLength: 13, withPad: " ", startingAt: 0) + parts.joined(separator: " · "))
+    }
+    for (name, setup) in scenarios {
+        let engine = SlimeEngine(profile: .main, seed: 7)
+        engine.detail = DetailLevel(pixelsPerUnit: Double(R))
+        engine.simulate(1)
+        setup(engine)
+        let dt = 1.0 / 60.0
+        let total = Int(2.0 / dt)
+        var engineCPU = 0.0
+        var drawCPU = 0.0
+        var drawWall = 0.0
+        for _ in 0..<total {
+            let e0 = PerfProbe.processCPUSeconds()
+            engine.simulate(dt)
+            let frame = engine.frame()
+            let e1 = PerfProbe.processCPUSeconds()
+            let w0 = Date.timeIntervalSinceReferenceDate
+            cg.saveGState()
+            cg.clear(CGRect(x: 0, y: 0, width: w, height: h))
+            cg.translateBy(x: 0, y: CGFloat(h))
+            cg.scaleBy(x: 1, y: -1)
+            SlimeCGRenderer.draw(frame, appearance: engine.appearance, in: cg, origin: origin, radius: R)
+            cg.restoreGState()
+            let e2 = PerfProbe.processCPUSeconds()
+            engineCPU += e1 - e0
+            drawCPU += e2 - e1
+            drawWall += Date.timeIntervalSinceReferenceDate - w0
+        }
+        let n = Double(total)
+        let label = name.padding(toLength: 24, withPad: " ", startingAt: 0)
+        print("R 56 " + label + String(format: " engine %.3f ms  draw %.3f ms cpu / %.3f ms wall per frame (60 Hz, 2 s)", engineCPU * 1000 / n, drawCPU * 1000 / n, drawWall * 1000 / n))
+    }
 }
 
 /// Renders the app icon set (happy slime on a dark rounded square) into an .appiconset folder.

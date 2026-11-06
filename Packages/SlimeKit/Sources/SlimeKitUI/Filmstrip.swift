@@ -295,7 +295,9 @@ public enum Filmstrip {
 
     public static func contactSheet(_ images: [CGImage], labels: [String], columns: Int) -> CGImage? {
         guard let first = images.first else { return nil }
-        let cw = first.width
+        // Cells never get narrower than a label ("demonLord · obsidian" in Menlo 10), so small
+        // radii still read; images sit centred in their cell.
+        let cw = max(first.width, 136)
         let ch = first.height + 18
         let rows = (images.count + columns - 1) / columns
         let width = cw * columns
@@ -310,7 +312,7 @@ public enum Filmstrip {
             let x = col * cw
             let yTop = row * ch
             let y = height - yTop - ch
-            ctx.draw(img, in: CGRect(x: x, y: y + 18, width: cw, height: first.height))
+            ctx.draw(img, in: CGRect(x: x + (cw - img.width) / 2, y: y + 18, width: img.width, height: first.height))
             let label = i < labels.count ? labels[i] : "\(i)"
             let font = CTFontCreateWithName("Menlo" as CFString, 10, nil)
             let attrs: [CFString: Any] = [kCTFontAttributeName: font, kCTForegroundColorAttributeName: CGColor(gray: 0.85, alpha: 1)]

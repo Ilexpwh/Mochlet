@@ -294,7 +294,7 @@ not gated by the public-host policy (only bodies of pushed-in items are).
    the folders; Measure lists the size of each data folder; Clean up now reports what it removed.
 4. Housekeeping runs a minute after launch and daily: exported logs older than 14 days, debug
    screenshots older than 7, processed inbox files older than 30, cached pages older than 30.
-5. Release: `scripts/release.sh` (ad hoc) produces `build/release/Mochlet-2.0.0.zip` and `.dmg`;
+5. Release: `scripts/release.sh` (ad hoc) produces `build/release/Mochlet-<version>.zip` and `.dmg`;
    with `SIGN_IDENTITY` and `NOTARY_PROFILE` it signs, notarises and staples both.
 6. Idle: `scripts/measure-idle.sh 120` with the island collapsed and Settings closed stays under
    1 % of a core.
@@ -315,3 +315,61 @@ Seen on this Mac (2026-11-06): the unified log store cannot be read back here (`
 `OSLogStore` both answer "Operation not permitted"), which is why Mochlet keeps its own rolling log
 file and exports from it.
 
+
+## Character 2 (C0–C6)
+
+1. Settings → Character: the preview slime follows the pointer and the emote buttons work on it.
+   Pick a look (cat → loaf body with ears, tempest → horns, wings and tail, ghost → a translucent
+   drop), a colour swatch or move the hue slider: the notch slime and its minis change at once
+   ("Minis a shade lighter" tints only the minis). Pick an outfit set (King, Scholar, Wizard, Santa,
+   Summer, Onsen, Night, Idol) or single pieces; the hat rides the body and bounces a beat after a
+   landing.
+2. Dress for the occasion: drop a PDF → round glasses while it reads; a meeting ask → phone in
+   hand; left alone ≥ 90 s in the expanded island → it sips a mug. None of these are saved.
+3. Hands: drop a file on the slime: it catches it with both hands, hugs it, bites it (crumbs,
+   "hamu"), pages swirl inside while it digests, a sparkle, then the gulp. The greeting ends with a
+   wave, an approval with a thumbs up, a hot signal with a cheer and a bell, an error with a
+   facepalm; hold to talk → mic in hand (expanded island or desktop only).
+4. Expressions: click → poked (side squish, "> <" eyes, "puni"), then the `?` grows out of the body;
+   `!` on a shock, `♪` while humming; deny an approval → puff (cheeks, glare, steam); a rate limit
+   or thermal pressure → melt; an error that stays > 10 s → cry; voice yes/no → nod / shake.
+5. Sounds: Settings → Character → Sounds: pack picker (puni / classic), "Voice squeaks" toggle,
+   the All sounds grid plays each one (tinted buttons are voice). A WAV in
+   `~/Library/Application Support/Mochlet/Sounds/<name>.wav` (or `<pack>/<name>.wav`) replaces the
+   sound after a relaunch.
+6. Right-click menu: Look ▸ and Dress up ▸ switch presets without opening Settings.
+7. Sizes: the compact notch (R 15) keeps ears, horns, the hat silhouette, eyewear and the chewing
+   hands; arms for other poses, grown glyphs and surface particles appear from the expanded island
+   (R ≥ 24) and the desktop (R ≥ 36).
+8. Performance: `swift run -c release slimekit-tools bench` prints the per-frame draw cost of the
+   expensive situations at R 56 (see below); `scripts/measure-idle.sh 120` with the island
+   collapsed and a flame look stays under 1 % of a core.
+
+Scripted version:
+
+```sh
+T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/look?look=cat&palette=ruby&outfit=king&$T"; open "mochlet://debug/fsm?input=reveal&$T"; open "mochlet://debug/shot?name=c2-king&$T"
+open "mochlet://debug/look?look=tempest&outfit=scholar&dress=1&occasion=reading&$T"; open "mochlet://debug/shot?name=c2-reading&$T"
+open "mochlet://debug/chew?kind=pdf&$T"; sleep 1.2; open "mochlet://debug/shot?name=c2-catch&$T"; sleep 2; open "mochlet://debug/shot?name=c2-digest&$T"
+open "mochlet://debug/arms?pose=wave&$T"; open "mochlet://debug/arms?pose=holdSide:phone:-1&$T"
+for e in poked melt puff shock cry hum cheer hug nod shakeNo thumbsUp stretch; do open "mochlet://debug/emote?name=$e&$T"; sleep 0.4; open "mochlet://debug/shot?name=c2-$e&$T"; sleep 1.5; done
+open "mochlet://debug/press?x=52&y=20&$T"; open "mochlet://debug/release?$T"; sleep 0.9; open "mochlet://debug/shot?name=c2-question&$T"
+open "mochlet://debug/look?pack=classic&voice=0&$T"; open "mochlet://debug/state?$T"; python3 -c "import json; print(json.load(open('$HOME/Library/Logs/Mochlet/debug/state.json'))['sound'])"
+open "mochlet://debug/look?reset=1&$T"
+swift run --package-path Packages/SlimeKit slimekit-tools render-catalog --out out/catalog.png      # every look × three palettes at R 56/22/15
+swift run --package-path Packages/SlimeKit slimekit-tools render-catalog --sets 1 --out out/sets.png
+swift run -c release --package-path Packages/SlimeKit slimekit-tools bench --seconds 3
+```
+
+Seen on this Mac (2026-11-06, release build of the tools, CoreGraphics into a bitmap at R 56, 60 Hz):
+idle 0.23 ms per frame, hover 0.25, grown `?` 0.54, melt 0.53, cheer with arms 0.91, chewing with
+both arms and the file 1.28 (was 2.0 before the C6 pass: edge-local ring field, shorter blob tails,
+goo contours as dense polylines with bevel joins, one silhouette clip for both arms, no path
+booleans in the arm pass), tempest look idle 0.77, cat 0.68, king outfit 0.42. The goo contour alone
+(28 blobs) is 0.40 ms and is reused from the cache while nothing moves more than 0.3 px. `scripts/test.sh`
+green (SlimeKit 119, MochletCore 141, app 2, relay).
+Idle on this Mac (release build, flame look, island collapsed, Settings closed): `scripts/measure-idle.sh 120`
+averaged 4.97 % of a core with a live coding-agent session attached (the main slime and its mini stay in the
+working animation at 30 redraws/s; `ps` showed 0.2 % between bursts). The no-session idle figure from M11
+(≈ 0.25 % compact) could not be re-measured in that session; re-run with no agent running before a release.

@@ -116,7 +116,11 @@ final class SessionStore {
         var wanted = Self.mainState(mood)
         // A chat reply in flight shows as thinking unless a session needs the user or failed.
         if app.chat?.isStreaming == true || app.knowledge?.isAnswering == true, wanted == .idle || wanted == .working || wanted == .thinking { wanted = .thinking }
-        if main.agentState != wanted { main.agent(wanted) }
+        if main.agentState != wanted {
+            main.agent(wanted)
+            // A rate limit melts the slime instead of the plain error shock.
+            if wanted == .error, liveCards.contains(where: { $0.state == .ratelimit }) { main.trigger(.melt) }
+        }
     }
 
     static func ticker(_ c: SessionCard) -> String {

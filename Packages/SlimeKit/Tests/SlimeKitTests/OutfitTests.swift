@@ -77,7 +77,7 @@ import simd
         #expect(e.frame().outfit.eyewear == .roundGlasses, "reading glasses while chewing")
         #expect(e.appearance.outfit.isEmpty, "the chosen outfit is untouched")
         e.ingestionFinished(success: true)
-        e.simulate(3)
+        e.simulate(4)  // catch, hug, bites, digest, gulp: about 3.8 s
         #expect(e.frame().outfit.eyewear == .none)
         e.occasion = .reading
         e.simulate(0.1)

@@ -3,10 +3,24 @@ import simd
 
 public enum EyeShape: String, Sendable, Codable, CaseIterable {
     case open, half, closedLine, happyArc, squint, dot, wide, spiral, cross, heart, star, tired, focused, flat
+    /// Ink-line faces from the anime: a relaxed "ー" with a tick, a "> <" squeeze with radiating
+    /// ticks, an angled glare, a half-lidded smug look, a welling teary eye, concentric shock rings,
+    /// a sideways glance and a soft "︶" pleased arc.
+    case relaxed, squeeze, glare, smug, teary, shock, sideGlance, pleased
+
+    /// Shapes drawn as a ball (an ink ellipse with highlights) that blinks shut.
+    public var isBall: Bool {
+        switch self {
+        case .open, .half, .wide, .focused, .tired, .dot, .smug, .teary, .sideGlance, .glare: return true
+        default: return false
+        }
+    }
 }
 
 public enum MouthShape: String, Sendable, Codable, CaseIterable {
     case none, smileTiny, omega, openRound, o, flat, wavy, sleepy
+    /// A big rounded shout, a puckered pout, a tongue out, a wide toothy grin and a droopy squiggle.
+    case openWide, pout, tongue, grin, squiggle
 }
 
 /// Eyes live on a sphere inside the jelly: they slide across it as the gaze turns and

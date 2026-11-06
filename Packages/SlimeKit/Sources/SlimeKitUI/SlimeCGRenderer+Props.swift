@@ -39,7 +39,7 @@ extension SlimeCGRenderer {
     }
 
     private var bodyScale: CGFloat { CGFloat((frame.body.scaleX * frame.body.scaleY).squareRoot()) }
-    private var inkLine: RGBA { theme.ink.mixed(with: mid, 0.45) }
+    var inkLine: RGBA { theme.ink.mixed(with: mid, 0.45) }
 
     // MARK: Arms
 

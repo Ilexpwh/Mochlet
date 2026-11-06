@@ -445,7 +445,8 @@ final class VoiceController {
         guard let p = pending else { return }
         pending = nil
         pendingWork?.cancel()
-        guard let project else { done("cancelled"); app.window.send(.collapse); return }
+        guard let project else { app.slime.stage.main.trigger(.shakeNo); done("cancelled"); app.window.send(.collapse); return }
+        app.slime.stage.main.trigger(.nod)
         var r = p.intent
         r.project = project
         Task { await act(r) }
@@ -453,12 +454,13 @@ final class VoiceController {
 
     private func answer(_ p: Pending, with text: String) async {
         let lower = text.lowercased()
-        if IntentRouter.isCancel(lower) { done("cancelled"); app.window.send(.collapse); return }
+        if IntentRouter.isCancel(lower) { app.slime.stage.main.trigger(.shakeNo); done("cancelled"); app.window.send(.collapse); return }
         let project = app.projects.match(text) ?? IntentRouter.bestProject(in: text, context: context())?.0
         guard let project else {
             fail("No project called “\(text)”. I know: \(app.projects.projects.map(\.name).prefix(4).joined(separator: ", ")).")
             return
         }
+        app.slime.stage.main.trigger(.nod)
         var r = p.intent
         r.project = project
         await act(r)

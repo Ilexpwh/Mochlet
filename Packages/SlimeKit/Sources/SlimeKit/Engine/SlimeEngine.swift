@@ -114,6 +114,13 @@ public final class SlimeEngine {
     private var lean = AnimatedValue(0)
     private var flatten = AnimatedValue(1)
     private var sizeScale = AnimatedValue(1)
+    /// Temporary body morphs (melt spread, puffed cheeks, heart-shaped top): blobs in the silhouette
+    /// whose size follows `morphAmount`.
+    private enum MorphKind { case melt, puff, heartBody }
+    private var morph: MorphKind?
+    private var morphAmount = AnimatedValue(0)
+    /// The caught file is hugged for a beat before the first bite.
+    private var chewHug = false
     private var shakeX = AnimatedValue(0)
     private var shakeY = AnimatedValue(0)
     private var pulse: Double = 0
@@ -179,6 +186,7 @@ public final class SlimeEngine {
 
     private static let stateTag = "state"
     private static let emoteTag = "emote"
+    private static let questionTag = "question"
 
     public init(profile: SlimeProfile = .main, seed: UInt64 = 1) {
         self.profile = profile
@@ -236,6 +244,8 @@ public final class SlimeEngine {
         lean.advance(to: time)
         flatten.advance(to: time)
         sizeScale.advance(to: time)
+        morphAmount.advance(to: time)
+        if morph != nil, !morphAmount.isAnimating, morphAmount.value < 1e-3 { morph = nil }
         shakeX.advance(to: time)
         shakeY.advance(to: time)
         eyeScale.advance(to: time)
@@ -410,15 +420,16 @@ public final class SlimeEngine {
         case .dragBegan:
             onEvent?(.dragOutBegan)
         case .click(let n):
-            onEvent?(.clickClassified(count: n))
+            // React first so a host that asks a question on the click lets the poke play out.
             switch n {
             case 1:
-                if state.priority <= SlimeState.question.priority { startQuestion() }
+                trigger(.poked)
             case 2:
                 if !reduceMotion { body.apply(.wobble(angle: -.pi / 2, strength: 0.35)) }
             default:
                 break
             }
+            onEvent?(.clickClassified(count: n))
         case .splitNow(let extra):
             onEvent?(.splitRequested(extra: extra))
         }
@@ -560,7 +571,7 @@ public final class SlimeEngine {
         hostProgress = 1
         chewHostDriven = false
         // The arms timeline (catch, bites, digest) needs about two seconds to read as eating.
-        let at = max(time, chewStartedAt + (chewPhase != nil ? 2.4 : 0.9))
+        let at = max(time, chewStartedAt + (chewPhase != nil ? 2.9 : 0.9))
         if chewPhase != nil, digestStartedAt == nil {
             // Let the bite loop run on to digesting; the gulp waits for it.
             scheduler.schedule(at: at, tag: Self.stateTag) { [weak self] in self?.gulp() }
@@ -637,7 +648,7 @@ public final class SlimeEngine {
         guard appearance.armsEnabled, profile.kind == .main else { return .hidden }
         if state == .chewing, let cp = chewPhase {
             switch cp {
-            case .catching: return .holdHigh(chewProp)
+            case .catching: return chewHug ? .hug(chewProp) : .holdHigh(chewProp)
             case .biting: return .holdFront(chewProp)
             case .digesting, .filing: return .hidden
             }
@@ -733,6 +744,12 @@ public final class SlimeEngine {
 
     public func startQuestion() {
         lastInteractionAt = time
+        if emote == .poked {
+            // Let the poke play out (the question face clears emotes), then ask.
+            let at = emoteUntil
+            scheduler.schedule(at: at, tag: Self.questionTag) { [weak self] in self?.setUserState(.question) }
+            return
+        }
         setUserState(.question)
     }
 
@@ -765,9 +782,12 @@ public final class SlimeEngine {
         cue(.pop)
         refreshState()
         onEvent?(.wokeUp)
-        if rng.chance(0.4) {
-            scheduler.schedule(at: time + 0.15, tag: Self.emoteTag) { [weak self] in
-                self?.trigger(.yawn)
+        let yawnToo = rng.chance(0.4)
+        scheduler.schedule(at: time + 0.15, tag: Self.stateTag) { [weak self] in
+            guard let self else { return }
+            self.trigger(.stretch)
+            if yawnToo {
+                self.scheduler.schedule(at: self.time + 1.35, tag: Self.stateTag) { [weak self] in self?.trigger(.yawn) }
             }
         }
     }
@@ -879,6 +899,9 @@ public final class SlimeEngine {
         case .shy: gesture(.cover, for: e.duration, owner: .emote)
         case .love: gesture(.hug(.heart), for: e.duration, owner: .emote)
         case .confused: gesture(.scratchHead, for: e.duration, owner: .emote)
+        case .cheer, .stretch: gesture(.cheer, for: e.duration, owner: .emote)
+        case .hug: gesture(.hug(nil), for: e.duration, owner: .emote)
+        case .thumbsUp: gesture(.thumbsUp(side: 1), for: e.duration, owner: .emote)
         default: break
         }
         switch e {
@@ -958,13 +981,161 @@ public final class SlimeEngine {
             scheduler.schedule(at: time + 0.5, tag: Self.emoteTag) { [weak self] in self?.hop(1.6) }
             scheduler.schedule(at: time + 0.2, tag: Self.emoteTag) { [weak self] in self?.spawnSparkles(count: 6) }
             cue(.finish, gain: 0.8)
+        case .melt:
+            // とけている: the body sags into a puddle and spreads at the base, eyes drooping.
+            eyeOverride = (.tired, .tired, until)
+            mouthOverride = (.squiggle, until)
+            startMorph(.melt, duration: 0.7, ease: .inOutSine)
+            flatten.animate(keys: [.init(to: 0.62, duration: 0.7, ease: .inOutSine), .init(to: 0.62, duration: 1.0, ease: .linear),
+                                   .init(to: 1, duration: 0.5, ease: .outBack)], at: time)
+            scheduler.schedule(at: time + 1.7, tag: Self.emoteTag) { [weak self] in
+                guard let self else { return }
+                self.morphAmount.animate(to: 0, duration: 0.5, ease: .inOutSine, at: self.time)
+            }
+            for k in 0..<3 {
+                scheduler.schedule(at: time + 0.5 + Double(k) * 0.4, tag: Self.emoteTag) { [weak self] in
+                    guard let self else { return }
+                    let f = self.frameNow()
+                    let side: Double = k % 2 == 0 ? 1 : -1
+                    let at = f.body.transform(SIMD2(side * 1.05, -0.5))
+                    self.spawn(.drip, at: at, velocity: SIMD2(side * 0.1, 0.1), life: 0.7, size: 0.14)
+                }
+            }
+            cue(.splat, rate: 0.7, gain: 0.6)
+        case .puff:
+            // ふくらむ: cheeks balloon out, a glare, a pout and steam off the top.
+            eyeOverride = (.glare, .glare, until)
+            mouthOverride = (.pout, until)
+            startMorph(.puff, duration: 0.3, ease: .outBack)
+            sizeScale.animate(to: 1.06, duration: 0.3, ease: .outBack, at: time)
+            blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
+            for k in 0..<3 {
+                scheduler.schedule(at: time + 0.1 + Double(k) * 0.25, tag: Self.emoteTag) { [weak self] in
+                    guard let self else { return }
+                    let f = self.frameNow()
+                    let at = f.body.transform(SIMD2(0.35 - Double(k) * 0.3, -2.05))
+                    self.spawn(.steam, at: at, velocity: SIMD2(self.rng.range(-0.15...0.15), -0.7), life: 0.75, size: 0.16)
+                }
+            }
+            cue(.annoyed, rate: 0.85)
+        case .shock:
+            // A startled jolt: ring eyes, a wide-open mouth, a quick stretch upward and a "!".
+            eyeOverride = (.shock, .shock, until)
+            mouthOverride = (.openWide, until)
+            mouthOpen.animate(to: 0.9, duration: 0.08, at: time)
+            eyeScale.animate(keys: [.init(to: style.eyeScale * 1.3, duration: 0.08, ease: .outBack), .init(to: style.eyeScale * 1.15, duration: 0.6, ease: .outCubic)], at: time)
+            flatten.animate(keys: [.init(to: 1.14, duration: 0.08, ease: .outQuad), .init(to: 0.96, duration: 0.14, ease: .outQuad),
+                                   .init(to: 1, duration: 0.3, ease: .outBack)], at: time)
+            if !reduceMotion { shakeKicks([(0, -1.8), (0.07, 1.2)]) }
+            addAccessory(.exclamation, owner: .emote)
+            cue(.pop, rate: 0.7)
+        case .cry:
+            // Welling eyes, a droopy mouth and tears running down both cheeks.
+            eyeOverride = (.teary, .teary, until)
+            mouthOverride = (.squiggle, until)
+            blush.animate(to: max(baseBlush, 0.4), duration: 0.3, at: time)
+            flatten.animate(to: 0.94, duration: 0.4, ease: .inOutSine, at: time)
+            for k in 0..<5 {
+                scheduler.schedule(at: time + 0.25 + Double(k) * 0.3, tag: Self.emoteTag) { [weak self] in
+                    guard let self else { return }
+                    let f = self.frameNow()
+                    for e in f.eyes where e.visible {
+                        let at = e.center + SIMD2(e.side * 0.06, 0.22)
+                        self.spawn(.drop, at: at, velocity: SIMD2(e.side * 0.08, 0.3), life: 0.75, size: 0.13)
+                    }
+                }
+            }
+            cue(.sleep, rate: 0.75, gain: 0.6)
+        case .hum:
+            // A note grows out of the head and the body sways to it.
+            eyeOverride = (.relaxed, .relaxed, until)
+            mouthOverride = (.smileTiny, until)
+            addAccessory(.note, owner: .emote)
+            lean.animate(keys: [.init(to: 0.07, duration: 0.45, ease: .inOutSine), .init(to: -0.07, duration: 0.5, ease: .inOutSine),
+                                .init(to: 0.07, duration: 0.5, ease: .inOutSine), .init(to: style.lean, duration: 0.45, ease: .inOutSine)], at: time)
+            cue(.greet, rate: 1.25, gain: 0.5)
+        case .cheer:
+            eyeOverride = (.happyArc, .happyArc, until)
+            mouthOverride = (.grin, until)
+            hop(1.7)
+            scheduler.schedule(at: time + 0.45, tag: Self.emoteTag) { [weak self] in self?.hop(1.5) }
+            let c = body.centroid
+            for k in 0..<4 {
+                let a = -2.5 + Double(k) * 0.6
+                spawn(.star, at: c + SIMD2(cos(a), sin(a)) * 1.4, velocity: SIMD2(cos(a), sin(a)) * 0.6, life: 0.8, size: 0.15)
+            }
+            cue(.finish)
+        case .hug:
+            // A self-hug: arms wrap round the belly, the top bulges into a heart, cheeks warm.
+            eyeOverride = (.pleased, .pleased, until)
+            mouthOverride = (.smileTiny, until)
+            startMorph(.heartBody, duration: 0.45, ease: .outBack)
+            blush.animate(to: 0.75, duration: 0.3, at: time)
+            lean.animate(keys: [.init(to: 0.06, duration: 0.4, ease: .inOutSine), .init(to: -0.06, duration: 0.5, ease: .inOutSine),
+                                .init(to: style.lean, duration: 0.5, ease: .inOutSine)], at: time)
+            for k in 0..<2 {
+                scheduler.schedule(at: time + 0.3 + Double(k) * 0.4, tag: Self.emoteTag) { [weak self] in
+                    guard let self else { return }
+                    let c = self.body.centroid
+                    self.spawn(.heart, at: SIMD2(c.x + (k == 0 ? -0.5 : 0.5), c.y - 1.0), velocity: SIMD2(0, -0.8), life: 1.0, size: 0.18)
+                }
+            }
+            cue(.love, gain: 0.7)
+        case .nod:
+            eyeOverride = (.pleased, .pleased, until)
+            mouthOverride = (.smileTiny, until)
+            flatten.animate(keys: [.init(to: 0.9, duration: 0.16, ease: .inOutSine), .init(to: 1.0, duration: 0.16, ease: .inOutSine),
+                                   .init(to: 0.92, duration: 0.16, ease: .inOutSine), .init(to: 1, duration: 0.3, ease: .outBack)], at: time)
+            glance = (SIMD2(0, 0.35), time + 0.3)
+            cue(.approve, gain: 0.6)
+        case .shakeNo:
+            eyeOverride = (.flat, .flat, until)
+            mouthOverride = (.pout, until)
+            if !reduceMotion { shakeKicks([(0, 2.2), (0.1, -3.6), (0.2, 3.0), (0.3, -1.8)]) }
+            lean.animate(keys: [.init(to: 0.1, duration: 0.14, ease: .inOutSine), .init(to: -0.1, duration: 0.16, ease: .inOutSine),
+                                .init(to: 0.08, duration: 0.16, ease: .inOutSine), .init(to: style.lean, duration: 0.3, ease: .outBack)], at: time)
+            cue(.annoyed, gain: 0.5)
+        case .thumbsUp:
+            eyeOverride = (.open, .happyArc, until)
+            mouthOverride = (.grin, until)
+            cue(.approve)
+        case .stretch:
+            // A morning stretch: arms up, the body tall, a small "mu" sigh.
+            eyeOverride = (.relaxed, .relaxed, until)
+            mouthOverride = (.o, until)
+            mouthOpen.animate(keys: [.init(to: 0.45, duration: 0.3, ease: .inOutSine), .init(to: 0.45, duration: 0.4, ease: .linear),
+                                     .init(to: style.mouthOpen, duration: 0.3, ease: .inOutSine)], at: time)
+            flatten.animate(keys: [.init(to: 1.25, duration: 0.45, ease: .outQuad), .init(to: 1.25, duration: 0.35, ease: .linear),
+                                   .init(to: 0.96, duration: 0.2, ease: .inOutSine), .init(to: 1, duration: 0.2, ease: .outBack)], at: time)
+            cue(.sleep, rate: 1.3, gain: 0.5)
+        case .poked:
+            // ツンツン: a side squish away from the finger with "> <" eyes.
+            let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
+            eyeOverride = (.squeeze, .squeeze, until)
+            mouthOverride = (.o, until)
+            mouthOpen.animate(to: 0.25, duration: 0.08, at: time)
+            if !reduceMotion { body.apply(.slap(side: side, strength: 0.55)) }
+            lean.animate(keys: [.init(to: -0.12 * side, duration: 0.1, ease: .outQuad), .init(to: style.lean, duration: 0.45, ease: .outBack)], at: time)
+            cue(.pinch, rate: 1.2, gain: 0.7)
         }
     }
 
+    private func startMorph(_ m: MorphKind, duration: Double, ease: Ease) {
+        morph = m
+        morphAmount.animate(to: 1, duration: duration, ease: ease, at: time)
+    }
+
     private func endEmote() {
-        guard emote != nil else { return }
+        guard let ended = emote else { return }
         emote = nil
         clearGesture(owner: .emote)
+        if morph != nil { morphAmount.animate(to: 0, duration: 0.35, ease: .inOutSine, at: time) }
+        switch ended {
+        case .melt, .shock, .cry, .nod, .stretch:
+            flatten.animate(to: userState == .sleeping ? 0.80 : 1, duration: 0.4, ease: .outBack, at: time)
+        default:
+            break
+        }
         scheduler.cancel(tag: Self.emoteTag)
         if let o = eyeOverride, o.until == emoteUntil { eyeOverride = nil }
         if let m = mouthOverride, m.until == emoteUntil { mouthOverride = nil }
@@ -1124,6 +1295,7 @@ public final class SlimeEngine {
             digestStartedAt = nil
             filingAt = nil
             chewProp = .file(kind: chewKind, bites: 0)
+            chewHug = false
             if appearance.armsEnabled, profile.kind == .main {
                 chewPhase = .catching
                 scheduler.schedule(at: time + 0.25, tag: Self.stateTag) { [weak self] in
@@ -1133,8 +1305,19 @@ public final class SlimeEngine {
                     self.mouthOverride = (.o, self.time + 0.45)
                     self.cue(.plip)
                 }
-                scheduler.schedule(at: time + 0.7, tag: Self.stateTag) { [weak self] in
+                // A beat of hugging the catch (the mask-hug from the references), then eating.
+                scheduler.schedule(at: time + 0.65, tag: Self.stateTag) { [weak self] in
                     guard let self else { return }
+                    self.chewHug = true
+                    self.eyeOverride = (.pleased, .pleased, self.time + 0.55)
+                    self.mouthOverride = (.smileTiny, self.time + 0.55)
+                    self.blush.animate(to: max(self.baseBlush, 0.5), duration: 0.2, at: self.time)
+                    self.cue(.love, gain: 0.45)
+                }
+                scheduler.schedule(at: time + 1.2, tag: Self.stateTag) { [weak self] in
+                    guard let self else { return }
+                    self.chewHug = false
+                    self.blush.animate(to: self.baseBlush, duration: 0.4, at: self.time)
                     self.chewPhase = .biting(0)
                     self.scheduleBite()
                 }
@@ -1152,8 +1335,13 @@ public final class SlimeEngine {
             }
         case .error:
             if !reduceMotion { shakeKicks([(0, 2.6), (0.06, -4.4), (0.13, 3.2), (0.2, -1.6)]) }
+            trigger(.shock)
             scheduleSweat()
-            scheduler.schedule(at: time + 0.3, tag: Self.stateTag) { [weak self] in self?.gesture(.facepalm, for: 1.3, owner: .state) }
+            scheduler.schedule(at: time + 1.1, tag: Self.stateTag) { [weak self] in self?.gesture(.facepalm, for: 1.3, owner: .state) }
+            scheduler.schedule(at: time + 10, tag: Self.stateTag) { [weak self] in
+                guard let self, self.state == .error else { return }
+                self.trigger(.cry)
+            }
         case .sleeping:
             flatten.animate(to: 0.80, duration: 0.9, ease: .inOutSine, at: time)
             scheduler.schedule(at: time + 0.9, tag: Self.stateTag) { [weak self] in self?.baseEye = .closedLine }
@@ -1363,6 +1551,7 @@ public final class SlimeEngine {
             case .drip: g = 2.5
             case .bubble: g = -0.08
             case .crumb: g = 4.5
+            case .steam: g = -0.6
             }
             p.velocity.y += g * h
             p.position += p.velocity * h
@@ -1417,11 +1606,76 @@ public final class SlimeEngine {
     private func frame(alpha: Double) -> SlimeFrame {
         let ring = body.interpolated(alpha: alpha)
         let bf = BodyFrame.fit(reference: body.referenceRing, referenceCentroid: body.referenceCentroid, current: ring)
-        var rig = TraitRig.build(look: appearance.look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
-        let worn = resolvedOutfit
-        rig.traits += OutfitRig.build(outfit: worn, ring: ring, anim: traitAnim, detail: detail, mini: profile.kind == .mini)
         let limbs = armFrames(ring: ring, bf: bf)
         let holdsMic = limbs.props.contains { $0.prop == .mic }
+        let s = profile.kind == .mini ? 0.85 : 1.0
+        var acc: [AccessoryFrame] = []
+        var extraBlobs: [Blob] = []
+        var grownStrength = 0.0
+        accessories.removeAll { r in r.removeAt.map { time - $0 > 0.18 } ?? false }
+        let grownStyle = appearance.glyphStyle == .grown && detail >= .medium
+        for a in accessories where !(a.kind == .micBars && holdsMic) {
+            let age = time - a.startedAt
+            var pop = Ease.outBack.apply(min(1, age / 0.28))
+            if let r = a.removeAt { pop = max(0, 1 - (time - r) / 0.18) * min(pop, 1) }
+            let grown = grownStyle && a.kind.canGrow
+            var anchor: SIMD2<Double>
+            var dir = SIMD2<Double>(0, -1)
+            if grown {
+                // The mark grows out of the top-back of the head on a goo stalk (where the drop tip
+                // sits), swaying a little; the stalk is body material, the glyph is drawn as jelly.
+                let n = ring.count
+                var c = SIMD2<Double>.zero
+                for p in ring { c += p }
+                c /= Double(n)
+                let base = ring[TraitRig.index(angle: -.pi / 2 + 0.72, count: n)]
+                let normal = TraitRig.unit(base - c)
+                // Up and out at about 35° so the mark stays inside the island; the tip lag moves it,
+                // and nothing else does, so the contour cache holds while the slime is still.
+                dir = TraitRig.rotate(TraitRig.unit(normal * 0.85 + SIMD2(0, -0.5)), by: 0.05 + traitAnim.tipLag * 0.5)
+                let heading = atan2(dir.y, dir.x)
+                let grow = max(0, pop)
+                let len = 0.36 * grow * s
+                for (k, r) in [0.24, 0.19, 0.15, 0.12].enumerated() {
+                    let t = 0.08 * s + len * Double(k) / 3
+                    extraBlobs.append(Blob(position: base + dir * t, radius: r * s * max(0.35, grow), stretch: 1.2, heading: heading, shaded: false))
+                }
+                anchor = base + dir * (0.08 * s + len + 0.34 * s * grow)
+                grownStrength = max(grownStrength, grow)
+            } else {
+                let local: SIMD2<Double>
+                switch a.kind {
+                // In the compact notch (tiny detail) there is no room above the head: bubbles sit beside it.
+                case .question, .exclamation, .dots, .note: local = detail == .tiny ? SIMD2(1.45, -1.55) : SIMD2(1.15, -2.05)
+                case .badge: local = SIMD2(0.95, -1.9)
+                case .micBars: local = SIMD2(1.75, -1.0)
+                case .recDot: local = SIMD2(1.25, -1.8)
+                case .anger: local = SIMD2(0.78, -1.62)
+                }
+                anchor = bf.transform(local)
+            }
+            acc.append(AccessoryFrame(kind: a.kind, anchor: anchor, pop: pop, phase: age, levels: a.kind == .micBars ? micLevels : [],
+                                      grown: grown, direction: dir))
+        }
+        if let m = morph {
+            let k = morphAmount.value
+            if k > 1e-3 {
+                let bs = (bf.scaleX * bf.scaleY).squareRoot()
+                func bulge(_ local: SIMD2<Double>, _ r: Double, _ stretch: Double) {
+                    extraBlobs.append(Blob(position: bf.transform(local), radius: r * bs * s, stretch: stretch, heading: 0, shaded: false))
+                }
+                switch m {
+                case .melt: for side in [-1.0, 1.0] { bulge(SIMD2(side * (0.6 + 0.22 * k), -0.2), 0.32 * k, 1.8) }
+                case .puff: for side in [-1.0, 1.0] { bulge(SIMD2(side * 0.8, -0.98), 0.4 * k, 1.1) }
+                case .heartBody: for side in [-1.0, 1.0] { bulge(SIMD2(side * 0.52, -1.72), 0.4 * k, 1.0) }
+                }
+            }
+        }
+        var look = appearance.look
+        if grownStrength > 0.5 { look.tip = false }  // the stalk takes the tip's place
+        var rig = TraitRig.build(look: look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
+        let worn = resolvedOutfit
+        rig.traits += OutfitRig.build(outfit: worn, ring: ring, anim: traitAnim, detail: detail, mini: profile.kind == .mini)
         let yaw = gaze.yaw
         let pitch = gaze.pitch
         let open = blink.openness
@@ -1448,22 +1702,7 @@ public final class SlimeEngine {
                 }
             }
         }
-        var acc: [AccessoryFrame] = []
-        accessories.removeAll { r in r.removeAt.map { time - $0 > 0.18 } ?? false }
-        for a in accessories where !(a.kind == .micBars && holdsMic) {
-            let age = time - a.startedAt
-            var pop = Ease.outBack.apply(min(1, age / 0.28))
-            if let r = a.removeAt { pop = max(0, 1 - (time - r) / 0.18) * min(pop, 1) }
-            let local: SIMD2<Double>
-            switch a.kind {
-            case .question, .exclamation, .dots: local = SIMD2(1.15, -2.05)
-            case .badge: local = SIMD2(0.95, -1.9)
-            case .micBars: local = SIMD2(1.75, -1.0)
-            case .recDot: local = SIMD2(1.25, -1.8)
-            }
-            acc.append(AccessoryFrame(kind: a.kind, anchor: bf.transform(local), pop: pop, phase: age, levels: a.kind == .micBars ? micLevels : []))
-        }
-        let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty
+        let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty || morph != nil
             || blobs.contains(where: { $0.radius > 1e-3 }) || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
             || armRig.isAnimating(at: time) || armRig.hasMotion || (propLive && simd_length(propSpring.velocity) > 1e-3) || !limbs.inner.isEmpty
         // A resting pointer is not activity: the gaze counts only while it is still turning.
@@ -1477,7 +1716,7 @@ public final class SlimeEngine {
             blush: blush.value, blushCenters: blushCenters, blushForeshorten: blushFore,
             core: coreSpring.value, coreBoost: coreBoost, gaze: SIMD2(yaw, pitch),
             highlightShift: SIMD2(-0.08 * yaw, 0.06 * pitch), tint: tint, accessories: acc, particles: particles,
-            blobs: blobs + rig.blobs + limbs.blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
+            blobs: blobs + rig.blobs + limbs.blobs + extraBlobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
             ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, outfit: worn, time: time,
             arms: limbs.arms, props: limbs.props, innerItems: limbs.inner, chewPhase: chewPhase)
     }

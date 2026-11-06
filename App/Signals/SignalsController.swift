@@ -232,8 +232,11 @@ final class SignalsController {
         guard !app.meetings.prefs.isQuiet(at: now) else { return }
         if let last = lastReaction, now.timeIntervalSince(last) < 3600 { return }
         lastReaction = now
-        app.slime.stage.main.trigger(.excited)
-        app.slime.stage.main.gesture(.holdHigh(.bell), for: 1.8)
+        app.slime.stage.main.trigger(.cheer)
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1.3))
+            self?.app.slime.stage.main.gesture(.holdHigh(.bell), for: 1.8)
+        }
         app.toast("Everyone is on it: \(top.title)", symbol: "antenna.radiowaves.left.and.right", seconds: 4)
     }
 

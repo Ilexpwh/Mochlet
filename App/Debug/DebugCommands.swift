@@ -20,7 +20,7 @@ import MochletCore
 ///   split greet sleep wake drop chew(?seconds=) listen(?seconds=)
 ///   press?x=&y=  release  click?x=&y=[&count=1]  hold?x=&y=&seconds=
 ///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
-///   arms?pose=<pose>[&seconds=]      one-off arm pose (wave, thumbsUp, cheer, holdSide:phone:-1, hug:heart, sip…)
+///   arms?pose=<pose>[&seconds=]      one-off arm pose (wave, thumbsUp, cheer, holdSide:phone:-1, hug:heart, hug:self, sip…)
 ///   chew?[kind=pdf][&seconds=]        eat a pretend file; chew?phase=biting:0.5|digesting|filing drives the timeline
 ///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | reset=1
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1

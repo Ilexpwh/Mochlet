@@ -27,6 +27,16 @@ public struct MouthFrame: Sendable, Equatable {
 
 public enum AccessoryKind: String, Sendable, Codable, Equatable {
     case question, exclamation, dots, badge, micBars, recDot
+    /// A music note (humming) and the anime's anger mark on the body.
+    case note, anger
+
+    /// Marks that can grow out of the body as slime (`GlyphStyle.grown`).
+    public var canGrow: Bool {
+        switch self {
+        case .question, .exclamation, .note: return true
+        default: return false
+        }
+    }
 }
 
 public struct AccessoryFrame: Sendable, Equatable {
@@ -39,6 +49,11 @@ public struct AccessoryFrame: Sendable, Equatable {
     public var phase: Double
     /// Mic levels for `micBars` (5 values 0…1).
     public var levels: [Double]
+    /// The glyph grows out of the body on a goo stalk (the stalk is in `SlimeFrame.blobs`) and is
+    /// drawn as jelly; false draws the speech-bubble style.
+    public var grown: Bool = false
+    /// Direction the stalk points (unit, world space); the glyph leans with it.
+    public var direction: SIMD2<Double> = SIMD2(0, -1)
 }
 
 public struct Particle: Sendable, Equatable {
@@ -48,6 +63,8 @@ public struct Particle: Sendable, Equatable {
         case wisp, spark, glint, drip, bubble
         /// A fleck of file falling from the mouth while eating.
         case crumb
+        /// A puff of steam rising off a puffed-up (angry) slime.
+        case steam
     }
 
     public var kind: Kind

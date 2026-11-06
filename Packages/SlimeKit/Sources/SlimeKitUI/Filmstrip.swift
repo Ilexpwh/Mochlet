@@ -99,8 +99,7 @@ public enum Filmstrip {
         case "wave": return "0:gesture:1.6:wave"
         case "thumbs": return "0:gesture:1.2:thumbsUp"
         case "sip": return "0:gesture:3.2:sip"
-        case "hug": return "0:emote:love"
-        case "cheer": return "0:emote:proud"
+        case "error2": return "0:agent:error"
         default:
             if SlimeEmote(rawValue: s) != nil { return "0:emote:\(s)" }
             return ""
@@ -112,7 +111,7 @@ public enum Filmstrip {
     record[:off] chew chewdone[:fail] question dizzy sleep wake audio:<0-1> dragin:<±1> dragout drop
     jump:<v0> slap:<side> puff:<scale> shake pointer:<x,y> lean:<rad> drop:<doc|pdf|image|audio|video|folder|link|text>
     arms:<pose> gesture:<seconds>:<pose> occasion:<reading|call|rest|working|none> chewphase:<catching|biting:0.5|digesting|filing>
-    poses: hidden holdFront:<prop> holdHigh:<prop> holdSide:<prop>:<side> hug:<prop> wave[:side] thumbsUp[:side] cheer rubEyes scratchHead facepalm cover point:<x,y> sip
+    poses: hidden holdFront:<prop> holdHigh:<prop> holdSide:<prop>:<side> hug:<prop|self> wave[:side] thumbsUp[:side] cheer rubEyes scratchHead facepalm cover point:<x,y> sip
     stage: split[:extra] pinch:<id> endsession:<id> miniagent:<id>:<state> ghost:<x,y> ghostto:<x,y> ghostdrop ghostback
     """
 

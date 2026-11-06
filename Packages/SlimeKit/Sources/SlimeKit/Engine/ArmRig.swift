@@ -69,8 +69,8 @@ public enum ArmPose: Sendable, Equatable, Hashable {
     case holdHigh(Prop)
     /// One hand beside the face (phone, mic, mug).
     case holdSide(Prop, side: Double)
-    /// Both arms wrapped around a prop in front.
-    case hug(Prop)
+    /// Both arms wrapped around a prop in front, or around the body itself (nil).
+    case hug(Prop?)
     case wave(side: Double)
     case thumbsUp(side: Double)
     case cheer
@@ -85,7 +85,8 @@ public enum ArmPose: Sendable, Equatable, Hashable {
 
     public var prop: Prop? {
         switch self {
-        case .holdFront(let p), .holdHigh(let p), .hug(let p): return p
+        case .holdFront(let p), .holdHigh(let p): return p
+        case .hug(let p): return p
         case .holdSide(let p, _): return p
         case .sip: return .mug
         default: return nil
@@ -109,7 +110,7 @@ public enum ArmPose: Sendable, Equatable, Hashable {
         case .holdFront(let p): return "holdFront:" + p.name
         case .holdHigh(let p): return "holdHigh:" + p.name
         case .holdSide(let p, let s): return "holdSide:" + p.name + (s < 0 ? ":-1" : ":1")
-        case .hug(let p): return "hug:" + p.name
+        case .hug(let p): return "hug:" + (p?.name ?? "self")
         case .wave(let s): return s < 0 ? "wave:-1" : "wave"
         case .thumbsUp(let s): return s < 0 ? "thumbsUp:-1" : "thumbsUp"
         case .cheer: return "cheer"
@@ -122,7 +123,7 @@ public enum ArmPose: Sendable, Equatable, Hashable {
         }
     }
 
-    /// "wave", "wave:-1", "holdFront:phone", "holdSide:mic:1", "point:1,-0.5", "hug:heart".
+    /// "wave", "wave:-1", "holdFront:phone", "holdSide:mic:1", "point:1,-0.5", "hug:heart", "hug:self".
     public static func parse(_ s: String) -> ArmPose? {
         let parts = s.split(separator: ":").map(String.init)
         guard let head = parts.first else { return nil }
@@ -133,7 +134,7 @@ public enum ArmPose: Sendable, Equatable, Hashable {
         case "holdFront": return .holdFront(prop(1, .file(kind: .doc, bites: 0)))
         case "holdHigh": return .holdHigh(prop(1, .bell))
         case "holdSide": return .holdSide(prop(1, .phone), side: side(2))
-        case "hug": return .hug(prop(1, .heart))
+        case "hug": return parts.count > 1 && (parts[1] == "self" || parts[1] == "none") ? .hug(nil) : .hug(prop(1, .heart))
         case "wave": return .wave(side: side(1))
         case "thumbsUp": return .thumbsUp(side: side(1))
         case "cheer": return .cheer
@@ -422,9 +423,11 @@ public struct ArmRig: Sendable, Equatable {
         case .holdHigh:
             let mid = (joints[0].hand + joints[1].hand) * 0.5
             return (mid + SIMD2(0, -0.12), 0, true)
-        case .hug:
+        case .hug(.some):
             let mid = (joints[0].hand + joints[1].hand) * 0.5
             return (mid + SIMD2(0, -0.2), 0, true)
+        case .hug(.none):
+            return nil
         case .holdSide(let p, let side):
             let h = joints[side < 0 ? 0 : 1].hand
             switch p {
@@ -458,11 +461,16 @@ public struct ArmRig: Sendable, Equatable {
             return sym(SIMD2(0.36, 0.58 + lift), SIMD2(1.02, 0.5 + lift * 0.5), angle: 0.15, shape: .grip)
         case .holdHigh:
             return sym(SIMD2(0.46, -1.22), SIMD2(1.14, -0.56), angle: 0.75, shape: .grip)
-        case .hug:
+        case .hug(.some):
             // Arms cross in front: the right hand reaches to the left side and vice versa.
             return side > 0
                 ? Target(shoulderAngle: -0.25, elbow: SIMD2(0.95, 0.5), hand: SIMD2(-0.22, 0.34), reach: 1, shape: .grip)
                 : Target(shoulderAngle: .pi + 0.25, elbow: SIMD2(-0.95, 0.56), hand: SIMD2(0.24, 0.46), reach: 1, shape: .grip)
+        case .hug(.none):
+            // A self-hug: both arms wrap round the belly, hands overlapping in front.
+            return side > 0
+                ? Target(shoulderAngle: -0.2, elbow: SIMD2(1.0, 0.22), hand: SIMD2(-0.46, 0.12), reach: 1, shape: .open)
+                : Target(shoulderAngle: .pi + 0.2, elbow: SIMD2(-1.0, 0.3), hand: SIMD2(0.42, 0.24), reach: 1, shape: .open)
         case .holdSide(_, let s):
             guard s == side else { return hidden }
             return sym(SIMD2(0.64, -0.14), SIMD2(1.02, 0.3), angle: 0.3, shape: .grip)

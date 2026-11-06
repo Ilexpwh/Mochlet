@@ -79,7 +79,7 @@ final class ApprovalCenter {
             app.slime.stage.main.trigger(.happy)
             app.slime.stage.main.gesture(.thumbsUp(side: 1), for: 0.9)
         case .deny:
-            app.slime.stage.main.trigger(.annoyed)
+            app.slime.stage.main.trigger(.puff)
         case .ask:
             app.terminal.jump(to: app.sessions.card(r.sessionID))
         case .planChange:

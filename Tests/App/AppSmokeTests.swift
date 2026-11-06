@@ -1,4 +1,5 @@
 import XCTest
+import SlimeKit
 @testable import Mochlet
 
 @MainActor
@@ -8,7 +9,8 @@ final class AppSmokeTests: XCTestCase {
         d.removePersistentDomain(forName: "com.ilexpwh.Mochlet.tests")
         let s = SettingsStore(defaults: d)
         XCTAssertEqual(s.character.paletteName, "rimuru")
-        XCTAssertEqual(s.character.appearance, .rimuru)
+        // The app's "rimuru" look is the engine default plus the drop tip.
+        XCTAssertEqual(s.character.appearance, SlimeAppearance(look: .rimuru))
         XCTAssertTrue(s.soundEnabled)
         XCTAssertEqual(s.autoCloseSeconds, 15, accuracy: 0.01)
     }

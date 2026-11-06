@@ -51,6 +51,10 @@ public enum SlimeState: String, Sendable, Codable, CaseIterable {
 
 public enum SlimeEmote: String, Sendable, Codable, CaseIterable {
     case happy, love, proud, surprised, wink, yawn, annoyed, shy, confused, excited
+    /// Body-morph and gesture emotes (Character 2): melting into a puddle, puffed cheeks, a startled
+    /// shock, crying, humming a note, cheering, a self-hug, a nod, a head shake, a thumbs up, a
+    /// tall morning stretch and the side squish of being poked.
+    case melt, puff, shock, cry, hum, cheer, hug, nod, shakeNo, thumbsUp, stretch, poked
 
     public var duration: Double {
         switch self {
@@ -64,6 +68,18 @@ public enum SlimeEmote: String, Sendable, Codable, CaseIterable {
         case .shy: return 1.6
         case .confused: return 0.9
         case .excited: return 1.4
+        case .melt: return 2.2
+        case .puff: return 1.0
+        case .shock: return 0.9
+        case .cry: return 1.8
+        case .hum: return 2.0
+        case .cheer: return 1.2
+        case .hug: return 1.6
+        case .nod: return 0.8
+        case .shakeNo: return 0.8
+        case .thumbsUp: return 0.8
+        case .stretch: return 1.2
+        case .poked: return 0.6
         }
     }
 }

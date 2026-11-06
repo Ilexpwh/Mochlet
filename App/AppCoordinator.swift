@@ -124,6 +124,13 @@ final class AppCoordinator {
         signals.start()
         hooks.start()
         installers.refresh()
+        // Thermal pressure melts the slime (the reference's とけている puddle).
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                let s = ProcessInfo.processInfo.thermalState
+                if s == .serious || s == .critical { AppCoordinator.shared.slime.stage.main.trigger(.melt) }
+            }
+        }
         #if DEBUG
         _ = DebugCommands.token
         #endif

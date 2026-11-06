@@ -233,6 +233,7 @@ final class SignalsController {
         if let last = lastReaction, now.timeIntervalSince(last) < 3600 { return }
         lastReaction = now
         app.slime.stage.main.trigger(.excited)
+        app.slime.stage.main.gesture(.holdHigh(.bell), for: 1.8)
         app.toast("Everyone is on it: \(top.title)", symbol: "antenna.radiowaves.left.and.right", seconds: 4)
     }
 

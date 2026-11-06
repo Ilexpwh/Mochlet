@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SlimeKit
 import Observation
 import MochletCore
 import MochletServices
@@ -93,7 +94,7 @@ final class IngestController {
         jobs.append(job)
         if jobs.count > 8 { jobs.removeFirst(jobs.count - 8) }
         if active.count == 1 {
-            app.slime.stage.main.drop()
+            app.slime.stage.main.drop(kind: Self.propKind(for: input))
             app.notch.chewProgress = 0.02
         }
         collapseWork?.cancel()
@@ -473,7 +474,42 @@ final class IngestController {
         guard let j = job(id), j.isActive else { return }
         let all = IngestStage.allCases
         let next = all.firstIndex(of: j.stage).flatMap { $0 + 1 < all.count ? all[$0 + 1].progressStart : 1 } ?? 1
-        app.notch.chewProgress = j.stage.progressStart + j.progress * max(0, next - j.stage.progressStart)
+        let ring = j.stage.progressStart + j.progress * max(0, next - j.stage.progressStart)
+        app.notch.chewProgress = ring
+        // The slime's eating timeline follows the pipeline: bites while reading, pages inside
+        // while analysing, a sparkle while filing.
+        let phase: ChewPhase?
+        switch j.stage {
+        case .reading, .extracting, .ocr, .transcribing:
+            phase = .biting(min(1, ring / max(0.01, IngestStage.analysing.progressStart)))
+        case .analysing, .routing:
+            phase = .digesting
+        case .filing, .indexing, .integrating:
+            phase = .filing
+        case .done, .failed:
+            phase = nil
+        }
+        if let phase { app.slime.stage.main.setChewPhase(phase) }
+    }
+
+    /// What the slime holds while it eats this input.
+    nonisolated static func propKind(for input: IngestInput) -> Prop.FileKind {
+        switch input {
+        case .url: return .link
+        case .text: return .text
+        case .window: return .text
+        case .file(let url):
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue { return .folder }
+            switch url.pathExtension.lowercased() {
+            case "pdf": return .pdf
+            case "png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp", "svg": return .image
+            case "mp3", "wav", "m4a", "aac", "flac", "aiff", "ogg", "opus": return .audio
+            case "mp4", "mov", "m4v", "mkv", "webm", "avi": return .video
+            case "txt", "md", "markdown", "rtf", "csv", "json", "yaml", "yml": return .text
+            default: return .doc
+            }
+        }
     }
 
     private func finish(_ id: String, success: Bool) {

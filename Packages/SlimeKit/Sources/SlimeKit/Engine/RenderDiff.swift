@@ -55,6 +55,19 @@ public extension SlimeFrame {
             if a.kind != b.kind || moved(a.anchor, b.anchor) || diff(a.phase, b.phase, 0.02) || diff(a.scale, b.scale, 0.01)
                 || diff(a.direction.x, b.direction.x, 0.01) || diff(a.direction.y, b.direction.y, 0.01) { return true }
         }
+        if arms.count != o.arms.count || props.count != o.props.count || innerItems.count != o.innerItems.count || chewPhase != o.chewPhase { return true }
+        for i in arms.indices {
+            let a = arms[i], b = o.arms[i]
+            if a.shape != b.shape || moved(a.shoulder, b.shoulder) || moved(a.elbow, b.elbow) || moved(a.hand, b.hand) || diff(a.reach, b.reach, 0.01) { return true }
+        }
+        for i in props.indices {
+            let a = props[i], b = o.props[i]
+            if a.prop != b.prop || moved(a.position, b.position) || diff(a.angle, b.angle, 0.01) || diff(a.scale, b.scale, 0.01) { return true }
+        }
+        for i in innerItems.indices {
+            let a = innerItems[i], b = o.innerItems[i]
+            if moved(a.position, b.position) || diff(a.angle, b.angle, 0.02) || diff(a.opacity, b.opacity, 0.02) { return true }
+        }
         if diff(opacity, o.opacity, 0.01) || diff(faceOpacity, o.faceOpacity, 0.01) || diff(glowBoost, o.glowBoost, 0.02) || diff(sizeScale, o.sizeScale, tol) { return true }
         if profile == .ghost, moved(ghostStretch, o.ghostStretch) || diff(ghostHeading, o.ghostHeading, 0.01) { return true }
         return false

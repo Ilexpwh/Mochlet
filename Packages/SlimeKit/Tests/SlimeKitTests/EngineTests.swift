@@ -199,7 +199,9 @@ import simd
         e.ingestionFinished(success: true)
         e.simulate(0.5)
         #expect(e.state == .chewing, "chewing lasts at least 0.9 s")
-        e.simulate(1.0)
+        // With arms the catch, bites and digest take about 2.4 s before the gulp.
+        let t0 = e.time
+        while e.state == .chewing && e.time - t0 < 5 { e.simulate(1.0 / 60.0) }
         #expect(e.state == .idle)
         #expect(e.emote == .happy)
         #expect(e.drainCues().isEmpty == false || true)

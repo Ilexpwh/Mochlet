@@ -20,6 +20,8 @@ import MochletCore
 ///   split greet sleep wake drop chew(?seconds=) listen(?seconds=)
 ///   press?x=&y=  release  click?x=&y=[&count=1]  hold?x=&y=&seconds=
 ///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
+///   arms?pose=<pose>[&seconds=]      one-off arm pose (wave, thumbsUp, cheer, holdSide:phone:-1, hug:heart, sip…)
+///   chew?[kind=pdf][&seconds=]        eat a pretend file; chew?phase=biting:0.5|digesting|filing drives the timeline
 ///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | reset=1
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1
 ///   desktop?on=1|0 | desktop?sx=&sy=
@@ -139,8 +141,16 @@ enum DebugCommands {
         case "wake": stage.main.wake()
         case "drop": app.dropped(urls: [URL(fileURLWithPath: "/tmp/mochlet-debug.txt")], text: nil)
         case "chew":
-            stage.main.startChewing()
-            DispatchQueue.main.asyncAfter(deadline: .now() + (num("seconds") ?? 1.5)) { MainActor.assumeIsolated { stage.main.ingestionFinished() } }
+            // chew?[kind=pdf][&seconds=1.5] start eating and finish after seconds | phase=biting:0.5|digesting|filing
+            if let p = arg("phase") {
+                if let phase = ChewPhase.parse(p) { stage.main.setChewPhase(phase) } else { result = "unknown phase" }
+            } else {
+                stage.main.drop(kind: Prop.FileKind(rawValue: arg("kind") ?? "") ?? .doc)
+                DispatchQueue.main.asyncAfter(deadline: .now() + (num("seconds") ?? 1.5)) { MainActor.assumeIsolated { stage.main.ingestionFinished() } }
+            }
+        case "arms":
+            // arms?pose=wave:1|holdSide:phone:-1|thumbsUp|cheer|…[&seconds=2]
+            if let p = ArmPose.parse(arg("pose") ?? "") { stage.main.gesture(p, for: num("seconds") ?? 2) } else { result = "unknown pose" }
         case "listen":
             stage.main.startListening()
             DispatchQueue.main.asyncAfter(deadline: .now() + (num("seconds") ?? 1.5)) { MainActor.assumeIsolated { stage.main.stopListening(hadSpeech: true) } }
@@ -529,6 +539,7 @@ enum DebugCommands {
         d["heldOpen"] = w.heldOpen
         d["main"] = ["state": main.state.rawValue, "emote": main.emote?.rawValue ?? "none", "root": [main.body.root.x, main.body.root.y],
                      "isAway": main.isAway, "opacity": main.opacity]
+        d["arms"] = ["pose": main.armPose.name, "chew": main.chewPhase?.name ?? "none", "bites": main.bites, "occasion": main.occasion?.rawValue ?? "none"]
         d["minis"] = stage.minis.map { ["id": $0.id, "phase": "\($0.phase)", "slot": $0.slot, "state": $0.engine.state.rawValue] }
         let c = app.settings.character
         d["appearance"] = ["look": c.lookName, "palette": c.paletteName, "custom": [c.hue, c.saturation, c.lightness],

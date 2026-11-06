@@ -100,6 +100,9 @@ struct CharacterSettingsView: View {
                     Text("Full motion").tag("off")
                     Text("Reduced motion").tag("on")
                 }
+                Toggle("Arms and hands", isOn: $s.character.armsEnabled)
+                Text("Pseudopod arms hold files while it eats, wave hello, and hold a phone or mic.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Stepper("Visible mini slimes: \(s.maxVisibleMinis)", value: $s.maxVisibleMinis, in: 2...6)
                     .onChange(of: s.maxVisibleMinis) { _, _ in app.applySettings() }
             }

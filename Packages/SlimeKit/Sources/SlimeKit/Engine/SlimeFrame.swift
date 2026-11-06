@@ -46,6 +46,8 @@ public struct Particle: Sendable, Equatable {
         case sparkle, heart, star, zzz, drop, dust
         /// Surface effects: a flame tongue, an electric arc, a glint of light, a honey drip, a soap bubble.
         case wisp, spark, glint, drip, bubble
+        /// A fleck of file falling from the mouth while eating.
+        case crumb
     }
 
     public var kind: Kind
@@ -113,6 +115,14 @@ public struct SlimeFrame: Sendable, Equatable {
     public var outfit = SlimeOutfit()
     /// Engine time of the frame (surface shimmer, twinkle).
     public var time: Double = 0
+    /// Pseudopod arms, when a pose is active (empty on the idle path).
+    public var arms: [ArmFrame] = []
+    /// Props in the hands.
+    public var props: [PropFrame] = []
+    /// Pages seen inside the jelly while digesting.
+    public var innerItems: [InnerItem] = []
+    /// Where the eating timeline is, while chewing with arms.
+    public var chewPhase: ChewPhase? = nil
 
     /// Topmost y of the ring (most negative).
     public var topY: Double { ring.map(\.y).min() ?? 0 }

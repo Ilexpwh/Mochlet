@@ -91,6 +91,16 @@ public enum Filmstrip {
         case "sessions": return "0:pinch:a,0.9:pinch:b,1.8:pinch:c,2.6:miniagent:a:waiting,3.2:miniagent:b:error,4.6:endsession:a"
         case "ghost": return "0:ghost:0.3,-1,0.05:ghostto:4,-3,0.9:ghostto:5.5,-2,1.6:ghostback"
         case "ghostdrop": return "0:ghost:0.3,-1,0.05:ghostto:4.5,-3,1.2:ghostdrop"
+        case "chew2": return "0:drop:pdf,5.2:chewdone"
+        case "calling": return "0:record"
+        case "reading": return "0:occasion:reading"
+        case "rest": return "0:occasion:rest"
+        case "desk": return "0:occasion:working"
+        case "wave": return "0:gesture:1.6:wave"
+        case "thumbs": return "0:gesture:1.2:thumbsUp"
+        case "sip": return "0:gesture:3.2:sip"
+        case "hug": return "0:emote:love"
+        case "cheer": return "0:emote:proud"
         default:
             if SlimeEmote(rawValue: s) != nil { return "0:emote:\(s)" }
             return ""
@@ -100,7 +110,9 @@ public enum Filmstrip {
     public static let actionHelp = """
     greet click press release emote:<name> agent:<idle|thinking|working|waiting|finished|error> listen stoplisten[:silent]
     record[:off] chew chewdone[:fail] question dizzy sleep wake audio:<0-1> dragin:<±1> dragout drop
-    jump:<v0> slap:<side> puff:<scale> shake pointer:<x,y> lean:<rad>
+    jump:<v0> slap:<side> puff:<scale> shake pointer:<x,y> lean:<rad> drop:<doc|pdf|image|audio|video|folder|link|text>
+    arms:<pose> gesture:<seconds>:<pose> occasion:<reading|call|rest|working|none> chewphase:<catching|biting:0.5|digesting|filing>
+    poses: hidden holdFront:<prop> holdHigh:<prop> holdSide:<prop>:<side> hug:<prop> wave[:side] thumbsUp[:side] cheer rubEyes scratchHead facepalm cover point:<x,y> sip
     stage: split[:extra] pinch:<id> endsession:<id> miniagent:<id>:<state> ghost:<x,y> ghostto:<x,y> ghostdrop ghostback
     """
 
@@ -131,7 +143,15 @@ public enum Filmstrip {
         case "audio": engine.setAudioLevel(Double(arg) ?? 0.5)
         case "dragin": engine.dragEntered(fromDirection: Double(arg) ?? 1)
         case "dragout": engine.dragExited()
-        case "drop": engine.drop()
+        case "drop": engine.drop(kind: Prop.FileKind(rawValue: arg) ?? .doc)
+        case "arms": if let p = ArmPose.parse(arg) { engine.gesture(p, for: 600) } else { return false }
+        case "gesture":
+            // gesture:<seconds>:<pose spec>
+            let parts = arg.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let secs = Double(parts[0]), let p = ArmPose.parse(parts[1]) else { return false }
+            engine.gesture(p, for: secs)
+        case "occasion": engine.occasion = SlimeEngine.Occasion(rawValue: arg)
+        case "chewphase": if let p = ChewPhase.parse(arg) { engine.setChewPhase(p) } else { return false }
         case "jump": engine.impulse(.jump(v0: Double(arg) ?? 2.6))
         case "slap": engine.impulse(.slap(side: Double(arg) ?? 1, strength: 0.8))
         case "puff": engine.impulse(.puff(scale: Double(arg) ?? 0.1))

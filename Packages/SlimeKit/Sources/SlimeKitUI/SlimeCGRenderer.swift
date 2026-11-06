@@ -14,10 +14,10 @@ public struct SlimeCGRenderer {
     /// The palette (colours) of `appearance`.
     public var theme: SlimeTheme { appearance.palette }
 
-    private let rim: RGBA
-    private let deep: RGBA
-    private let mid: RGBA
-    private let core: RGBA
+    let rim: RGBA
+    let deep: RGBA
+    let mid: RGBA
+    let core: RGBA
     private static let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
     public init(frame: SlimeFrame, appearance: SlimeAppearance, origin: CGPoint, radius: CGFloat) {
@@ -120,7 +120,7 @@ public struct SlimeCGRenderer {
         if liveBlobs.isEmpty {
             bodyPath = BodyPath.closed(through: frame.ring.map(px)).cgPath
         } else {
-            let loops = Metaball.contour(ring: frame.ring, blobs: liveBlobs, options: .forScale(pixelsPerUnit: Double(R)))
+            let loops = ContourCache.contour(ring: frame.ring, blobs: liveBlobs, options: .forScale(pixelsPerUnit: Double(R)), pixelsPerUnit: Double(R))
             if loops.isEmpty {
                 bodyPath = BodyPath.closed(through: frame.ring.map(px)).cgPath
             } else {
@@ -135,6 +135,9 @@ public struct SlimeCGRenderer {
         drawFace(in: cg, bodyPath: bodyPath)
         drawEyewear(in: cg)
         drawFrontTraits(in: cg)
+        drawProps(behindHands: true, in: cg)
+        drawArms(in: cg, bodyPath: bodyPath)
+        drawProps(behindHands: false, in: cg)
         drawAccessories(in: cg)
         drawParticles(in: cg)
         cg.restoreGState()
@@ -159,6 +162,17 @@ public struct SlimeCGRenderer {
         cg.restoreGState()
     }
 
+    /// The jelly's base tone in local (reference) space: a soft top-left light on the mid tone.
+    /// Shared with the arm pass so a lobe over the body is the same material.
+    func jellyGradient(in cg: CGContext) {
+        let c = bodyCenterLocal
+        let big = CGPath(rect: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8), transform: nil)
+        fillRadial(big, [(core.mixed(with: mid, 0.3), 0), (mid, 0.72), (mid.mixed(with: rim, 0.35), 1)], center: CGPoint(x: c.x - 0.42, y: c.y - 0.55), radius: 1.7, in: cg)
+    }
+
+    /// The flat cel-shadow tone below the terminator.
+    var jellyShade: RGBA { mid.mixed(with: deep, theme.isDark ? 0.7 : 0.5) }
+
     // 2–6. The jelly: gradient fill, lagging core, rim darkening, inner stroke, highlights.
     func drawBodyFill(in cg: CGContext, bodyPath: CGPath, goo: Bool) {
         cg.saveGState()
@@ -173,8 +187,8 @@ public struct SlimeCGRenderer {
         cg.concatenate(localTransform)
         let c = bodyCenterLocal
         let big = CGPath(rect: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8), transform: nil)
-        fillRadial(big, [(core.mixed(with: mid, 0.3), 0), (mid, 0.72), (mid.mixed(with: rim, 0.35), 1)], center: CGPoint(x: c.x - 0.42, y: c.y - 0.55), radius: 1.7, in: cg)
-        let shade = mid.mixed(with: deep, theme.isDark ? 0.7 : 0.5)
+        jellyGradient(in: cg)
+        let shade = jellyShade
         let litR: CGFloat = 6.45
         let lit = CGPath(ellipseIn: CGRect(x: c.x - 0.6 - litR, y: c.y - 6.0 - litR, width: 2 * litR, height: 2 * litR), transform: nil)
         cg.saveGState()
@@ -189,6 +203,7 @@ public struct SlimeCGRenderer {
         cg.restoreGState()
         cg.restoreGState()
         drawInnerMass(in: cg)
+        drawInnerItems(in: cg)
 
         if goo {
             for b in frame.blobs where b.radius > 1e-4 && b.shaded {
@@ -570,6 +585,13 @@ public struct SlimeCGRenderer {
                 fill(Self.ellipse(c, r, r), .white, 0.35 * (1 - t), in: cg)
             case .wisp, .spark, .glint, .drip, .bubble:
                 drawSurfaceParticle(p, in: cg)
+            case .crumb:
+                let s = size * (1 - t * 0.4)
+                cg.saveGState()
+                cg.translateBy(x: c.x, y: c.y)
+                cg.rotate(by: p.spin * p.age + p.seed * 3)
+                fill(CGPath(rect: CGRect(x: -s * 0.5, y: -s * 0.4, width: s, height: s * 0.8), transform: nil), RGBA(hex: 0xFFF6E8), 0.95 * (1 - t * t), in: cg)
+                cg.restoreGState()
             }
         }
     }

@@ -30,6 +30,29 @@ public final class SlimeEngine {
     private var tipSpring = Spring1D(value: 0, omega: 16, zeta: 0.28)
     private var hatSpring = Spring2D(value: .zero, omega: 20, zeta: 0.32)
 
+    // Arms, hands and props.
+    private var armRig = ArmRig()
+    public enum GestureOwner: Sendable, Equatable { case host, emote, state }
+    private var gesturePose: ArmPose?
+    private var gestureUntil: Double = 0
+    private var gestureOwner: GestureOwner = .host
+    private var propSpring = Spring2D(value: .zero, omega: 18, zeta: 0.36)
+    private var propLive = false
+    private var propShownAt: Double = 0
+    private var hmmCount = 0
+    /// The current arm pose (derived from the chewing timeline, gestures, state and occasion).
+    public var armPose: ArmPose { armRig.pose }
+
+    // Chewing v2: catch the file, bite it, digest it, file it.
+    public private(set) var chewPhase: ChewPhase?
+    private var chewKind: Prop.FileKind = .doc
+    private var chewProp: Prop = .file(kind: .doc, bites: 0)
+    public private(set) var bites: Double = 0
+    private var chewHostDriven = false
+    private var hostProgress: Double = 0
+    private var digestStartedAt: Double?
+    private var filingAt: Double?
+
     /// What the slime is busy with, as the host sees it; with `dressForOccasion` it adds a prop
     /// or a piece of clothing on top of the chosen outfit (never stored).
     public enum Occasion: String, Sendable, CaseIterable { case reading, call, rest, working }
@@ -241,6 +264,7 @@ public final class SlimeEngine {
             if case .landed(let speed) = e { landed(speed: speed) }
         }
         tickTraits()
+        tickArms()
         if let d = pendingDust {
             if body.bottomY > -0.02 {
                 let c = body.centroid
@@ -428,10 +452,46 @@ public final class SlimeEngine {
     }
 
     /// The host accepted a drop: the slime starts chewing.
-    public func drop() {
+    public func drop(kind: Prop.FileKind = .doc) {
         dragExited()
         onEvent?(.dropAccepted)
+        chewKind = kind
+        chewProp = .file(kind: kind, bites: 0)
         startChewing()
+    }
+
+    /// A one-off arm pose for `duration` seconds on top of whatever the state would show
+    /// (thumbs up on an approval, a bell held high for a hot signal).
+    public func gesture(_ pose: ArmPose, for duration: Double, owner: GestureOwner = .host) {
+        gesturePose = pose
+        gestureUntil = time + duration
+        gestureOwner = owner
+    }
+
+    private func clearGesture(owner: GestureOwner) {
+        if gesturePose != nil, gestureOwner == owner { gesturePose = nil }
+    }
+
+    /// The host's view of the eating pipeline. Progress holds the bites back until the file is
+    /// really read; `digesting` and `filing` move the timeline on. Without it the timeline
+    /// runs on its own (previews, filmstrips).
+    public func setChewPhase(_ p: ChewPhase) {
+        guard state == .chewing, chewPhase != nil else { return }
+        switch p {
+        case .catching:
+            break
+        case .biting(let fraction):
+            chewHostDriven = true
+            hostProgress = max(hostProgress, clamp(fraction, 0, 1))
+        case .digesting:
+            // The host is analysing: swallow after at least two bites (the next bite does it otherwise).
+            chewHostDriven = true
+            hostProgress = max(hostProgress, 0.6)
+            if digestStartedAt == nil, case .biting = chewPhase ?? .catching, bites >= 0.3 - 1e-9 { startDigesting() }
+        case .filing:
+            hostProgress = 1
+            if digestStartedAt != nil { startFiling() }
+        }
     }
 
     // MARK: - Host state
@@ -497,15 +557,28 @@ public final class SlimeEngine {
     public func ingestionFinished(success: Bool = true) {
         guard state == .chewing else { return }
         ingestResult = success
-        let at = max(time, chewStartedAt + 0.9)
-        scheduler.cancel(tag: Self.stateTag)
-        scheduler.schedule(at: at, tag: Self.stateTag) { [weak self] in
-            self?.gulp()
+        hostProgress = 1
+        chewHostDriven = false
+        // The arms timeline (catch, bites, digest) needs about two seconds to read as eating.
+        let at = max(time, chewStartedAt + (chewPhase != nil ? 2.4 : 0.9))
+        if chewPhase != nil, digestStartedAt == nil {
+            // Let the bite loop run on to digesting; the gulp waits for it.
+            scheduler.schedule(at: at, tag: Self.stateTag) { [weak self] in self?.gulp() }
+        } else {
+            scheduler.cancel(tag: Self.stateTag)
+            scheduler.schedule(at: at, tag: Self.stateTag) { [weak self] in self?.gulp() }
         }
     }
 
     private func gulp() {
         guard state == .chewing else { return }
+        if chewPhase != nil, digestStartedAt == nil {
+            // Still catching or biting: push the rest in now, then swallow.
+            startDigesting()
+            scheduler.schedule(at: time + 0.45, tag: Self.stateTag) { [weak self] in self?.gulp() }
+            return
+        }
+        if chewPhase != nil, filingAt == nil { startFiling() }
         let ok = ingestResult ?? true
         mouthOpen.animate(to: 0, duration: 0.1, at: time)
         if ok {
@@ -518,7 +591,144 @@ public final class SlimeEngine {
             guard let self else { return }
             self.setUserState(.none)
             self.trigger(ok ? .happy : .confused)
+            if ok { self.gesture(.cheer, for: 0.7, owner: .emote) }
         }
+    }
+
+    private func startDigesting() {
+        guard state == .chewing, digestStartedAt == nil else { return }
+        chewPhase = .digesting
+        digestStartedAt = time
+        bites = 1
+        chewProp = .file(kind: chewKind, bites: 1)
+        scheduler.cancel(tag: Self.stateTag)
+        mouthOpen.animate(to: 0.12, duration: 0.25, at: time)
+        eyeOverride = (.focused, .focused, time + 1e9)
+        cue(.gulp, rate: 1.3, gain: 0.6)
+        scheduleDigestSlosh()
+    }
+
+    private func scheduleDigestSlosh() {
+        scheduler.schedule(at: time + 0.9, tag: Self.stateTag) { [weak self] in
+            guard let self, self.state == .chewing else { return }
+            if !self.reduceMotion { self.body.apply(.wobble(angle: self.rng.range(-2.6...(-0.5)), strength: 0.2)) }
+            self.scheduleDigestSlosh()
+        }
+    }
+
+    private func startFiling() {
+        guard state == .chewing, filingAt == nil else { return }
+        if digestStartedAt == nil { digestStartedAt = time - 0.35 }
+        chewPhase = .filing
+        filingAt = time
+        spawnSparkles(count: 1)
+    }
+
+    private func spawnCrumbs() {
+        let m = frameNow().mouth.center
+        for side in [-1.0, 1.0] {
+            spawn(.crumb, at: m + SIMD2(side * 0.12, 0.08), velocity: SIMD2(side * rng.range(0.25...0.45), 0.2), life: rng.range(0.45...0.65), size: 0.07)
+        }
+    }
+
+    // MARK: - Arms
+
+    private func desiredArmPose() -> ArmPose {
+        guard appearance.armsEnabled, profile.kind == .main else { return .hidden }
+        if state == .chewing, let cp = chewPhase {
+            switch cp {
+            case .catching: return .holdHigh(chewProp)
+            case .biting: return .holdFront(chewProp)
+            case .digesting, .filing: return .hidden
+            }
+        }
+        guard detail >= .medium else { return .hidden }
+        if let g = gesturePose {
+            if time < gestureUntil { return g }
+            gesturePose = nil
+        }
+        switch state {
+        case .listening: return detail >= .full ? .holdSide(.mic, side: 1) : .hidden
+        case .recording: return .holdSide(.phone, side: -1)
+        case .sleeping, .split, .dizzy, .greeting, .chewing: return .hidden
+        default: break
+        }
+        if let o = occasion {
+            switch o {
+            case .call: return .holdSide(.phone, side: -1)
+            case .rest: return .holdSide(.mug, side: 1)
+            case .working: return .holdSide(.pen, side: 1)
+            case .reading: return .holdFront(.book)
+            }
+        }
+        return .hidden
+    }
+
+    private func tickArms() {
+        let want = desiredArmPose()
+        if want != armRig.pose { armRig.retarget(to: want, at: time) }
+        if digestStartedAt != nil, filingAt == nil {
+            coreBoost = max(coreBoost, 0.22 + 0.18 * sin(2 * .pi * 0.8 * time))
+        }
+        guard want.prop != nil else { propLive = false; return }
+        let bf = BodyFrame.fit(reference: body.referenceRing, referenceCentroid: body.referenceCentroid, current: body.points)
+        let joints = armRig.joints(at: time)
+        guard let place = ArmRig.propPlacement(want, joints: joints) else { propLive = false; return }
+        let anchor = bf.transform(bf.referenceCentroid + place.offset)
+        if !propLive {
+            propLive = true
+            propShownAt = time
+            propSpring.snap(to: anchor)
+            if case .catching = chewPhase {
+                // The file falls into the raised hands.
+                propSpring.value = anchor + SIMD2(0, -1.3)
+                propSpring.velocity = SIMD2(0, 1.2)
+            }
+        }
+        propSpring.target = anchor
+        propSpring.advance(h)
+        if simd_distance(propSpring.value, anchor) < 1e-3, simd_length(propSpring.velocity) < 1e-3 { propSpring.snap(to: anchor) }
+    }
+
+    private func armFrames(ring: [SIMD2<Double>], bf: BodyFrame) -> (arms: [ArmFrame], props: [PropFrame], inner: [InnerItem], blobs: [Blob]) {
+        var arms: [ArmFrame] = []
+        var props: [PropFrame] = []
+        var goo: [Blob] = []
+        let pose = armRig.pose
+        if !pose.isHidden || armRig.isAnimating(at: time) {
+            let joints = armRig.joints(at: time)
+            let bodyScale = (bf.scaleX * bf.scaleY).squareRoot()
+            for (i, j) in joints.enumerated() where j.reach > 0.02 {
+                let shoulder = ring[TraitRig.index(angle: j.shoulderAngle, count: ring.count)]
+                let arm = ArmFrame(side: i == 0 ? -1 : 1, shoulder: shoulder,
+                                   elbow: bf.transform(bf.referenceCentroid + j.elbow),
+                                   hand: bf.transform(bf.referenceCentroid + j.hand),
+                                   reach: j.reach, handRadius: ArmRig.handRadius, shape: j.shape)
+                arms.append(arm)
+                goo += ArmRig.blobs(for: arm, bodyScale: bodyScale)
+            }
+            if let prop = pose.prop, propLive, let place = ArmRig.propPlacement(pose, joints: joints) {
+                let lag = propSpring.value - propSpring.target
+                let angle = place.angle + clamp(-lag.x * 1.5, -0.35, 0.35) + armRig.sipTilt(at: time)
+                let pop = Ease.outBack.apply(min(1, (time - propShownAt) / 0.22))
+                props.append(PropFrame(prop: prop, position: propSpring.value, angle: angle, scale: pop, behindHands: place.behindHands))
+            }
+        }
+        var inner: [InnerItem] = []
+        if let d = digestStartedAt {
+            let age = time - d
+            let fadeIn = min(1, age / 0.35)
+            let fadeOut = filingAt.map { max(0, 1 - (time - $0) / 0.4) } ?? 1
+            let op = fadeIn * fadeOut
+            if op > 0.01 {
+                for k in 0..<3 {
+                    let ang = age * 2 * .pi * 0.45 + Double(k) * 2 * .pi / 3
+                    let local = SIMD2(cos(ang) * 0.4, sin(ang) * 0.24 + 0.1)
+                    inner.append(InnerItem(kind: .page, position: bf.transform(bf.referenceCentroid + local), angle: ang * 0.6 + Double(k), size: 0.2 - Double(k) * 0.02, opacity: op))
+                }
+            }
+        }
+        return (arms, props, inner, goo)
     }
 
     public func startQuestion() {
@@ -664,6 +874,14 @@ public final class SlimeEngine {
         onEvent?(.emoteTriggered(e))
         let style = StateStyle.style(for: state)
         switch e {
+        case .proud, .excited: gesture(.cheer, for: e.duration, owner: .emote)
+        case .yawn: gesture(.rubEyes, for: e.duration, owner: .emote)
+        case .shy: gesture(.cover, for: e.duration, owner: .emote)
+        case .love: gesture(.hug(.heart), for: e.duration, owner: .emote)
+        case .confused: gesture(.scratchHead, for: e.duration, owner: .emote)
+        default: break
+        }
+        switch e {
         case .happy:
             eyeOverride = (.happyArc, .happyArc, until)
             mouthOverride = (.omega, until)
@@ -746,6 +964,7 @@ public final class SlimeEngine {
     private func endEmote() {
         guard emote != nil else { return }
         emote = nil
+        clearGesture(owner: .emote)
         scheduler.cancel(tag: Self.emoteTag)
         if let o = eyeOverride, o.until == emoteUntil { eyeOverride = nil }
         if let m = mouthOverride, m.until == emoteUntil { mouthOverride = nil }
@@ -840,7 +1059,13 @@ public final class SlimeEngine {
         pulse = 0
         if s == .chewing {
             mouthOpen.animate(to: 0, duration: 0.2, at: time)
+            chewPhase = nil
+            digestStartedAt = nil
+            filingAt = nil
+            bites = 0
+            if let o = eyeOverride, o.until > time + 1e8 { eyeOverride = nil }
         }
+        clearGesture(owner: .state)
         if s == .sleeping {
             flatten.animate(to: 1, duration: 0.5, ease: .outBack, at: time)
         }
@@ -893,7 +1118,30 @@ public final class SlimeEngine {
             chewSide = 1
             chewStartedAt = time
             ingestResult = nil
-            scheduleBite()
+            bites = 0
+            chewHostDriven = false
+            hostProgress = 0
+            digestStartedAt = nil
+            filingAt = nil
+            chewProp = .file(kind: chewKind, bites: 0)
+            if appearance.armsEnabled, profile.kind == .main {
+                chewPhase = .catching
+                scheduler.schedule(at: time + 0.25, tag: Self.stateTag) { [weak self] in
+                    guard let self else { return }
+                    if !self.reduceMotion { self.body.apply(.landing(speed: 0.9)) }
+                    self.glance = (SIMD2(0, -0.7), self.time + 0.45)
+                    self.mouthOverride = (.o, self.time + 0.45)
+                    self.cue(.plip)
+                }
+                scheduler.schedule(at: time + 0.7, tag: Self.stateTag) { [weak self] in
+                    guard let self else { return }
+                    self.chewPhase = .biting(0)
+                    self.scheduleBite()
+                }
+            } else {
+                chewPhase = nil
+                scheduleBite()
+            }
         case .finished:
             hop(2.6)
             blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
@@ -905,6 +1153,7 @@ public final class SlimeEngine {
         case .error:
             if !reduceMotion { shakeKicks([(0, 2.6), (0.06, -4.4), (0.13, 3.2), (0.2, -1.6)]) }
             scheduleSweat()
+            scheduler.schedule(at: time + 0.3, tag: Self.stateTag) { [weak self] in self?.gesture(.facepalm, for: 1.3, owner: .state) }
         case .sleeping:
             flatten.animate(to: 0.80, duration: 0.9, ease: .inOutSine, at: time)
             scheduler.schedule(at: time + 0.9, tag: Self.stateTag) { [weak self] in self?.baseEye = .closedLine }
@@ -951,6 +1200,10 @@ public final class SlimeEngine {
 
     private func microIdle() {
         guard state == .idle, !isPressed else { return }
+        if time - lastInteractionAt > 90, detail >= .medium, occasion == nil, rng.chance(0.35) {
+            gesture(.sip, for: 3.0, owner: .state)
+            return
+        }
         switch rng.int(0..<3) {
         case 0:
             glance = (SIMD2(rng.sign() * rng.range(0.3...0.5), rng.range(-0.1...0.25)), time + rng.range(0.6...1.0))
@@ -976,6 +1229,8 @@ public final class SlimeEngine {
             guard let self else { return }
             let s = self.rng.sign()
             self.lean.animate(keys: [.init(to: 0.08 * s, duration: 0.3, ease: .outBack), .init(to: 0, duration: 0.5, ease: .inOutSine)], at: self.time)
+            self.hmmCount += 1
+            if self.hmmCount % 2 == 0 { self.gesture(.scratchHead, for: 1.1, owner: .state) }
             self.scheduleHmm()
         }
     }
@@ -1006,6 +1261,20 @@ public final class SlimeEngine {
             self.eyeOverride = (left, right, self.time + 0.4)
             self.cue(.chew, rate: self.chewSide > 0 ? 1 : 1.06)
             self.chewSide = -self.chewSide
+            if case .biting = self.chewPhase {
+                // Each bite takes 15 % of the file; the host's progress can hold the bites back.
+                let cap = self.chewHostDriven ? min(0.6, self.hostProgress * 0.6 + 0.12) : 0.6
+                if self.bites < cap { self.bites = min(cap, self.bites + 0.15) }
+                self.chewPhase = .biting(self.bites)
+                self.chewProp = .file(kind: self.chewKind, bites: self.bites)
+                self.spawnCrumbs()
+                // Swallow at 60 % eaten, or after two bites once the host is already analysing.
+                let enough = self.chewHostDriven && self.hostProgress >= 0.6 ? 0.3 : 0.6
+                if self.bites >= enough - 1e-9, !self.chewHostDriven || self.hostProgress >= 0.6 {
+                    self.startDigesting()
+                    return
+                }
+            }
             self.scheduleBite()
         }
     }
@@ -1047,6 +1316,7 @@ public final class SlimeEngine {
                                          .init(to: 0.10, duration: 0.125, ease: .inOutSine), .init(to: 0, duration: 0.125, ease: .inOutSine)], at: self.time)
             }
             self.cue(.greet)
+            self.gesture(.wave(side: 1), for: 1.3, owner: .state)
             self.scheduler.schedule(at: until, tag: Self.stateTag) { [weak self] in
                 guard let self else { return }
                 self.blush.animate(to: self.baseBlush, duration: 0.4, at: self.time)
@@ -1092,6 +1362,7 @@ public final class SlimeEngine {
             case .spark, .glint: g = 0
             case .drip: g = 2.5
             case .bubble: g = -0.08
+            case .crumb: g = 4.5
             }
             p.velocity.y += g * h
             p.position += p.velocity * h
@@ -1149,6 +1420,8 @@ public final class SlimeEngine {
         var rig = TraitRig.build(look: appearance.look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
         let worn = resolvedOutfit
         rig.traits += OutfitRig.build(outfit: worn, ring: ring, anim: traitAnim, detail: detail, mini: profile.kind == .mini)
+        let limbs = armFrames(ring: ring, bf: bf)
+        let holdsMic = limbs.props.contains { $0.prop == .mic }
         let yaw = gaze.yaw
         let pitch = gaze.pitch
         let open = blink.openness
@@ -1177,7 +1450,7 @@ public final class SlimeEngine {
         }
         var acc: [AccessoryFrame] = []
         accessories.removeAll { r in r.removeAt.map { time - $0 > 0.18 } ?? false }
-        for a in accessories {
+        for a in accessories where !(a.kind == .micBars && holdsMic) {
             let age = time - a.startedAt
             var pop = Ease.outBack.apply(min(1, age / 0.28))
             if let r = a.removeAt { pop = max(0, 1 - (time - r) / 0.18) * min(pop, 1) }
@@ -1192,10 +1465,11 @@ public final class SlimeEngine {
         }
         let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty
             || blobs.contains(where: { $0.radius > 1e-3 }) || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
+            || armRig.isAnimating(at: time) || armRig.hasMotion || (propLive && simd_length(propSpring.velocity) > 1e-3) || !limbs.inner.isEmpty
         // A resting pointer is not activity: the gaze counts only while it is still turning.
         let gazeMoving = abs(gaze.yaw - gaze.target.x) > 0.003 || abs(gaze.pitch - gaze.target.y) > 0.003
         let lively = blink.isBlinking || lean.isAnimating || opacityAnim.isAnimating || faceOpacityAnim.isAnimating || eyeScale.isAnimating || blush.isAnimating || mouthOpen.isAnimating
-            || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || gazeMoving
+            || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || gazeMoving || !limbs.arms.isEmpty
         activity = moving ? 2 : (lively ? 1 : 0)
         return SlimeFrame(
             profile: profile.kind, state: state, emote: emote, ring: ring, root: body.root, body: bf,
@@ -1203,8 +1477,9 @@ public final class SlimeEngine {
             blush: blush.value, blushCenters: blushCenters, blushForeshorten: blushFore,
             core: coreSpring.value, coreBoost: coreBoost, gaze: SIMD2(yaw, pitch),
             highlightShift: SIMD2(-0.08 * yaw, 0.06 * pitch), tint: tint, accessories: acc, particles: particles,
-            blobs: blobs + rig.blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
-            ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, outfit: worn, time: time)
+            blobs: blobs + rig.blobs + limbs.blobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
+            ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, outfit: worn, time: time,
+            arms: limbs.arms, props: limbs.props, innerItems: limbs.inner, chewPhase: chewPhase)
     }
 
     // MARK: - Looks

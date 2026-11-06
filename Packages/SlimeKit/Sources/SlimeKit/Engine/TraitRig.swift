@@ -168,17 +168,18 @@ public enum TraitRig {
             break
         }
 
-        // The drop tip: two goo links curling up and back from the top-right, lagging the body.
+        // The drop tip: a short soft peak at the top-back of the head, as on the figures (a wide
+        // base narrowing to a small curl, about a third of a radius long), lagging the body.
         if look.tip {
-            let base = at(top + 0.78)
-            let dir0 = rotate(unit(base.normal * 0.5 + up * 0.9), by: 0.15 + anim.tipLag)
-            let p1 = base.p + dir0 * (0.3 * s)
-            out.blobs.append(Blob(position: p1, radius: 0.2 * s, stretch: 1.6, heading: atan2(dir0.y, dir0.x)))
-            let dir1 = rotate(dir0, by: 0.6 + anim.tipLag * 0.6)
-            let p2 = p1 + dir1 * (0.3 * s)
-            out.blobs.append(Blob(position: p2, radius: 0.12 * s, stretch: 1.5, heading: atan2(dir1.y, dir1.x)))
-            if detail >= .medium {
-                out.traits.append(TraitFrame(kind: .gloss, side: 1, anchor: p1 + SIMD2(-0.06, -0.09) * s, direction: dir0, scale: s * 0.9, phase: 0))
+            let base = at(top + 0.72)
+            let dir0 = rotate(unit(base.normal * 0.55 + up * 0.85), by: 0.1 + anim.tipLag)
+            let p1 = base.p + dir0 * (0.1 * s)
+            out.blobs.append(Blob(position: p1, radius: 0.17 * s, stretch: 1.3, heading: atan2(dir0.y, dir0.x)))
+            let dir1 = rotate(dir0, by: 0.55 + anim.tipLag * 0.6)
+            let p2 = p1 + dir1 * (0.16 * s)
+            out.blobs.append(Blob(position: p2, radius: 0.07 * s, stretch: 1.6, heading: atan2(dir1.y, dir1.x)))
+            if detail >= .full {
+                out.traits.append(TraitFrame(kind: .gloss, side: 1, anchor: p1 + SIMD2(-0.04, -0.07) * s, direction: dir0, scale: s * 0.5, phase: 0))
             }
         }
 

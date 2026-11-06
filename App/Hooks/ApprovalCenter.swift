@@ -77,6 +77,7 @@ final class ApprovalCenter {
         case .allow, .always, .planAuto, .planDefault:
             app.slime.sound.play(SoundCue(.approve))
             app.slime.stage.main.trigger(.happy)
+            app.slime.stage.main.gesture(.thumbsUp(side: 1), for: 0.9)
         case .deny:
             app.slime.stage.main.trigger(.annoyed)
         case .ask:

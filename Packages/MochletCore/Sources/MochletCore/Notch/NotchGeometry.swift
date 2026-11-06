@@ -10,26 +10,33 @@ public struct NotchGeometry: Sendable, Equatable {
     public let hasNotch: Bool
     public let width: Double
     public let height: Double
+    /// Centre of the physical notch measured from the screen's left edge, when the screen reported
+    /// its auxiliary areas; nil means "assume the middle of the strip".
+    public let notchCenterX: Double?
 
-    public init(hasNotch: Bool, width: Double, height: Double) {
+    public init(hasNotch: Bool, width: Double, height: Double, notchCenterX: Double? = nil) {
         self.hasNotch = hasNotch
         self.width = width
         self.height = height
+        self.notchCenterX = notchCenterX
     }
 
     public init(screenWidth: Double, safeAreaTop: Double, auxiliaryLeftWidth: Double?, auxiliaryRightWidth: Double?, menuBarHeight: Double) {
         hasNotch = safeAreaTop > 0
         if hasNotch {
-            if let left = auxiliaryLeftWidth, let right = auxiliaryRightWidth {
+            if let left = auxiliaryLeftWidth, let right = auxiliaryRightWidth, screenWidth - left - right > 0, screenWidth - left - right < screenWidth {
                 let measured = screenWidth - left - right
-                width = measured > 0 && measured < screenWidth ? measured : Self.fallbackNotchWidth
+                width = measured
+                notchCenterX = left + measured / 2
             } else {
                 width = Self.fallbackNotchWidth
+                notchCenterX = nil
             }
             height = safeAreaTop
         } else {
             width = Self.noNotchWidth
             height = min(Self.noNotchHeight, menuBarHeight)
+            notchCenterX = nil
         }
     }
 

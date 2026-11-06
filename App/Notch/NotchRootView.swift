@@ -26,9 +26,10 @@ struct IslandContainer: View {
         let store = app.notch
         let w = CGFloat(store.liveWidth)
         let h = CGFloat(store.liveHeight)
-        let shape = NotchShape(width: w, height: h, cornerRadius: CGFloat(store.liveCorner), topRadius: 0)
+        let shape = NotchShape(width: w, height: h, cornerRadius: CGFloat(store.liveCorner), topRadius: CGFloat(store.liveTopRadius))
         ZStack(alignment: .topLeading) {
             shape.fill(Color.black)
+                .gesture(IslandMoveGesture.make(app: app))
             if store.mode == .expanded {
                 ExpandedContent(app: app)
                     .frame(width: w, height: h, alignment: .topLeading)
@@ -42,6 +43,20 @@ struct IslandContainer: View {
         }
         .frame(width: w, height: h, alignment: .topLeading)
         .animation(.easeOut(duration: 0.18), value: store.mode)
+    }
+}
+
+/// Dragging the black background of the open island (not a button, not the slime) slides it along
+/// the top edge; the window controller snaps it to an anchor on release.
+enum IslandMoveGesture {
+    @MainActor static func make(app: AppCoordinator) -> some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+            .onChanged { v in
+                let x = Double(v.location.x)
+                if app.window.moveSession == nil { app.window.beginIslandMove(panelX: Double(v.startLocation.x)) }
+                app.window.islandMoveUpdated(panelX: x)
+            }
+            .onEnded { v in app.window.endIslandMove(panelX: Double(v.location.x)) }
     }
 }
 

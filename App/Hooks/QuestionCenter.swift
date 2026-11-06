@@ -52,7 +52,7 @@ final class QuestionCenter {
     }
 
     func toggle(_ label: String) {
-        guard var p = pending else { return }
+        guard var p = pending, app.window.viewAge > 0.35 else { return }
         let q = p.question.questions[p.index]
         var picks = p.selections[p.index]
         if q.multiSelect {
@@ -74,7 +74,7 @@ final class QuestionCenter {
     }
 
     func submitOther() {
-        guard var p = pending, !p.otherText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard var p = pending, !p.otherText.trimmingCharacters(in: .whitespaces).isEmpty, app.window.viewAge > 0.35 else { return }
         p.selections[p.index] = [p.otherText.trimmingCharacters(in: .whitespaces)]
         p.otherText = ""
         pending = p

@@ -69,6 +69,9 @@ final class ApprovalCenter {
     /// The user chose on the card shown (the head).
     func decide(_ d: ApprovalDecision) {
         guard let r = queue.head else { return }
+        // A card that has just slid in under the pointer must not take a click meant for whatever
+        // was there before it.
+        guard app.window.viewAge > 0.35 else { return }
         app.window.send(.userInteracted)
         let reply = replies[r.id]
         let sent = reply?.send(d.reply.any as! [String: Any]) ?? false

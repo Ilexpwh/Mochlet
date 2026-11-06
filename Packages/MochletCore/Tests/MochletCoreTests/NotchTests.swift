@@ -322,18 +322,73 @@ import Testing
 
     @Test func centredIslandAlignsNotchSlotRegardlessOfWing() {
         let l = NotchLayout(geometry: .fallback)
-        let container = 720.0
+        let container = 1470.0   // the strip panel spans the screen
         let notchLeft = container / 2 - 92
         let narrow = l.size(mode: .compact, view: .home).width
         let wide = l.size(mode: .compact, view: .home, miniCount: 4, rightContent: 230).width
         for w in [narrow, wide] {
-            let x = l.islandMinX(mode: .compact, width: w, mainAway: false, containerWidth: container)
+            let x = l.islandMinX(anchor: .center, mode: .compact, width: w, mainAway: false, containerWidth: container)
             #expect(x + NotchLayout.compactWing == notchLeft)
         }
-        #expect(l.islandMinX(mode: .hidden, width: 184, mainAway: false, containerWidth: container) == notchLeft)
-        #expect(l.islandMinX(mode: .compact, width: narrow, mainAway: true, containerWidth: container) == notchLeft)
-        #expect(l.islandMinX(mode: .expanded, width: 640, mainAway: false, containerWidth: container) == 40)
-        let bar = NotchLayout(geometry: NotchGeometry(hasNotch: false, width: 80, height: 24))
-        #expect(bar.islandMinX(mode: .compact, width: 248, mainAway: false, containerWidth: container) == (container - 248) / 2)
+        #expect(l.islandMinX(anchor: .center, mode: .hidden, width: 184, mainAway: false, containerWidth: container) == notchLeft)
+        #expect(l.islandMinX(anchor: .center, mode: .compact, width: narrow, mainAway: true, containerWidth: container) == notchLeft)
+        #expect(l.islandMinX(anchor: .center, mode: .expanded, width: 640, mainAway: false, containerWidth: container) == (container - 640) / 2)
+        let bar = NotchLayout(geometry: NotchGeometry(hasNotch: false, width: 80, height: 24), detached: true)
+        #expect(bar.islandMinX(anchor: .center, mode: .compact, width: 248, mainAway: false, containerWidth: container) == (container - 248) / 2)
+    }
+
+    @Test func measuredNotchCentreAnchorsTheSlot() {
+        // A notch measured off-centre (auxiliary areas) still lands the slot on the camera.
+        let g = NotchGeometry(screenWidth: 1470, safeAreaTop: 32, auxiliaryLeftWidth: 640, auxiliaryRightWidth: 651, menuBarHeight: 37)
+        let l = NotchLayout(geometry: g)
+        #expect(g.notchCenterX == 640 + 179.0 / 2)
+        let x = l.islandMinX(anchor: .center, mode: .compact, width: 500, mainAway: false, containerWidth: 1470)
+        #expect(x + NotchLayout.compactWing + g.width / 2 == g.notchCenterX)
+    }
+
+    @Test func anchorsOnTheStrip() {
+        let l = NotchLayout(geometry: .fallback, detached: true)
+        let c = 1470.0
+        #expect(l.islandMinX(anchor: .left, mode: .compact, width: 300, mainAway: false, containerWidth: c) == NotchLayout.edgeMargin)
+        #expect(l.islandMinX(anchor: .right, mode: .compact, width: 300, mainAway: false, containerWidth: c) == c - NotchLayout.edgeMargin - 300)
+        #expect(l.islandMinX(anchor: .custom(fraction: 0.25), mode: .expanded, width: 640, mainAway: false, containerWidth: c) == 0.25 * c - 320)
+        // Never off the strip: a far-left custom spot clamps to the edge, a huge island to zero.
+        #expect(l.islandMinX(anchor: .custom(fraction: 0.01), mode: .expanded, width: 640, mainAway: false, containerWidth: c) == 0)
+        #expect(l.islandMinX(anchor: .custom(fraction: 0.99), mode: .expanded, width: 640, mainAway: false, containerWidth: c) == c - 640)
+        #expect(l.islandMinX(anchor: .right, mode: .expanded, width: 2000, mainAway: false, containerWidth: c) == 0)
+    }
+
+    @Test func detachedCompactHasNoGap() {
+        let over = NotchLayout(geometry: .fallback)
+        let away = NotchLayout(geometry: .fallback, detached: true)
+        #expect(away.size(mode: .compact, view: .home).width == over.size(mode: .compact, view: .home).width - 184)
+        #expect(away.size(mode: .hidden, view: .home).width == NotchGeometry.noNotchWidth)
+        #expect(away.miniSlotOffset(mode: .compact) == over.miniSlotOffset(mode: .compact) - 184)
+        #expect(away.tickerLeading(miniCount: 1, mainAway: false) == over.tickerLeading(miniCount: 1, mainAway: false) - 184)
+        #expect(away.topRadius(mode: .compact) == NotchLayout.compactCorner && away.topRadius(mode: .expanded) == NotchLayout.expandedCorner)
+        #expect(over.topRadius(mode: .compact) == 0 && over.topRadius(mode: .expanded) == 0)
+        #expect(away.slimeOrigin(mode: .hidden, view: .home, islandSize: (80, 32)).x == 40)
+    }
+
+    @Test func snapAnchorNearEdges() {
+        let l = NotchLayout(geometry: .fallback, detached: true)
+        let c = 1470.0, w = 300.0
+        #expect(l.snapAnchor(forMinX: 40, width: w, mode: .compact, mainAway: false, containerWidth: c) == .left)
+        #expect(l.snapAnchor(forMinX: c - w - 50, width: w, mode: .compact, mainAway: false, containerWidth: c) == .right)
+        #expect(l.snapAnchor(forMinX: c / 2 - w / 2 + 30, width: w, mode: .compact, mainAway: false, containerWidth: c) == .center)
+        if case .custom(let f) = l.snapAnchor(forMinX: 400, width: w, mode: .compact, mainAway: false, containerWidth: c) {
+            #expect(abs(f - (400 + w / 2) / c) < 1e-9)
+        } else {
+            Issue.record("a drop far from every preset is a custom anchor")
+        }
+    }
+
+    @Test func anchorStorageRoundTrip() {
+        for a in IslandAnchor.presets + [.custom(fraction: 0.372)] {
+            #expect(IslandAnchor(storageValue: a.storageValue) == a)
+        }
+        #expect(IslandAnchor(storageValue: "garbage") == .center)
+        #expect(IslandAnchor(storageValue: "custom:9") == .custom(fraction: 1))
+        #expect(IslandAnchor.center.title(hasNotch: true) == "Over the notch" && IslandAnchor.center.title(hasNotch: false) == "Centre")
     }
 }

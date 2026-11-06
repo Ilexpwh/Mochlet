@@ -77,7 +77,7 @@ final class AppCoordinator {
     private(set) var signals: SignalsController!
     private(set) var window: NotchWindowController!
     private(set) var desktop: DesktopSlimeController!
-    private var statusItem: StatusItemController!
+    private(set) var statusItem: StatusItemController!
     private(set) var settingsWindow: SettingsWindowController?
     private var toastWork: DispatchWorkItem?
     private var pushToTalkActive = false
@@ -567,6 +567,7 @@ final class AppCoordinator {
             if a == .quit || a == .settings { menu.addItem(.separator()) }
             if a == .dressUp {
                 for item in appearanceMenuItems() { menu.addItem(item) }
+                menu.addItem(positionMenuItem())
                 continue
             }
             let item = NSMenuItem(title: title(for: a), action: #selector(MenuTarget.fire(_:)), keyEquivalent: "")
@@ -576,6 +577,26 @@ final class AppCoordinator {
             menu.addItem(item)
         }
         return menu
+    }
+
+    /// "Island position ▸": left, over the notch, right (and the custom spot when dragged there),
+    /// shared by the right-click menu and the status item.
+    func positionMenuItem() -> NSMenuItem {
+        let root = NSMenuItem(title: "Island position", action: nil, keyEquivalent: "")
+        root.image = NSImage(systemSymbolName: "arrow.left.and.right", accessibilityDescription: nil)
+        let sub = NSMenu()
+        let current = window?.currentAnchor ?? .center
+        var anchors = IslandAnchor.presets
+        if current.isCustom { anchors.append(current) }
+        for a in anchors {
+            let item = NSMenuItem(title: a.title(hasNotch: notch.geometry.hasNotch), action: #selector(PositionMenuTarget.fire(_:)), keyEquivalent: "")
+            item.representedObject = a.storageValue
+            item.target = PositionMenuTarget.shared
+            item.state = a == current ? .on : .off
+            sub.addItem(item)
+        }
+        root.submenu = sub
+        return root
     }
 
     /// "Dress up ▸" (outfit sets) and "Look ▸" (species presets) submenus, shared by the
@@ -738,6 +759,15 @@ final class MenuTarget: NSObject {
     @objc func fire(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let a = MenuAction(rawValue: raw) else { return }
         AppCoordinator.shared.menu(a)
+    }
+}
+
+@MainActor final class PositionMenuTarget: NSObject {
+    static let shared = PositionMenuTarget()
+
+    @objc func fire(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        AppCoordinator.shared.window?.setAnchor(IslandAnchor(storageValue: raw))
     }
 }
 

@@ -10,6 +10,8 @@ final class SettingsStore {
     @ObservationIgnored private let defaults: UserDefaults
 
     var displayChoice: DisplayChoice { didSet { defaults.set(displayChoice.storageValue, forKey: "displayChoice") } }
+    /// Island anchor per display UUID ("default" for a display without one).
+    var islandAnchors: [String: String] { didSet { defaults.set(islandAnchors, forKey: "islandAnchors") } }
     var openOnHover: Bool { didSet { defaults.set(openOnHover, forKey: "openOnHover") } }
     var autoCloseSeconds: Double { didSet { defaults.set(autoCloseSeconds, forKey: "autoCloseSeconds") } }
     var soundEnabled: Bool { didSet { defaults.set(soundEnabled, forKey: "soundEnabled") } }
@@ -67,6 +69,7 @@ final class SettingsStore {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         displayChoice = DisplayChoice(storageValue: defaults.string(forKey: "displayChoice") ?? "notch")
+        islandAnchors = defaults.dictionary(forKey: "islandAnchors") as? [String: String] ?? [:]
         openOnHover = defaults.object(forKey: "openOnHover") as? Bool ?? false
         autoCloseSeconds = defaults.object(forKey: "autoCloseSeconds") as? Double ?? 15
         soundEnabled = defaults.object(forKey: "soundEnabled") as? Bool ?? true
@@ -150,4 +153,12 @@ final class SettingsStore {
     }
 
     var launchAtLoginNeedsApproval: Bool { SMAppService.mainApp.status == .requiresApproval }
+
+    func islandAnchor(forDisplay uuid: String?) -> IslandAnchor {
+        IslandAnchor(storageValue: islandAnchors[uuid ?? "default"] ?? "center")
+    }
+
+    func setIslandAnchor(_ anchor: IslandAnchor, forDisplay uuid: String?) {
+        islandAnchors[uuid ?? "default"] = anchor.storageValue
+    }
 }

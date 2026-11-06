@@ -220,6 +220,17 @@ struct GeneralSettingsView: View {
                         }
                     }
                 }
+                Picker("Position", selection: Binding(get: { app.window.currentAnchor.storageValue },
+                                                      set: { app.window.setAnchor(IslandAnchor(storageValue: $0)) })) {
+                    ForEach(IslandAnchor.presets, id: \.storageValue) { a in
+                        Text(a.title(hasNotch: app.notch.geometry.hasNotch)).tag(a.storageValue)
+                    }
+                    if app.window.currentAnchor.isCustom {
+                        Text("Custom (where you dragged it)").tag(app.window.currentAnchor.storageValue)
+                    }
+                }
+                Text("Drag the black strip, or ⌘-drag anywhere on the island, to move it along the top edge. Each screen remembers its own spot.")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("Open when the pointer rests on it", isOn: $s.openOnHover)
                     .onChange(of: s.openOnHover) { _, _ in app.applySettings() }
                 HStack {

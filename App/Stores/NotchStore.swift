@@ -14,8 +14,12 @@ final class NotchStore {
     var mode: NotchMode = .hidden
     var view: NotchView = .home
     var geometry: NotchGeometry = .fallback
-    /// Width of the panel the island lives in (its centre is the notch).
+    /// Width of the strip panel the island slides along (the screen's width).
     var containerWidth: Double = 720
+    /// Where the island sits along the top edge of the current screen.
+    var anchor: IslandAnchor = .center
+    /// Away from the notch: another anchor, or a screen without one.
+    var detached: Bool { !geometry.hasNotch || !anchor.isCenter }
     var miniCount = 0
     var overflowCount = 0
     /// Height measured by a view that grows with its content (question, chat).
@@ -37,6 +41,8 @@ final class NotchStore {
     var liveHeight: Double = NotchGeometry.fallback.height
     var liveCorner: Double = NotchLayout.compactCorner
     var liveX: Double = 0
+    /// Radius of the top corners (0 against the notch, rounded when detached).
+    var liveTopRadius: Double = 0
     /// Live contact point of the main slime (island coordinates, y down), springing between modes.
     var liveSlimeOrigin: (x: Double, y: Double) = (NotchLayout.compactWing / 2, NotchGeometry.fallback.height - 2)
     /// The main slime is away on the desktop (or flying there and back).
@@ -63,7 +69,7 @@ final class NotchStore {
     /// "new" asks the projects card to open the task field on the first project.
     var projectsFocus: String?
 
-    var layout: NotchLayout { NotchLayout(geometry: geometry) }
+    var layout: NotchLayout { NotchLayout(geometry: geometry, detached: detached) }
 
     /// Target island size for the current mode and view (the live size springs toward it).
     var islandSize: (width: Double, height: Double) {
@@ -73,8 +79,10 @@ final class NotchStore {
 
     /// Target left edge of the island inside the panel.
     var islandTargetX: Double {
-        layout.islandMinX(mode: mode, width: islandSize.width, mainAway: slimeOnDesktop, containerWidth: containerWidth)
+        layout.islandMinX(anchor: anchor, mode: mode, width: islandSize.width, mainAway: slimeOnDesktop, containerWidth: containerWidth)
     }
+
+    var targetTopRadius: Double { layout.topRadius(mode: mode) }
 
     /// A card reports the height of its content; the island height follows within the view's range.
     func setMeasured(content: Double, for view: NotchView) {
@@ -88,7 +96,7 @@ final class NotchStore {
     /// Bottom padding of expanded content: leaves the tray free when minis are around.
     var contentBottom: Double { 12 + (miniCount > 0 ? NotchLayout.trayHeight : 0) }
     /// Where the compact ticker starts: after the notch, the main slime's wing and the mini row.
-    var tickerLeading: Double { geometry.width + (slimeOnDesktop ? 0 : NotchLayout.compactWing) + NotchLayout.miniRowWidth(miniCount: min(miniCount, 6)) + 6 }
+    var tickerLeading: Double { layout.tickerLeading(miniCount: min(miniCount, 6), mainAway: slimeOnDesktop) }
 
     /// Target contact point of the main slime for the current mode.
     var targetSlimeOrigin: (x: Double, y: Double) {

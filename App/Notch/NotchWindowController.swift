@@ -41,6 +41,10 @@ final class NotchWindowController: NSWindowController {
     private var pendingReveals: [NotchView] = []
     private var revealWork: DispatchWorkItem?
     private(set) var dragOut: DragOutSession?
+    /// The island is being dragged along the top edge.
+    private(set) var moveSession: IslandMoveSession?
+    /// When the current view (or the open island) was shown; cards ignore decisions for a beat after.
+    private var viewShownAt = Date()
     private var greetingWork: DispatchWorkItem?
     private var hitView: SlimeHitView!
     private var dropView: FileDropNSView!
@@ -55,6 +59,7 @@ final class NotchWindowController: NSWindowController {
     private var rSpring = Spring1D(value: 15, response: 0.5, dampingFraction: 0.72)
     private var oSpring = Spring2D(value: SIMD2(NotchLayout.compactWing / 2, 30), response: 0.5, dampingFraction: 0.72)
     private var xSpring = Spring1D(value: 0, response: 0.5, dampingFraction: 0.72)
+    private var tSpring = Spring1D(value: 0, response: 0.5, dampingFraction: 0.72)
     private var motionSettled = true
 
     init(app: AppCoordinator) {
@@ -67,6 +72,7 @@ final class NotchWindowController: NSWindowController {
         currentScreen = screen
         app.notch.geometry = Self.geometry(for: screen)
         app.notch.containerWidth = Double(frame.width)
+        app.notch.anchor = app.settings.islandAnchor(forDisplay: Self.displayUUID(screen))
         setupPanel()
     }
 
@@ -218,7 +224,8 @@ final class NotchWindowController: NSWindowController {
         tune(&hSpring, s.height)
         tune(&cSpring, corner)
         tune(&rSpring, Double(app.slime.targetRadius))
-        tune(&xSpring, store.islandTargetX)
+        if moveSession == nil { tune(&xSpring, store.islandTargetX) }
+        tune(&tSpring, store.targetTopRadius)
         oSpring.omega = omega
         oSpring.zeta = zeta
         oSpring.target = SIMD2(o.x, o.y)
@@ -232,6 +239,7 @@ final class NotchWindowController: NSWindowController {
         cSpring.value = cSpring.target; cSpring.velocity = 0
         rSpring.value = rSpring.target; rSpring.velocity = 0
         xSpring.value = xSpring.target; xSpring.velocity = 0
+        tSpring.value = tSpring.target; tSpring.velocity = 0
         oSpring.value = oSpring.target; oSpring.velocity = .zero
         motionSettled = true
         publishLayout()
@@ -244,7 +252,8 @@ final class NotchWindowController: NSWindowController {
         return abs(wSpring.target - s.width) > 0.01 || abs(hSpring.target - s.height) > 0.01
             || abs(oSpring.target.x - o.x) > 0.01 || abs(oSpring.target.y - o.y) > 0.01
             || abs(rSpring.target - Double(app.slime.targetRadius)) > 0.01
-            || abs(xSpring.target - store.islandTargetX) > 0.01
+            || (moveSession == nil && abs(xSpring.target - store.islandTargetX) > 0.01)
+            || abs(tSpring.target - store.targetTopRadius) > 0.01
     }
 
     private func tickLayout(_ dt: Double) {
@@ -253,11 +262,11 @@ final class NotchWindowController: NSWindowController {
             let steps = max(1, Int((dt * 240).rounded(.up)))
             let h = dt / Double(steps)
             for _ in 0..<steps {
-                wSpring.advance(h); hSpring.advance(h); cSpring.advance(h); rSpring.advance(h); xSpring.advance(h); oSpring.advance(h)
+                wSpring.advance(h); hSpring.advance(h); cSpring.advance(h); rSpring.advance(h); xSpring.advance(h); tSpring.advance(h); oSpring.advance(h)
             }
             func done(_ sp: Spring1D) -> Bool { abs(sp.value - sp.target) < 0.15 && abs(sp.velocity) < 2 }
             let oDone = simd_distance(oSpring.value, oSpring.target) < 0.15 && simd_length(oSpring.velocity) < 2
-            if done(wSpring), done(hSpring), done(cSpring), done(rSpring), done(xSpring), oDone {
+            if done(wSpring), done(hSpring), done(cSpring), done(rSpring), done(xSpring), done(tSpring), oDone, moveSession == nil {
                 snapLayout()
             } else {
                 publishLayout()
@@ -279,6 +288,8 @@ final class NotchWindowController: NSWindowController {
         if abs(store.liveCorner - c) > 0.01 { store.liveCorner = c }
         let x = xSpring.value
         if abs(store.liveX - x) > 0.01 { store.liveX = x }
+        let t = tSpring.value
+        if abs(store.liveTopRadius - t) > 0.01 { store.liveTopRadius = t }
         let o = oSpring.value
         if abs(store.liveSlimeOrigin.x - o.x) > 0.01 || abs(store.liveSlimeOrigin.y - o.y) > 0.01 {
             store.liveSlimeOrigin = (o.x, o.y)
@@ -288,9 +299,55 @@ final class NotchWindowController: NSWindowController {
         let r = islandRect
         if slimeView.frame != r { slimeView.frame = r }
         maskLayer.frame = slimeView.bounds
-        maskLayer.path = NotchShape(width: w, height: h, cornerRadius: c, topRadius: 0)
+        maskLayer.path = NotchShape(width: w, height: h, cornerRadius: c, topRadius: t)
             .path(in: CGRect(x: 0, y: 0, width: w, height: h)).cgPath
     }
+
+    // MARK: - Island placement
+
+    var currentAnchor: IslandAnchor { app.notch.anchor }
+
+    /// Moves the island to an anchor on the current screen and, when asked, remembers it for the display.
+    func setAnchor(_ anchor: IslandAnchor, persist: Bool = true) {
+        guard dragOut == nil else { return }
+        app.notch.anchor = anchor
+        if persist { app.settings.setIslandAnchor(anchor, forDisplay: currentScreen.flatMap(Self.displayUUID)) }
+        app.slime.apply(mode: app.notch.mode, layout: app.notch.layout)
+        retarget(closing: false)
+        slimeView.paused = false
+        app.statusItem?.refresh()
+    }
+
+    /// Dragging the island along the edge: begins on the first real movement, ends with a snap.
+    func beginIslandMove(panelX: Double) {
+        guard moveSession == nil, dragOut == nil else { return }
+        moveSession = IslandMoveSession(app: app, controller: self, panelX: panelX)
+        hold("move", true)
+        send(.userInteracted)
+    }
+
+    func islandMoveUpdated(panelX: Double) {
+        moveSession?.update(panelX: panelX)
+    }
+
+    func endIslandMove(panelX: Double) {
+        guard let session = moveSession else { return }
+        moveSession = nil
+        session.end(panelX: panelX)
+        hold("move", false)
+    }
+
+    /// The move session drives the x spring straight at the pointer (short response, no overshoot).
+    func setMoveX(_ x: Double) {
+        xSpring.omega = 2 * Double.pi / 0.16
+        xSpring.zeta = 1
+        xSpring.target = x
+        motionSettled = false
+        slimeView.paused = false
+    }
+
+    /// Seconds since the current view appeared (cards ignore a decision landing in the first beat).
+    var viewAge: TimeInterval { Date().timeIntervalSince(viewShownAt) }
 
     // MARK: - FSM
 
@@ -301,6 +358,7 @@ final class NotchWindowController: NSWindowController {
         var h = Set(heldOpenFlags.map { NotchFSM.Hold($0.key, $0.value) })
         if app.notch.isPinned { h.insert(NotchFSM.Hold("pin")) }
         if dragOut != nil { h.insert(NotchFSM.Hold("dragout")) }
+        if moveSession != nil { h.insert(NotchFSM.Hold("move")) }
         return h
     }
 
@@ -399,8 +457,9 @@ final class NotchWindowController: NSWindowController {
             // A height measured by one card never carries into the next.
             if store.measuredHeight != nil { store.measuredHeight = nil }
         }
-        if store.view != view { store.view = view }
+        if store.view != view { store.view = view; viewShownAt = Date() }
         guard mode != prev else { return }
+        if mode == .expanded { viewShownAt = Date() }
         store.mode = mode
         app.slime.apply(mode: mode, layout: store.layout)
         retarget(closing: mode.order < prev.order)
@@ -458,7 +517,7 @@ final class NotchWindowController: NSWindowController {
         let hoverRect = !app.notch.geometry.hasNotch && app.notch.mode != .expanded ? rect : rect.insetBy(dx: -6, dy: -6)
         let inIsland = hoverRect.contains(local)
 
-        let shouldAccept = inIsland || dragOut != nil
+        let shouldAccept = inIsland || dragOut != nil || moveSession != nil
         if panel.ignoresMouseEvents == shouldAccept {
             panel.ignoresMouseEvents = !shouldAccept
             if shouldAccept, let cv = panel.contentView { panel.invalidateCursorRects(for: cv) }
@@ -482,8 +541,8 @@ final class NotchWindowController: NSWindowController {
             app.notch.hoveredMiniID = hovered
             app.sessions?.publish()
         }
-        if inIsland, !previously, dragOut == nil { send(.pointerEntered) }
-        if !inIsland, previously { send(.pointerLeft) }
+        if inIsland, !previously, dragOut == nil, moveSession == nil { send(.pointerEntered) }
+        if !inIsland, previously, moveSession == nil { send(.pointerLeft) }
 
         if let d = dragOut {
             d.tick()
@@ -501,7 +560,7 @@ final class NotchWindowController: NSWindowController {
         let nearIsland = island.insetBy(dx: -200, dy: -160).contains(mouse)
         // The panel spans the screen, so the "near" band is measured from the island, not the panel.
         let inBand = island.insetBy(dx: -360, dy: -240).contains(mouse)
-        let busy = app.notch.mode == .expanded || dragOut != nil || nearIsland
+        let busy = app.notch.mode == .expanded || dragOut != nil || moveSession != nil || nearIsland
         let wanted = busy ? Self.fastPoll : inBand ? Self.nearPoll : Self.idlePoll
         if wanted != pollInterval { startPolling(interval: wanted) }
         // Nobody near: the quiescent slime breathes at 15 Hz (processed ticks are the idle cost).
@@ -625,7 +684,7 @@ final class NotchWindowController: NSWindowController {
     }
 
     func relocateToChosenScreen() {
-        guard dragOut == nil else { return }
+        guard dragOut == nil, moveSession == nil else { return }
         relocate(to: Self.targetScreen(for: app.settings.displayChoice))
     }
 
@@ -634,6 +693,7 @@ final class NotchWindowController: NSWindowController {
         app.notch.geometry = Self.geometry(for: screen)
         let frame = Self.panelFrame(on: screen)
         app.notch.containerWidth = Double(frame.width)
+        app.notch.anchor = app.settings.islandAnchor(forDisplay: Self.displayUUID(screen))
         panel.setFrame(frame, display: true)
         app.slime.apply(mode: app.notch.mode, layout: app.notch.layout)
         if app.notch.mode == .hidden { snapLayout() } else { retarget(closing: false); slimeView.paused = false }

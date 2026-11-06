@@ -256,6 +256,24 @@ enum DebugCommands {
                     }
                 }
             }
+        case "island":
+            // island?anchor=left|center|right|custom:0.3   move the island to an anchor (persisted)
+            if let a = arg("anchor") { app.window.setAnchor(IslandAnchor(storageValue: a)) }
+            result = "ok island anchor \(app.window.currentAnchor.storageValue) x \(app.notch.islandTargetX)"
+        case "islanddrag":
+            // islanddrag?dx=-300   drag the island along the edge by dx points over ~0.5 s and release
+            let dx = num("dx") ?? 0
+            let startX = app.notch.liveX + app.notch.islandSize.width / 2
+            app.window.beginIslandMove(panelX: startX)
+            let steps = 10
+            for i in 1...steps {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05 * Double(i)) {
+                    MainActor.assumeIsolated { app.window.islandMoveUpdated(panelX: startX + dx * Double(i) / Double(steps)) }
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05 * Double(steps + 1)) {
+                MainActor.assumeIsolated { app.window.endIslandMove(panelX: startX + dx) }
+            }
         case "hold":
             app.slimePressed(atIsland: islandPoint(app, num("x"), num("y")))
             DispatchQueue.main.asyncAfter(deadline: .now() + (num("seconds") ?? 1.2)) { MainActor.assumeIsolated { app.slimeReleased(screen: NSEvent.mouseLocation) } }
@@ -548,6 +566,11 @@ enum DebugCommands {
         d["lastInteractionAgo"] = Date().timeIntervalSince(w.lastInteraction)
         d["liveX"] = n.liveX
         d["islandTargetX"] = n.islandTargetX
+        d["anchor"] = n.anchor.storageValue
+        d["detached"] = n.detached
+        d["liveTopRadius"] = n.liveTopRadius
+        d["moving"] = w.moveSession != nil
+        d["containerWidth"] = n.containerWidth
         d["compactRightWidth"] = n.compactRightWidth
         d["main"] = ["state": main.state.rawValue, "emote": main.emote?.rawValue ?? "none", "root": [main.body.root.x, main.body.root.y],
                      "isAway": main.isAway, "opacity": main.opacity]

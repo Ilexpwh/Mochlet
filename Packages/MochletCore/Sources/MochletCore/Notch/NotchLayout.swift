@@ -32,12 +32,23 @@ public struct NotchLayout: Sendable, Equatable {
     public static let trayPitch: Double = 36
     /// The compact ticker never grows past this; longer text truncates in the middle.
     public static let tickerMaxWidth: Double = 240
+    /// Room kept between a left or right anchored island and the screen edge.
+    public static let edgeMargin: Double = 16
+    /// A dragged island within this distance of a preset anchor snaps to it.
+    public static let snapDistance: Double = 72
 
     public var geometry: NotchGeometry
+    /// The island is away from the notch (another anchor, or a screen without one): no notch slot
+    /// in the strip, rounded top corners, and a small pill while hidden.
+    public var detached: Bool
 
-    public init(geometry: NotchGeometry) {
+    public init(geometry: NotchGeometry, detached: Bool = false) {
         self.geometry = geometry
+        self.detached = detached
     }
+
+    /// The notch slot: the physical notch's width while the island sits over it, nothing otherwise.
+    public var slotWidth: Double { detached ? 0 : geometry.width }
 
     /// Height of each expanded view. `question` and `chat` can be taller (host passes a measured height).
     public static func viewHeight(_ view: NotchView) -> Double {
@@ -83,9 +94,9 @@ public struct NotchLayout: Sendable, Equatable {
                      rightContent: Double = 0) -> (width: Double, height: Double) {
         switch mode {
         case .hidden:
-            return (geometry.width, geometry.height)
+            return (detached ? NotchGeometry.noNotchWidth : geometry.width, geometry.height)
         case .compact:
-            return (geometry.width + leftWing(mode: mode, mainAway: mainAway) + compactRightWing(miniCount: miniCount, rightContent: rightContent), geometry.height)
+            return (slotWidth + leftWing(mode: mode, mainAway: mainAway) + compactRightWing(miniCount: miniCount, rightContent: rightContent), geometry.height)
         case .expanded:
             let range = Self.heightRange(view)
             let natural = Self.viewHeight(view) + (miniCount > 0 ? Self.trayHeight : 0)
@@ -93,16 +104,54 @@ public struct NotchLayout: Sendable, Equatable {
         }
     }
 
-    /// Left edge of the island inside a container of `containerWidth` whose centre is the notch:
-    /// the notch slot of the compact strip stays on the camera whatever the right wing grows to.
-    public func islandMinX(mode: NotchMode, width: Double, mainAway: Bool, containerWidth: Double) -> Double {
-        guard geometry.hasNotch else { return (containerWidth - width) / 2 }
-        switch mode {
-        case .expanded:
-            return (containerWidth - width) / 2
-        case .hidden, .compact:
-            return containerWidth / 2 - geometry.width / 2 - leftWing(mode: mode, mainAway: mainAway)
+    /// Left edge of the island inside the strip panel (`containerWidth` = the screen's width) for an
+    /// anchor. Over the notch, the compact strip's notch slot stays on the camera whatever the
+    /// right wing grows to; elsewhere the island keeps `edgeMargin` from the edge or sits at its
+    /// custom fraction, always fully on the strip.
+    public func islandMinX(anchor: IslandAnchor, mode: NotchMode, width: Double, mainAway: Bool, containerWidth: Double) -> Double {
+        let x: Double
+        switch anchor {
+        case .center where geometry.hasNotch:
+            let notchCenter = geometry.notchCenterX ?? containerWidth / 2
+            switch mode {
+            case .expanded: x = notchCenter - width / 2
+            case .hidden, .compact: x = notchCenter - geometry.width / 2 - leftWing(mode: mode, mainAway: mainAway)
+            }
+        case .center:
+            x = (containerWidth - width) / 2
+        case .left:
+            x = Self.edgeMargin
+        case .right:
+            x = containerWidth - Self.edgeMargin - width
+        case .custom(let f):
+            x = f * containerWidth - width / 2
         }
+        return min(max(0, containerWidth - width), max(0, x))
+    }
+
+    /// The anchor a dragged island settles on: the nearest preset whose resting centre is within
+    /// `snapDistance`, else a custom fraction where it was dropped.
+    public func snapAnchor(forMinX minX: Double, width: Double, mode: NotchMode, mainAway: Bool, containerWidth: Double) -> IslandAnchor {
+        let centre = minX + width / 2
+        var best: (anchor: IslandAnchor, distance: Double)?
+        for a in IslandAnchor.presets {
+            let x = islandMinX(anchor: a, mode: mode, width: width, mainAway: mainAway, containerWidth: containerWidth)
+            let d = abs(x + width / 2 - centre)
+            if d <= Self.snapDistance, d < (best?.distance ?? .infinity) { best = (a, d) }
+        }
+        if let best { return best.anchor }
+        return .custom(fraction: min(1, max(0, centre / max(1, containerWidth))))
+    }
+
+    /// Radius of the island's top corners: square against the notch, rounded when detached.
+    public func topRadius(mode: NotchMode) -> Double {
+        guard detached else { return 0 }
+        return mode == .expanded ? Self.expandedCorner : Self.compactCorner
+    }
+
+    /// Where the compact ticker starts: after the notch slot, the main slime's wing and the mini row.
+    public func tickerLeading(miniCount: Int, mainAway: Bool) -> Double {
+        slotWidth + (mainAway ? 0 : Self.compactWing) + Self.miniRowWidth(miniCount: miniCount) + 6
     }
 
     /// Bounds for a measured (content-driven) height of each expanded view.
@@ -141,6 +190,8 @@ public struct NotchLayout: Sendable, Equatable {
     /// Contact point of the main slime inside the island (y down, from the island's top-left).
     public func slimeOrigin(mode: NotchMode, view: NotchView, islandSize: (width: Double, height: Double)) -> (x: Double, y: Double) {
         switch mode {
+        case .hidden where detached:
+            return (NotchGeometry.noNotchWidth / 2, geometry.height - 2)
         case .hidden, .compact:
             return (Self.compactWing / 2, geometry.height - 2)
         case .expanded:
@@ -151,7 +202,7 @@ public struct NotchLayout: Sendable, Equatable {
     /// Horizontal gap minis must skip over (the physical notch) while compact, in points.
     public func miniSlotOffset(mode: NotchMode) -> Double {
         switch mode {
-        case .hidden, .compact: return geometry.width + Self.compactWing / 2 - 14
+        case .hidden, .compact: return slotWidth + Self.compactWing / 2 - 14
         case .expanded: return 0
         }
     }

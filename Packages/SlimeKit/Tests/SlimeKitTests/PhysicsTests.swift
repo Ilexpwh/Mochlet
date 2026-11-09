@@ -17,20 +17,23 @@ import simd
         #expect(maxMove < 0.002, "a settled body must not drift (moved \(maxMove))")
         #expect(body.points.allSatisfy { $0.y <= 1e-9 })
         #expect(body.areaRatio > 0.85 && body.areaRatio < 1.1, "area ratio \(body.areaRatio)")
-        #expect(body.contactWidth > 0.7 && body.contactWidth < 1.4, "contact width \(body.contactWidth)")
-        #expect(body.topY < -1.7 && body.topY > -2.0, "top \(body.topY)")
+        #expect(body.contactWidth > 1.1 && body.contactWidth < 1.8, "contact width \(body.contactWidth)")
+        #expect(body.topY < -1.58 && body.topY > -1.82, "top \(body.topY)")
     }
 
     @Test func squashPreservesVolumeByConstruction() {
         var body = SoftBody(params: .main)
+        let rest = RestProfile.dome.ring(count: SoftBodyParams.main.pointCount)
+        let restW = rest.map(\.x).max()! - rest.map(\.x).min()!
+        let restH = rest.map(\.y).max()! - rest.map(\.y).min()!
         body.squash = 0.8
         let anchors = body.anchors()
         let xs = anchors.map(\.x)
         let ys = anchors.map(\.y)
         let w = xs.max()! - xs.min()!
         let h = ys.max()! - ys.min()!
-        #expect(abs(w - 2 / 0.8) < 1e-9)
-        #expect(abs(h - 2 * 0.8) < 1e-9)
+        #expect(abs(w - restW / 0.8) < 1e-9)
+        #expect(abs(h - restH * 0.8) < 1e-9)
     }
 
     @Test func landingSettlesWithOvershoots() {

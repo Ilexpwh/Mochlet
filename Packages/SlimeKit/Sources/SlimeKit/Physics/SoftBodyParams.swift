@@ -16,7 +16,7 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
     public var rootGravity: Double = 10
     /// Fraction of tangential velocity removed on floor contact.
     public var floorFriction: Double = 0.7
-    public var restCenterY: Double = -0.86
+    public var restCenterY: Double = -0.78
     public var restRadius: Double = 1
     /// Shape of the rest ring (see `RestProfile`).
     public var silhouette: SlimeLook.Silhouette = .dome

@@ -7,11 +7,39 @@ import simd
     static let silhouettes: [SlimeLook.Silhouette] = [.dome, .drop, .puddle, .loaf, .spiky, .tall]
     static let feels: [SlimeLook.Feel] = [.jelly, .firm, .runny, .airy, .bouncy]
 
-    @Test func domeRingIsUnchanged() {
-        let ring = RestProfile.forSilhouette(.dome).ring(count: 24)
+    @Test func domeRingIsTheBun() {
+        let profile = RestProfile.forSilhouette(.dome)
+        #expect(profile == RestProfile.dome)
+        let ring = profile.ring(count: 24)
         #expect(ring.count == 24)
-        #expect(abs(ring[0].x) < 1e-12 && abs(ring[0].y - (-1.86)) < 1e-12)
-        #expect(abs(ring[6].x - 1) < 1e-12 && abs(ring[6].y - (-0.86)) < 1e-12)
+        #expect(abs(ring[0].x) < 1e-9 && abs(ring[0].y - (-1.72)) < 1e-6, "the rest top is at −1.72")
+        let maxX = ring.map(\.x).max()!
+        #expect(maxX > 1.10 && maxX < 1.20, "rest half-width \(maxX)")
+        #expect(ring[12].y > 0, "the rest bottom sits under the floor")
+    }
+
+    @Test func domeCenterMatchesParams() {
+        #expect(abs(SoftBodyParams.main.restCenterY - RestProfile.dome.centerY) < 1e-12)
+        #expect(abs(SoftBodyParams.mini.restCenterY - RestProfile.dome.centerY) < 1e-12)
+    }
+
+    /// The settled default body reads as the anime bun: wide and low with a flat base, its widest
+    /// point below mid-height (the skirt), about 1.38 times as wide as it is tall.
+    @Test func bunProportions() {
+        for params in [SoftBodyParams.main, SoftBodyParams.main.applying(look: .rimuru, mini: false), SoftBodyParams.mini] {
+            let body = SoftBody(params: params)
+            let ring = body.referenceRing
+            let width = ring.map(\.x).max()! - ring.map(\.x).min()!
+            let top = -ring.map(\.y).min()!
+            let ratio = width / top
+            let widest = ring.max { abs($0.x) < abs($1.x) }!
+            #expect(ratio > 1.30 && ratio < 1.45, "width \(width) / height \(top) = \(ratio)")
+            // The contact chord is quantised by the ring (5 of 24 points sit on the floor, 3 of 16).
+            let minContact = params.pointCount < 20 ? 0.8 : 1.1
+            #expect(body.contactWidth > minContact && body.contactWidth < 1.8, "contact \(body.contactWidth)")
+            #expect(widest.y > -0.70, "widest point low on the body (y \(widest.y))")
+            #expect(top > 1.58 && top < 1.82, "top \(top)")
+        }
     }
 
     @Test func everySilhouetteSettlesAndKeepsItsArea() {
@@ -80,8 +108,10 @@ import simd
             #expect(!mini.traits.contains { if case .wing = $0.kind { return true } else { return false } })
         }
         #expect(TraitRig.build(look: .plain, ring: SoftBody(params: .main).points, anim: TraitAnim(), time: 0, detail: .full, mini: false) == TraitRig.Output())
-        let tip = TraitRig.build(look: .rimuru, ring: SoftBody(params: .main).points, anim: TraitAnim(), time: 0, detail: .full, mini: false)
-        #expect(tip.blobs.count == 2 && tip.blobs[0].position.x > 0.5 && tip.blobs[0].position.y < -1.6, "the tip curls up from the top-right")
+        let tipRing = SoftBody(params: .main).points
+        let tip = TraitRig.build(look: .rimuru, ring: tipRing, anim: TraitAnim(), time: 0, detail: .full, mini: false)
+        let crown = tipRing.map(\.y).min()!
+        #expect(tip.blobs.count == 2 && tip.blobs[0].position.x > 0.5 && tip.blobs[0].position.y < crown + 0.25, "the tip curls up from the top-right")
     }
 
     @Test func ringIndexMapsAngles() {
@@ -104,7 +134,8 @@ import simd
         #expect(f.traits.filter { if case .earInner = $0.kind { return true } else { return false } }.count == 2, "inner ears at full detail")
         #expect(f.traits.contains { $0.kind == .gloss }, "goo features carry a gloss at full detail")
         #expect(f.ring.allSatisfy { $0.x.isFinite && $0.y.isFinite })
-        #expect(f.ring.map(\.x).max()! - f.ring.map(\.x).min()! > 2.0, "loaf is wider than the dome")
+        let bunWidth = before.ring.map(\.x).max()! - before.ring.map(\.x).min()!
+        #expect(f.ring.map(\.x).max()! - f.ring.map(\.x).min()! > bunWidth + 0.1, "loaf is wider than the bun")
         e.appearance = SlimeAppearance(look: .tempest)
         e.simulate(1)
         let t = e.frame()

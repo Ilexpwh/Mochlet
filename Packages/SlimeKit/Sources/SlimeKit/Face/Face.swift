@@ -59,8 +59,9 @@ public struct EyeRig: Sendable, Codable, Equatable {
     /// tall drop the way they sit on the dome.
     public func fitted(to profile: RestProfile) -> EyeRig {
         var r = self
-        let kx = profile.width
-        let ky = (profile.height - profile.centerY) / 1.86
+        let dome = RestProfile.dome
+        let kx = profile.width / dome.width
+        let ky = (profile.height - profile.centerY) / (dome.height - dome.centerY)
         if abs(kx - 1) < 1e-9, abs(ky - 1) < 1e-9 { return self }
         let k = (kx * ky).squareRoot()
         r.sphereCenter = SIMD2(sphereCenter.x, sphereCenter.y * ky)

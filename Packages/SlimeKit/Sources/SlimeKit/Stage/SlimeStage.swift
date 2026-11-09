@@ -376,7 +376,7 @@ public final class SlimeStage {
                 let root = m.engine.body.root
                 let t = hopTime(abs(target.x - root.x))
                 let vx = (target.x - root.x) / t
-                let vy = -0.5 * m.engine.body.params.rootGravity * t + (target.y + 0.86 - root.y) / t
+                let vy = -0.5 * m.engine.body.params.rootGravity * t + (target.y - m.engine.body.params.restCenterY - root.y) / t
                 m.engine.launch(velocity: SIMD2(vx, vy))
                 m.engine.setFaceOpacity(0, duration: 0.3)
                 reslot()
@@ -521,7 +521,7 @@ public final class SlimeStage {
                     main.pinchRecoil(side: side)
                     main.setLean(0, duration: 0.3)
                     let centre = SIMD2(Self.pinchReach * side, -0.45) / miniScale
-                    let root = centre + SIMD2(0, 0.86)
+                    let root = centre - SIMD2(0, m.engine.body.params.restCenterY)
                     m.engine.teleport(to: root)
                     let tx = slotX(m.slot) / miniScale
                     let tf = hopTime(abs(tx - root.x))

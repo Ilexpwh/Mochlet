@@ -689,7 +689,7 @@ public final class SlimeEngine {
         let bf = BodyFrame.fit(reference: body.referenceRing, referenceCentroid: body.referenceCentroid, current: body.points)
         let joints = armRig.joints(at: time)
         guard let place = ArmRig.propPlacement(want, joints: joints) else { propLive = false; return }
-        let anchor = bf.transform(bf.referenceCentroid + place.offset)
+        let anchor = bf.transform(bf.referenceCentroid + place.offset * Self.armScale(bf))
         if !propLive {
             propLive = true
             propShownAt = time
@@ -705,6 +705,13 @@ public final class SlimeEngine {
         if simd_distance(propSpring.value, anchor) < 1e-3, simd_length(propSpring.velocity) < 1e-3 { propSpring.snap(to: anchor) }
     }
 
+    /// Arm pose targets were authored for a body about 1 R across and 1.8 R tall. The bun (and
+    /// every other silhouette) scales them by its own settled extents, so a hand that covered the
+    /// eyes still does, and a prop held in front still clears the face.
+    static func armScale(_ bf: BodyFrame) -> SIMD2<Double> {
+        SIMD2(bf.referenceHalfWidth / 1.0, bf.referenceTopHeight / 1.80)
+    }
+
     private func armFrames(ring: [SIMD2<Double>], bf: BodyFrame) -> (arms: [ArmFrame], props: [PropFrame], inner: [InnerItem], blobs: [Blob]) {
         var arms: [ArmFrame] = []
         var props: [PropFrame] = []
@@ -713,11 +720,12 @@ public final class SlimeEngine {
         if !pose.isHidden || armRig.isAnimating(at: time) {
             let joints = armRig.joints(at: time)
             let bodyScale = (bf.scaleX * bf.scaleY).squareRoot()
+            let k = Self.armScale(bf)
             for (i, j) in joints.enumerated() where j.reach > 0.02 {
                 let shoulder = ring[TraitRig.index(angle: j.shoulderAngle, count: ring.count)]
                 let arm = ArmFrame(side: i == 0 ? -1 : 1, shoulder: shoulder,
-                                   elbow: bf.transform(bf.referenceCentroid + j.elbow),
-                                   hand: bf.transform(bf.referenceCentroid + j.hand),
+                                   elbow: bf.transform(bf.referenceCentroid + j.elbow * k),
+                                   hand: bf.transform(bf.referenceCentroid + j.hand * k),
                                    reach: j.reach, handRadius: ArmRig.handRadius, shape: j.shape)
                 arms.append(arm)
                 goo += ArmRig.blobs(for: arm, bodyScale: bodyScale)
@@ -1654,7 +1662,7 @@ public final class SlimeEngine {
                 case .badge: local = SIMD2(0.95, -1.9)
                 case .micBars: local = SIMD2(1.75, -1.0)
                 case .recDot: local = SIMD2(1.25, -1.8)
-                case .anger: local = SIMD2(0.78, -1.62)
+                case .anger: local = SIMD2(0.72, -1.46)
                 }
                 anchor = bf.transform(local)
             }

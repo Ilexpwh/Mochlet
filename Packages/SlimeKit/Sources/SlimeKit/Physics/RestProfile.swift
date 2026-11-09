@@ -2,8 +2,11 @@ import Foundation
 import simd
 
 /// The resting outline of a slime body (R units, floor at y = 0, y down): an ellipse with optional
-/// bumps and a pinched tip, sampled into the soft body's rest ring. The classic dome is the unit
-/// circle centred at −0.86; the floor clamp and the pressure make the contact patch by themselves.
+/// bumps and a pinched tip, sampled into the soft body's rest ring. The default is the anime bun:
+/// a 1.12 × 0.94 ellipse centred at −0.78 (rest top −1.72) whose bottom 0.16 sits under the floor,
+/// with two soft skirt bumps low on the sides so the lowest third flares a little before it tucks
+/// into the contact chord. The floor clamp and the pressure make the flat base by themselves;
+/// settled, the body is about 1.38 times as wide as it is tall.
 public struct RestProfile: Sendable, Equatable {
     public struct Bump: Sendable, Equatable {
         /// Angle from the top: −π/2 is the top, 0 the right side, π/2 the bottom.
@@ -15,18 +18,22 @@ public struct RestProfile: Sendable, Equatable {
         }
     }
 
-    public var width: Double = 1
-    public var height: Double = 1
-    public var centerY: Double = -0.86
+    public var width: Double = 1.12
+    public var height: Double = 0.94
+    public var centerY: Double = -0.78
     /// Upward pull and pinch of the top (teardrop).
     public var tip: Double = 0
-    public var bumps: [Bump] = []
+    public var bumps: [Bump] = RestProfile.skirt
     /// Ring points this outline wants (bumps need more).
     public var pointCount: Int = 24
 
     public init() {}
 
     public static let dome = RestProfile()
+
+    /// The bun's skirt: two low bumps 0.55 rad under the horizontal on each side.
+    public static let skirt = [Bump(angle: 0.55, amplitude: 0.09, width: 0.45),
+                               Bump(angle: .pi - 0.55, amplitude: 0.09, width: 0.45)]
 
     /// Height of the outline above the floor before settling.
     public var topHeight: Double { height - centerY + tip }
@@ -37,27 +44,32 @@ public struct RestProfile: Sendable, Equatable {
         case .dome:
             p.pointCount = mini ? 16 : 24
         case .drop:
-            p.width = 0.96
+            // Rounder and a touch taller than the bun, pinched into a soft tip; no skirt.
+            p.width = 1.02
+            p.height = 0.98
+            p.centerY = -0.84
             p.tip = 0.32
+            p.bumps = []
             p.pointCount = mini ? 18 : 28
         case .puddle:
-            p.width = 1.28
-            p.height = 0.80
-            p.centerY = -0.70
+            p.width = 1.36
+            p.height = 0.76
+            p.centerY = -0.64
             p.pointCount = mini ? 18 : 28
         case .loaf:
-            p.width = 1.12
-            p.height = 0.95
-            p.centerY = -0.82
+            p.width = 1.24
+            p.height = 0.90
+            p.centerY = -0.74
             p.pointCount = mini ? 16 : 24
         case .spiky:
             let top = -Double.pi / 2
-            p.bumps = [0, -0.75, 0.75, -1.5, 1.5].map { Bump(angle: top + $0, amplitude: 0.13, width: 0.17) }
+            p.bumps += [0, -0.75, 0.75, -1.5, 1.5].map { Bump(angle: top + $0, amplitude: 0.13, width: 0.17) }
             p.pointCount = mini ? 24 : 36
         case .tall:
-            p.width = 0.9
-            p.height = 1.1
-            p.centerY = -0.95
+            p.width = 0.96
+            p.height = 1.10
+            p.centerY = -0.96
+            p.bumps = []
             p.pointCount = mini ? 16 : 24
         }
         return p

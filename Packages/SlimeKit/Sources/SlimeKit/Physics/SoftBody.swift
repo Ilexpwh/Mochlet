@@ -2,8 +2,9 @@ import Foundation
 import simd
 
 /// Ring of Verlet mass points with anchor, edge and bend springs, an area-pressure term,
-/// perimeter gravity and a floor. The rest shape is a circle whose bottom sits under the
-/// floor: the clamp plus the pressure produce the dome and the contact patch by themselves.
+/// perimeter gravity and a floor. The rest shape is a `RestProfile` (the bun by default) whose
+/// bottom sits under the floor: the clamp plus the pressure produce the flat base and the
+/// contact patch by themselves.
 public struct SoftBody: Sendable {
     public private(set) var params: SoftBodyParams
     public private(set) var points: [SIMD2<Double>]
@@ -36,12 +37,17 @@ public struct SoftBody: Sendable {
     public var floorEnabled = true
 
     public init(params: SoftBodyParams) {
-        self.params = params
-        let n = max(6, params.pointCount)
         var profile = RestProfile.forSilhouette(params.silhouette)
         profile.width *= params.restRadius
         profile.height *= params.restRadius
         profile.centerY = params.silhouette == .dome ? params.restCenterY : profile.centerY * params.restRadius
+        self.init(params: params, profile: profile)
+    }
+
+    /// A body resting on an explicit outline (tests and profile tuning).
+    init(params: SoftBodyParams, profile: RestProfile) {
+        self.params = params
+        let n = max(6, params.pointCount)
         let ring = profile.ring(count: n)
         restRing = ring
         points = ring

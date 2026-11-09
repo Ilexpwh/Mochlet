@@ -43,49 +43,86 @@ extension SlimeCGRenderer {
 
     // MARK: Arms
 
-    /// One arm as pixel geometry: the closed lobe (the centre line stroked with round joins, so
-    /// a tight elbow folds cleanly, plus the round hand), the hand's radius and the shoulder disk
-    /// where nothing is drawn.
+    /// One arm as pixel geometry: the closed cone (the centre line offset by the tapering
+    /// half-width on each side, capped by the round hand), the hand's radius, the digit size
+    /// and the shoulder disk where nothing is drawn.
     private struct Lobe {
         let arm: ArmFrame
         let tube: CGPath
+        /// The two sides and the tip from a third of the way out, open at the shoulder: what
+        /// gets an ink line where the lobe lies over the body.
+        let edge: CGPath
+        /// Where the edge starts, and the radius of the fade that softens its start.
+        let edgeStart: CGPoint
         let hole: CGFloat
         let handR: CGFloat
+        /// Where the specular sits: a point on the lit side of the limb near the tip, and the
+        /// local half-width and tangent there.
+        let shine: (centre: CGPoint, tangent: CGPoint, halfWidth: CGFloat)
 
         init(_ r: SlimeCGRenderer, _ a: ArmFrame, bodyScale: Double) {
             arm = a
             let n = 24
             let t0 = -0.03
-            var centre: [CGPoint] = []
+            var left: [CGPoint] = [], right: [CGPoint] = []
             for k in 0...n {
                 let t = t0 + (1 - t0) * Double(k) / Double(n)
-                centre.append(r.px(ArmRig.centre(a, t)))
+                let c = ArmRig.centre(a, t)
+                let tg = ArmRig.tangent(a, t)
+                let nrm = SIMD2(-tg.y, tg.x)
+                let w = ArmRig.halfWidth(a, t, bodyScale: bodyScale)
+                left.append(r.px(c + nrm * w))
+                right.append(r.px(c - nrm * w))
             }
-            let line = CGMutablePath()
-            line.addLines(between: centre)
-            let w = CGFloat(ArmRig.halfWidth(a, 0, bodyScale: bodyScale)) * r.R
-            var shape = line.copy(strokingWithWidth: 2 * w, lineCap: .round, lineJoin: .round, miterLimit: 1).normalized(using: .winding)
             let hr = CGFloat(a.handRadius * a.reach * bodyScale) * r.R
             let h = r.px(a.hand)
-            shape = shape.union(SlimeCGRenderer.ellipse(h, hr, hr), using: .winding)
-            // A thumb nub or a pointing finger: a capsule merged into the lobe.
-            let digit = ArmRig.digit(a)
-            let finger = CGMutablePath()
-            switch a.shape {
-            case .thumbsUp:
-                finger.move(to: CGPoint(x: h.x + hr * 0.5 * CGFloat(digit.x), y: h.y + hr * 0.5 * CGFloat(digit.y)))
-                finger.addLine(to: CGPoint(x: h.x + hr * 1.15 * CGFloat(digit.x), y: h.y + hr * 1.15 * CGFloat(digit.y)))
-                shape = shape.union(finger.copy(strokingWithWidth: hr * 0.7, lineCap: .round, lineJoin: .round, miterLimit: 1), using: .winding)
-            case .point:
-                finger.move(to: h)
-                finger.addLine(to: CGPoint(x: h.x + hr * 1.5 * CGFloat(digit.x), y: h.y + hr * 1.5 * CGFloat(digit.y)))
-                shape = shape.union(finger.copy(strokingWithWidth: hr * 0.8, lineCap: .round, lineJoin: .round, miterLimit: 1), using: .winding)
-            default:
-                break
+            let tipTangent = ArmRig.tangent(a, 1)
+            let tipAngle = atan2(tipTangent.y, tipTangent.x)
+            func sides(from k0: Int) -> CGMutablePath {
+                let path = CGMutablePath()
+                path.move(to: left[k0])
+                for p in left[(k0 + 1)...] { path.addLine(to: p) }
+                // Round the tip: a half circle of the hand's radius from the left side to the right.
+                path.addArc(center: h, radius: hr, startAngle: tipAngle + .pi / 2, endAngle: tipAngle - .pi / 2, clockwise: true)
+                for p in right[k0...].reversed() { path.addLine(to: p) }
+                return path
             }
+            let outline = sides(from: 0)
+            outline.closeSubpath()
+            let kEdge = Int((Double(n) * (0.3 - t0) / (1 - t0)).rounded())
+            let edgePath = sides(from: kEdge)
+            edgeStart = r.px(ArmRig.centre(a, t0 + (1 - t0) * Double(kEdge) / Double(n)))
+            // A thumb nub or a pointing finger: a capsule added as its own subpath (the fill
+            // rule merges it, no path boolean needed), never smaller than it needs to be to read.
+            let digit = ArmRig.digit(a)
+            let dr = max(hr, CGFloat(0.11 * a.reach * bodyScale) * r.R)
+            func capsule(from t0: CGFloat, to t1: CGFloat, width: CGFloat) -> CGPath {
+                let line = CGMutablePath()
+                line.move(to: CGPoint(x: h.x + dr * t0 * CGFloat(digit.x), y: h.y + dr * t0 * CGFloat(digit.y)))
+                line.addLine(to: CGPoint(x: h.x + dr * t1 * CGFloat(digit.x), y: h.y + dr * t1 * CGFloat(digit.y)))
+                return line.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 1)
+            }
+            let finger: CGPath? = switch a.shape {
+            case .thumbsUp: capsule(from: 0.5, to: 1.15, width: dr * 0.7)
+            case .point: capsule(from: 0, to: 1.5, width: dr * 0.8)
+            default: nil
+            }
+            if let finger {
+                outline.addPath(finger)
+                edgePath.addPath(finger)
+            }
+            let shape: CGPath = outline
             tube = shape
-            hole = CGFloat(0.3 * a.reach * bodyScale) * r.R
+            edge = edgePath
+            hole = CGFloat(max(0.22, 0.3 * ArmRig.length(a)) * a.reach * bodyScale) * r.R
             handR = hr
+            let ts = 0.68
+            let cs = ArmRig.centre(a, ts)
+            let tg = ArmRig.tangent(a, ts)
+            var nrm = SIMD2(-tg.y, tg.x)
+            if nrm.y > 0 { nrm = -nrm }
+            let ws = ArmRig.halfWidth(a, ts, bodyScale: bodyScale)
+            shine = (r.px(cs + nrm * (ws * 0.38)), CGPoint(x: tg.x, y: tg.y), CGFloat(ws) * r.R)
         }
     }
 
@@ -146,20 +183,21 @@ extension SlimeCGRenderer {
             cg.clip(using: .evenOdd)
             stroke(lobe.tube, deep, 0.2, width: 0.16 * R * bs, in: cg)
             cg.restoreGState()
-            stroke(lobe.tube, inkLine, 0.9, width: lineW, in: cg)
+            stroke(lobe.edge, inkLine, 0.9, width: lineW, in: cg)
             cg.setBlendMode(.destinationOut)
-            let sh = px(a.shoulder)
-            cg.drawRadialGradient(gradient([(.white, 0), (.white, 0.3), (RGBA.white.opacity(0), 1)]),
-                                  startCenter: sh, startRadius: 0, endCenter: sh, endRadius: lobe.hole * 2.2, options: [])
+            let sh = lobe.edgeStart
+            cg.drawRadialGradient(gradient([(.white, 0), (.white, 0.25), (RGBA.white.opacity(0), 1)]),
+                                  startCenter: sh, startRadius: 0, endCenter: sh, endRadius: lobe.hole, options: [])
             cg.endTransparencyLayer()
             cg.restoreGState()
         }
-        // 3. A specular on the hand, like the one on the head.
+        // 3. A specular on the limb, like the one on the head: a small pill on its lit side,
+        //    two thirds of the way to the tip.
         func specular(_ lobe: Lobe, in cg: CGContext) {
-            guard detail >= .medium else { return }
-            let h = px(lobe.arm.hand), hr = lobe.handR
-            var t = CGAffineTransform(translationX: h.x - hr * 0.3, y: h.y - hr * 0.38).rotated(by: -0.55)
-            let ell = CGPath(ellipseIn: CGRect(x: -hr * 0.3, y: -hr * 0.15, width: hr * 0.6, height: hr * 0.3), transform: &t)
+            guard detail >= .medium, lobe.shine.halfWidth > 1.5 else { return }
+            let s = lobe.shine
+            var t = CGAffineTransform(translationX: s.centre.x, y: s.centre.y).rotated(by: atan2(s.tangent.y, s.tangent.x))
+            let ell = CGPath(ellipseIn: CGRect(x: -s.halfWidth * 0.55, y: -s.halfWidth * 0.26, width: s.halfWidth * 1.1, height: s.halfWidth * 0.52), transform: &t)
             fill(ell, theme.highlight, 0.9, in: cg)
         }
 

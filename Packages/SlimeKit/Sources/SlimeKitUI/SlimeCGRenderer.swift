@@ -502,14 +502,14 @@ public struct SlimeCGRenderer {
             default: break
             }
         case .content:
-            // The resting face of the sticker sheets: one thin stroke, a shallow arch whose outer
-            // end sits a touch lower than the inner one, the eye closed in calm.
-            line(quad(CGPoint(x: -inward * w, y: h * 0.40), CGPoint(x: inward * w, y: h * 0.18), control: CGPoint(x: 0, y: -h * 0.50)))
+            // The resting face of the sticker sheets: one long thin stroke, a shallow arch whose
+            // outer end sits a touch lower than the inner one, the eye closed in calm.
+            line(quad(CGPoint(x: -inward * w, y: h * 0.30), CGPoint(x: inward * w, y: h * 0.12), control: CGPoint(x: 0, y: -h * 0.34)))
         case .sad:
             // Outward-down arcs with a slight bow.
             line(quad(CGPoint(x: inward * w, y: -h * 0.4), CGPoint(x: -inward * w, y: h * 0.4), control: CGPoint(x: 0, y: -h * 0.3)))
         case .relaxed:
-            // "ー" with a small tick at the outer corner.
+            // A flat line with a small tick at the outer corner.
             line(quad(CGPoint(x: -w, y: 0), CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.22)))
             line([CGPoint(x: -inward * w, y: h * 0.05), CGPoint(x: -inward * w * 1.2, y: h * 0.42)], widthScale: 0.7)
         case .squeeze:

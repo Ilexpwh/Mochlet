@@ -3,7 +3,7 @@ import simd
 
 public enum EyeShape: String, Sendable, Codable, CaseIterable {
     case open, half, closedLine, happyArc, squint, dot, wide, spiral, cross, heart, star, tired, focused, flat
-    /// Ink-line faces from the anime: a relaxed "ー" with a tick, a "> <" squeeze with radiating
+    /// Ink-line faces from the anime: a relaxed flat line with a tick, a "> <" squeeze with radiating
     /// ticks, an angled glare, a half-lidded smug look, a welling teary eye, concentric shock rings,
     /// a sideways glance and a soft "︶" pleased arc.
     case relaxed, squeeze, glare, smug, teary, shock, sideGlance, pleased
@@ -90,9 +90,9 @@ public struct EyeRig: Sendable, Codable, Equatable {
     /// blush ovals outside and a little below the eyes at (±0.84, −0.91).
     public static var anime: EyeRig {
         var r = EyeRig()
-        r.separation = 0.71
+        r.separation = 0.58
         r.basePitch = 0.17
-        r.eyeRadius = 0.30
+        r.eyeRadius = 0.37
         r.eyeAspect = 0.5
         r.mouthPitch = -0.30
         r.blushYaw = 1.27
@@ -103,7 +103,7 @@ public struct EyeRig: Sendable, Codable, Equatable {
     /// The stroke face on a mini: the same proportions, a little longer so it reads at 7 px.
     public static var animeMini: EyeRig {
         var r = anime
-        r.eyeRadius = 0.34
+        r.eyeRadius = 0.42
         return r
     }
 

@@ -136,6 +136,7 @@ public enum Filmstrip {
         case "release": engine.pressEnded()
         case "emote": if let e = SlimeEmote(rawValue: arg) { engine.trigger(e) }
         case "agent": if let s = AgentState(rawValue: arg) { engine.agent(s) }
+        case "gesture": if let p = ArmPose.parse(arg) { engine.gesture(p, for: 30) }
         case "listen": engine.startListening()
         case "stoplisten": engine.stopListening(hadSpeech: arg != "silent")
         case "record": engine.setRecording(arg != "off")

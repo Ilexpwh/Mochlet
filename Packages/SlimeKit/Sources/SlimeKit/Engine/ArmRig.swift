@@ -271,10 +271,26 @@ public struct ArmRig: Sendable, Equatable {
     }
 
     public static let transition = 0.28
-    /// Half-width of a lobe at full reach (R units): a short soft nub like the anime's, slim and
-    /// rounded, with barely a hand at the end.
-    public static let halfWidth = 0.12
-    public static let handRadius = 0.14
+    /// The arm is a small cone, as in the anime: the body stretches out into a pseudopod that is
+    /// wide where it leaves the silhouette and tapers in a straight line to a rounded tip no
+    /// bigger than the hand. A short nub is broad at the base; a long reach (the hands meeting
+    /// at the mouth, a hug) thins out so it reads as a tentacle rather than a blade. Half-widths
+    /// in R units at full reach.
+    public static let shortBaseHalfWidth = 0.22
+    public static let longBaseHalfWidth = 0.12
+    public static let handRadius = 0.08
+
+    /// Centre-line length of the arm in R (shoulder to elbow to hand).
+    public static func length(_ a: ArmFrame) -> Double {
+        simd_distance(a.shoulder, a.elbow) + simd_distance(a.elbow, a.hand)
+    }
+
+    /// Half-width at the shoulder for this arm's length: the short nub's up to 0.5 R, the long
+    /// reach's from 1.2 R, a straight ramp between.
+    public static func baseHalfWidth(_ a: ArmFrame) -> Double {
+        let k = max(0, min(1, (length(a) - 0.5) / 0.7))
+        return shortBaseHalfWidth + (longBaseHalfWidth - shortBaseHalfWidth) * k
+    }
     /// Elongation of the goo blobs along the arm (cross half-width = radius / stretch).
     public static let blobStretch = 1.35
 
@@ -294,9 +310,12 @@ public struct ArmRig: Sendable, Equatable {
         return l > 1e-6 ? d / l : SIMD2(0, -1)
     }
 
-    /// Half-width of the lobe at t: even along the arm, swelling into the round hand at the end.
+    /// Half-width of the lobe at t: a straight cone from the base to the hand, whose radius is
+    /// the tip, so the round hand caps it.
     public static func halfWidth(_ a: ArmFrame, _ t: Double, bodyScale: Double) -> Double {
-        let w = halfWidth + (a.handRadius - halfWidth) * smoothstep(0.55, 1, t)
+        let u = max(0, min(1, t))
+        let base = baseHalfWidth(a)
+        let w = base + (a.handRadius - base) * u
         return w * a.reach * bodyScale
     }
 
@@ -313,8 +332,7 @@ public struct ArmRig: Sendable, Equatable {
     public static func blobs(for a: ArmFrame, bodyScale: Double) -> [Blob] {
         guard a.reach > 0.03 else { return [] }
         var out: [Blob] = []
-        let length = simd_distance(a.shoulder, a.elbow) + simd_distance(a.elbow, a.hand)
-        let n = max(3, Int((length * 0.85 / 0.14).rounded(.up)))
+        let n = max(3, Int((length(a) * 0.85 / 0.14).rounded(.up)))
         for k in 0...n {
             let t = 0.85 * Double(k) / Double(n)
             let w = halfWidth(a, t, bodyScale: bodyScale)
@@ -324,11 +342,13 @@ public struct ArmRig: Sendable, Equatable {
         let hr = a.handRadius * a.reach * bodyScale
         out.append(Blob(position: a.hand, radius: hr, shaded: false))
         let d = digit(a)
+        // Digits keep a readable size whatever the hand has shrunk to.
+        let dr = max(hr, 0.11 * a.reach * bodyScale)
         switch a.shape {
         case .thumbsUp:
-            out.append(Blob(position: a.hand + d * (hr * 0.85), radius: hr * 0.35 * 1.4, stretch: 1.4, heading: atan2(d.y, d.x), shaded: false))
+            out.append(Blob(position: a.hand + d * (dr * 0.85), radius: dr * 0.35 * 1.4, stretch: 1.4, heading: atan2(d.y, d.x), shaded: false))
         case .point:
-            out.append(Blob(position: a.hand + d * (hr * 1.1), radius: hr * 0.42 * 1.6, stretch: 1.6, heading: atan2(d.y, d.x), shaded: false))
+            out.append(Blob(position: a.hand + d * (dr * 1.1), radius: dr * 0.42 * 1.6, stretch: 1.6, heading: atan2(d.y, d.x), shaded: false))
         default:
             break
         }
@@ -447,8 +467,11 @@ public struct ArmRig: Sendable, Equatable {
         }
     }
 
-    /// Stubby reach: no hand ends more than about 1.15 R from the centroid, so the arms read as
-    /// little nubs poking out of the jelly rather than limbs.
+    /// Stubby reach: no hand ends more than about 1.6 R from the centroid, so the arms read as
+    /// little cones poking out of the jelly rather than limbs. The elbow is the control point of
+    /// the arm's curve: it sits close to the line from shoulder to hand, bowed a little outward,
+    /// because a cone that hooks reads as a tusk. Shoulder angles are elevation above the side
+    /// (0 = the side at centroid height, 1.57 = the top).
     public static func keyframe(_ pose: ArmPose, side: Double) -> Target {
         let hidden = Target.hidden(side: side)
         let m = side  // mirror x for the left arm
@@ -459,50 +482,57 @@ public struct ArmRig: Sendable, Equatable {
         case .hidden:
             return hidden
         case .holdFront(let p):
+            // Both arms come in from the lower sides to hold the prop in front of the mouth.
             let lift = p.isFile ? -0.4 * bites(p) : 0
-            return sym(SIMD2(0.34, 0.56 + lift), SIMD2(0.9, 0.46 + lift * 0.5), angle: 0.15, shape: .grip)
+            return sym(SIMD2(0.34, 0.56 + lift), SIMD2(0.84, 0.36 + lift * 0.5), angle: 0.15, shape: .grip)
         case .holdHigh:
-            return sym(SIMD2(0.44, -1.0), SIMD2(0.95, -0.52), angle: 0.75, shape: .grip)
+            return sym(SIMD2(0.44, -1.0), SIMD2(0.74, -0.88), angle: 0.75, shape: .grip)
         case .hug(.some):
             // Arms cross in front: the right hand reaches to the left side and vice versa.
             return side > 0
-                ? Target(shoulderAngle: -0.25, elbow: SIMD2(0.85, 0.48), hand: SIMD2(-0.18, 0.34), reach: 1, shape: .grip)
-                : Target(shoulderAngle: .pi + 0.25, elbow: SIMD2(-0.85, 0.54), hand: SIMD2(0.2, 0.46), reach: 1, shape: .grip)
+                ? Target(shoulderAngle: -0.25, elbow: SIMD2(0.7, 0.42), hand: SIMD2(-0.18, 0.34), reach: 1, shape: .grip)
+                : Target(shoulderAngle: .pi + 0.25, elbow: SIMD2(-0.7, 0.48), hand: SIMD2(0.2, 0.46), reach: 1, shape: .grip)
         case .hug(.none):
             // A self-hug: both arms wrap round the belly, hands overlapping in front.
             return side > 0
-                ? Target(shoulderAngle: -0.2, elbow: SIMD2(0.9, 0.22), hand: SIMD2(-0.4, 0.14), reach: 1, shape: .open)
-                : Target(shoulderAngle: .pi + 0.2, elbow: SIMD2(-0.9, 0.3), hand: SIMD2(0.36, 0.26), reach: 1, shape: .open)
+                ? Target(shoulderAngle: -0.2, elbow: SIMD2(0.75, 0.2), hand: SIMD2(-0.4, 0.14), reach: 1, shape: .open)
+                : Target(shoulderAngle: .pi + 0.2, elbow: SIMD2(-0.75, 0.28), hand: SIMD2(0.36, 0.26), reach: 1, shape: .open)
         case .holdSide(_, let s):
             guard s == side else { return hidden }
-            return sym(SIMD2(0.6, -0.12), SIMD2(0.92, 0.26), angle: 0.3, shape: .grip)
+            return sym(SIMD2(0.6, -0.12), SIMD2(0.9, -0.08), angle: 0.3, shape: .grip)
         case .wave(let s):
+            // A short cone raised from the upper side, swaying from the hand.
             guard s == side else { return hidden }
-            return sym(SIMD2(1.14, -0.62), SIMD2(1.08, -0.18), angle: 0.6, shape: .open)
+            return sym(SIMD2(1.3, -0.9), SIMD2(1.14, -0.72), angle: 0.75, shape: .open)
         case .thumbsUp(let s):
+            // A nub poked out to the side at eye height, the thumb on top.
             guard s == side else { return hidden }
-            return sym(SIMD2(0.82, -0.5), SIMD2(0.95, 0.06), angle: 0.45, shape: .thumbsUp)
+            return sym(SIMD2(1.3, -0.8), SIMD2(1.18, -0.6), angle: 0.8, shape: .thumbsUp)
         case .cheer:
-            return sym(SIMD2(0.9, -0.84), SIMD2(1.02, -0.36), angle: 0.6, shape: .fist)
+            // Both pseudopods raised up and out from the upper sides, at about 45 degrees so
+            // they read as arms, not ears.
+            return sym(SIMD2(1.26, -0.96), SIMD2(1.1, -0.8), angle: 0.7, shape: .fist)
         case .rubEyes:
-            return sym(SIMD2(0.32, -0.28), SIMD2(0.9, 0.08), angle: 0.45, shape: .fist)
+            return sym(SIMD2(0.32, -0.28), SIMD2(0.68, -0.4), angle: 0.45, shape: .fist)
         case .scratchHead:
+            // One cone arching over the top of the head.
             guard side > 0 else { return hidden }
-            return sym(SIMD2(0.46, -0.9), SIMD2(0.98, -0.42), angle: 0.7, shape: .open)
+            return sym(SIMD2(0.46, -0.95), SIMD2(0.75, -0.85), angle: 0.7, shape: .open)
         case .facepalm:
+            // In across the eye from the upper side.
             guard side > 0 else { return hidden }
-            return sym(SIMD2(0.14, -0.34), SIMD2(0.88, -0.04), angle: 0.5, shape: .open)
+            return sym(SIMD2(0.18, -0.36), SIMD2(0.62, -0.45), angle: 0.5, shape: .open)
         case .cover:
-            return sym(SIMD2(0.3, -0.26), SIMD2(0.88, 0.12), angle: 0.45, shape: .open)
+            return sym(SIMD2(0.32, -0.28), SIMD2(0.68, -0.4), angle: 0.45, shape: .open)
         case .point(let d):
             let dir = TraitRig.unit(d)
             guard (dir.x >= 0) == (side > 0) else { return hidden }
             let hand = dir * 1.12
-            let perp = SIMD2(-dir.y, dir.x) * (side > 0 ? 0.2 : -0.2)
-            return Target(shoulderAngle: side > 0 ? -0.4 : .pi + 0.4, elbow: dir * 0.78 + perp + SIMD2(0, 0.08), hand: hand, reach: 1, shape: .point)
+            let perp = SIMD2(-dir.y, dir.x) * (side > 0 ? 0.12 : -0.12)
+            return Target(shoulderAngle: side > 0 ? -0.4 : .pi + 0.4, elbow: dir * 0.8 + perp + SIMD2(0, 0.04), hand: hand, reach: 1, shape: .point)
         case .sip:
             guard side > 0 else { return hidden }
-            return sym(SIMD2(0.34, 0.32), SIMD2(0.9, 0.38), angle: 0.2, shape: .grip)
+            return sym(SIMD2(0.34, 0.32), SIMD2(0.82, 0.22), angle: 0.2, shape: .grip)
         }
     }
 

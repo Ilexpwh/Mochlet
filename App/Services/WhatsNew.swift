@@ -11,9 +11,14 @@ enum WhatsNew {
     }
 
     static let notes: [Note] = [
+        Note(version: "2.1.2", title: "Character 3.1: longer eyes, cone arms", lines: [
+            "The resting eyes are two long thin strokes, closer together and gently arched, as on the sticker sheets.",
+            "Arms are small cones of jelly: broad where they leave the body, tapering to a rounded tip with barely a hand. Short nubs for a wave, a cheer or a thumbs up; thin tentacles for a hug or a file held at the mouth.",
+            "The approval card shows its scroll bars and marks long runs of blanks, so a command cannot hide its tail.",
+        ]),
         Note(version: "2.1.1", title: "Character 3: drawn like the anime", lines: [
             "A wide, flat-based bun of translucent jelly: pale shell, a darker cloud-topped core with windows, one hard highlight, a thin ink line.",
-            "An anime face: stroke eyes with lash ticks, flat blush ovals, a mouth only when the mood calls for it. Round eyes stay in Settings → Character → Face.",
+            "An anime face: stroke eyes, flat blush ovals, a mouth only when the mood calls for it. Round eyes stay in Settings → Character → Face.",
             "Anime timing: a crouch before every hop, a stretch in the air, a squash on landing and two or three jelly wobbles after; pokes dent where you touch, three quick ones draw a sweat drop.",
             "Creases when it strains, the face slides down when it melts, the core lags the body by a beat. All sizes, all looks and colours.",
         ]),

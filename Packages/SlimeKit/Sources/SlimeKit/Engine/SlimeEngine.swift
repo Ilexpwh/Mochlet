@@ -448,7 +448,7 @@ public final class SlimeEngine {
         lastInteractionAt = time
         let c = body.centroid
         let side: Double = local.x >= c.x ? 1 : -1
-        // ぷにぷに: a local dent under the finger that ripples round the ring, a squint, strain
+        // Puni-puni poke: a local dent under the finger that ripples round the ring, a squint, strain
         // creases that fade, and a sweat drop on the third quick poke.
         strainAngle = atan2(local.y - c.y, local.x - c.x)
         if !reduceMotion { body.apply(.poke(angle: strainAngle, depth: 0.25)) }
@@ -1044,7 +1044,7 @@ public final class SlimeEngine {
             scheduler.schedule(at: time + 0.2, tag: Self.emoteTag) { [weak self] in self?.spawnSparkles(count: 6) }
             cue(.finish, gain: 0.8)
         case .melt:
-            // とけている: the body sags into a puddle and spreads at the base, eyes drooping.
+            // Melt: the body sags into a puddle and spreads at the base, eyes drooping.
             startMorph(.melt, duration: 0.7, ease: .inOutSine)
             // The release eases straight back: the jelly ring supplies the overshoot on its own.
             // 0.66 keeps the wider bun's puddle inside the expanded island (hero at x 96 of 640).
@@ -1067,7 +1067,7 @@ public final class SlimeEngine {
             }
             cue(.squish, rate: 0.7, gain: 0.8)
         case .puff:
-            // ふくらむ: cheeks balloon out, a glare, a pout and steam off the top.
+            // Puff: cheeks balloon out, a glare, a pout and steam off the top.
             startMorph(.puff, duration: 0.2, ease: .outBack)
             sizeScale.animate(to: 1.06, duration: 0.3, ease: .outBack, at: time)
             blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
@@ -1154,7 +1154,7 @@ public final class SlimeEngine {
                                    .init(to: 0.96, duration: 0.2, ease: .inOutSine), .init(to: 1, duration: 0.2, ease: .outBack)], at: time)
             cue(.stretch, gain: 0.6)
         case .poked:
-            // ツンツン: a side squish away from the finger with "> <" eyes.
+            // Prod: a side squish away from the finger with "> <" eyes.
             let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
             mouthOpen.animate(to: 0.25, duration: 0.08, at: time)
             lean.animate(keys: [.init(to: -0.12 * side, duration: 0.1, ease: .outQuad), .init(to: style.lean, duration: 0.45, ease: .outBack)], at: time)

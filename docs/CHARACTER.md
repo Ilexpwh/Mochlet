@@ -19,6 +19,15 @@ which code owns it.
   tall) are explicit so they stay distinct from the bun.
 - Everything inside the body (face, core, highlights, arm joints, morph blobs) is placed through
   the `BodyFrame` affine fit, so it squashes, leans and stretches with the ring.
+- **Arms are pseudopods**, not limbs: a small cone of the same jelly that grows out of the
+  silhouette, broad at the base and tapering in a straight line to a rounded tip no bigger than
+  the hand (`ArmRig`: base half-width 0.22 R for a short nub, 0.12 R once the reach passes 1.2 R,
+  tip 0.08 R). Poses keep the elbow close to the shoulder-to-hand line, because a cone that hooks
+  reads as a tusk. The hand is only an anchor for props and for the thumb or pointing nub. Over
+  the body the lobe gets an ink line along its sides from a third of the way out, never at the
+  base, and one small specular pill two thirds of the way to the tip. Render any pose with
+  `render-filmstrip --script "0.1:gesture:<pose>"` (`cheer`, `wave`, `thumbsUp`, `hug:heart`,
+  `holdFront:doc`, `point:1,-0.4`, …).
 - The body carries emotion: melt → low lobed puddle; puff → cheeks out, top flat; strain → crease
   strokes; shock → jump and stretch thin; marks (`?` `!` `♪`) grow out of the top-back as the same
   material over one bead.
@@ -45,10 +54,10 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 
 | Feeling | Eyes | Mouth | Extras |
 | --- | --- | --- | --- |
-| content (idle, greeting, question, waiting) | one thin stroke per eye, 0.46 R long, a shallow arch whose outer end sits a touch lower (the resting face of the sticker sheets and the Bandai figures); eyes 1.15 R apart at the upper third, strokes inked like the outline (0.034 R, min 1.5 px) | none | blush ovals outside and below the eyes, 0.70 |
+| content (idle, greeting, question, waiting) | one long thin stroke per eye, 0.62 R long, a shallow arch whose outer end sits a touch lower (the resting face of the sticker sheets); eye centres 0.98 R apart with a 0.33 R gap between the inner ends, strokes inked like the outline (0.034 R, min 1.5 px) | none | blush ovals outside and below the eyes, 0.70 |
 | happy / finished / cheer | ᵔ ᵔ arcs | ω / open wide | sparkles |
 | thinking / working | relaxed line with a tick | none | |
-| sleeping | — — | none | zzz |
+| sleeping | two flat lines | none | zzz |
 | squeeze (error, poked) | > < with strain ticks | wavy / o | sweat |
 | shock / surprised | double-ring eyes, dot pupils | open wide / o | `!` |
 | dizzy | spirals | wavy | |
@@ -75,7 +84,7 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 - Sweat: `AccessoryKind.sweat`, a teardrop of the body's own jelly (shell, inner, ink, glint) that
   rides the upper cheek at ring angle −π/2 ± 0.75 and slides 0.30 rad down over 0.8 s, 0.62 s life
   plus the 0.18 s removal fade. The error state sweats every 2.5 s, `confused` once, and the third
-  press within 0.9 s of the last (ぷにぷに) draws one.
+  press within 0.9 s of the last (the puni-puni poke) draws one.
 - Creases: `CreaseFrame`s are 0.18 R ink ticks pointing in from 0.05 R inside the outline. A press
   sets `strainAngle` from the finger and fades `strainAmount` 1 → 0 over 0.5 s (three ticks); puff
   creases both cheeks and melt both lower sides while the morph holds (two ticks each side).

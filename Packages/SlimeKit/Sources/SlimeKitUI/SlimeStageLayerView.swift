@@ -21,6 +21,8 @@ public final class SlimeStageLayerView: NSView {
     public var updatesPointer = true
     /// Which placed slimes this view draws (the island skips the ghost; a desktop panel draws only the main).
     public var include: (PlacedSlime) -> Bool = { _ in true }
+    /// What the slimes stand on: a glow on the black island, a dark shadow over the desktop.
+    public var floorShadow: SlimeCGRenderer.FloorShadow = .glow
     /// Called first on every tick with the seconds since the previous tick; hosts animate layout here.
     public var onTick: ((SlimeStageLayerView, Double) -> Void)?
     /// Drains cues from the stage; only one view of a stage should own this.
@@ -199,7 +201,7 @@ public final class SlimeStageLayerView: NSView {
         cg.scaleBy(x: scale, y: -scale)
         cg.setAllowsAntialiasing(true)
         cg.setShouldAntialias(true)
-        Self.draw(placed, in: cg, origin: origin(bounds.size), radius: radius)
+        Self.draw(placed, in: cg, origin: origin(bounds.size), radius: radius, floorShadow: floorShadow)
         cg.restoreGState()
         layer.contentsScale = scale
         layer.contentsGravity = .resize
@@ -208,10 +210,11 @@ public final class SlimeStageLayerView: NSView {
     }
 
     /// Draws placed slimes: main first, then minis, then the ghost.
-    public static func draw(_ placed: [PlacedSlime], in cg: CGContext, origin: CGPoint, radius: CGFloat) {
+    public static func draw(_ placed: [PlacedSlime], in cg: CGContext, origin: CGPoint, radius: CGFloat,
+                            floorShadow: SlimeCGRenderer.FloorShadow = .glow) {
         for p in placed {
             let o = CGPoint(x: origin.x + CGFloat(p.offset.x) * radius, y: origin.y + CGFloat(p.offset.y) * radius)
-            SlimeCGRenderer.draw(p.frame, appearance: p.appearance, in: cg, origin: o, radius: radius * CGFloat(p.scale))
+            SlimeCGRenderer.draw(p.frame, appearance: p.appearance, in: cg, origin: o, radius: radius * CGFloat(p.scale), floorShadow: floorShadow)
         }
     }
 }

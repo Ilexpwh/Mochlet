@@ -4,8 +4,9 @@ import SwiftUI
 import SlimeKit
 
 // Marks that pop up above the head as slime (`GlyphStyle.grown`): the glyph is a filled path in
-// the same jelly material with a cel shadow, rim line and highlight, so a "?" reads as a piece of
-// the slime, not a speech bubble. It floats clear of the head over one small bead.
+// the same two-layer jelly material (shell, inner mass low in the mark, ink line, one glint), so
+// a "?" reads as a piece of the slime, not a speech bubble. It floats clear of the head over one
+// small bead.
 extension SlimeCGRenderer {
     /// The hooked "?" from the anime as a filled outline, centred on the glyph's middle.
     static func questionGlyph(scale R: CGFloat, stroke w: CGFloat) -> CGPath {
@@ -42,12 +43,12 @@ extension SlimeCGRenderer {
         return s.union(head)
     }
 
-    /// Glyph outline and its cel-shadow band for a kind at a size. The path booleans are not cheap,
-    /// and the result depends only on (kind, R), so it is built once per size.
-    nonisolated(unsafe) private static var glyphCache: [String: (path: CGPath, shade: CGPath)] = [:]
+    /// Glyph outline for a kind at a size. The path booleans are not cheap, and the result
+    /// depends only on (kind, R), so it is built once per size.
+    nonisolated(unsafe) private static var glyphCache: [String: CGPath] = [:]
     private static let glyphLock = NSLock()
 
-    static func grownGlyph(_ kind: AccessoryKind, scale R: CGFloat) -> (path: CGPath, shade: CGPath)? {
+    static func grownGlyph(_ kind: AccessoryKind, scale R: CGFloat) -> CGPath? {
         let key = "\(kind.rawValue)@\(Int((R * 4).rounded()))"
         glyphLock.lock()
         defer { glyphLock.unlock() }
@@ -59,25 +60,23 @@ extension SlimeCGRenderer {
         case .note: path = noteGlyph(scale: R, stroke: 0.15 * R)
         default: return nil
         }
-        var lit = CGAffineTransform(translationX: -0.055 * R, y: -0.085 * R)
-        let shade = path.copy(using: &lit).map { path.subtracting($0) } ?? CGMutablePath()
         if glyphCache.count > 24 { glyphCache.removeAll() }
-        glyphCache[key] = (path, shade)
-        return (path, shade)
+        glyphCache[key] = path
+        return path
     }
 
     func drawGrownGlyph(_ kind: AccessoryKind, in cg: CGContext) {
-        guard let (path, shade) = Self.grownGlyph(kind, scale: R) else { return }
-        // Jelly fill: light from the top-left, a flat cel shadow toward the bottom-right.
-        fillRadial(path, [(core.mixed(with: mid, 0.25), 0), (mid, 0.7), (mid.mixed(with: rim, 0.4), 1)],
-                   center: CGPoint(x: -0.16 * R, y: -0.26 * R), radius: 0.8 * R, in: cg)
+        guard let path = Self.grownGlyph(kind, scale: R) else { return }
+        let m = material
+        fill(path, m.shell, in: cg)
+        // The inner mass sits low in the mark with a curved top, as in the body.
         cg.saveGState()
         cg.addPath(path)
         cg.clip()
-        fill(shade, jellyShade, 0.8, in: cg)
+        fill(Self.ellipse(CGPoint(x: 0.04 * R, y: 0.14 * R), 0.46 * R, 0.40 * R), m.inner, 0.95, in: cg)
         cg.restoreGState()
-        stroke(path, inkLine, 0.8, width: max(1, 0.03 * R), in: cg)
-        // One soft highlight near the top of the glyph.
-        fill(Self.ellipse(CGPoint(x: -0.1 * R, y: -0.36 * R), 0.07 * R, 0.045 * R), theme.highlight, 0.85, in: cg)
+        stroke(path, m.inkLine, width: max(1, 0.03 * R), in: cg)
+        // One hard glint near the top of the glyph.
+        fill(Self.ellipse(CGPoint(x: -0.1 * R, y: -0.36 * R), 0.07 * R, 0.045 * R), m.highlight, 0.9, in: cg)
     }
 }

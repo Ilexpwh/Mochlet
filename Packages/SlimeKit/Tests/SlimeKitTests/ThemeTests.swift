@@ -31,6 +31,36 @@ import Foundation
         }
     }
 
+    /// The two layers of the material must read as two tones, and the ink on the shell, for
+    /// every preset, every custom pick and under the state tints.
+    @Test func materialContrast() {
+        func check(_ t: SlimeTheme, tint: StateTint = .none, label: String) {
+            let m = t.material(tint: tint)
+            if t.isDark {
+                #expect(m.inner.luminance < m.shell.luminance - 0.03, "\(label) inner darker than shell")
+            } else {
+                let d = m.shell.luminance - m.inner.luminance
+                #expect(d >= 0.15, "\(label) shell/inner contrast \(d)")
+            }
+            let ink = abs(m.inkLine.luminance - m.shell.luminance)
+            #expect(ink >= 0.30, "\(label) ink/shell contrast \(ink)")
+            #expect(m.window.a > 0 && m.rimLight.a > 0 && m.glow.a > 0 && m.inkLine.a >= 0.85)
+        }
+        for t in SlimeTheme.all {
+            check(t, label: t.name)
+            for tint in [StateTint.error, .thinking, .waiting, .sleeping, .dizzy] { check(t, tint: tint, label: "\(t.name) tinted") }
+        }
+        for hue in stride(from: 0.0, to: 360, by: 30) {
+            for light in [0.15, 0.3, 0.5, 0.7, 0.85] {
+                for sat in [0.0, 0.3, 1.0] {
+                    check(SlimeTheme.derived(hue: hue, saturation: sat, lightness: light), label: "h\(hue) s\(sat) l\(light)")
+                }
+            }
+        }
+        let r = SlimeTheme.rimuru.material()
+        #expect(r.shell.luminance > 0.8 && r.inner.luminance < 0.75, "rimuru reads pale shell over a blue core")
+    }
+
     @Test func derivedPaletteFollowsThePick() {
         let t = SlimeTheme.derived(hue: 200, saturation: 0.9, lightness: 0.6)
         let h = t.mid.hsl

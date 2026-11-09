@@ -39,7 +39,7 @@ extension SlimeCGRenderer {
     }
 
     private var bodyScale: CGFloat { CGFloat((frame.body.scaleX * frame.body.scaleY).squareRoot()) }
-    var inkLine: RGBA { theme.ink.mixed(with: mid, 0.45) }
+    var inkLine: RGBA { material.inkLine }
 
     // MARK: Arms
 
@@ -110,26 +110,24 @@ extension SlimeCGRenderer {
         var overlapping = false
         for i in boxes.indices { for k in boxes.indices where k > i && boxes[i].intersects(boxes[k]) { overlapping = true } }
 
-        // 1. The jelly inside the lobe, clipped to the silhouette, with its own cel shadow (the
-        //    band not covered by a copy of the lobe shifted toward the light) and a lit rim.
+        // 1. The jelly inside the lobe, clipped to the silhouette: the shell tone, the inner
+        //    tone along its underside (the band not covered by a copy of the lobe shifted toward
+        //    the light, as the core flows into the pseudopod) and a thin band of reflected light.
         func jelly(_ lobe: Lobe, in cg: CGContext) {
             cg.saveGState()
             cg.addPath(lobe.tube)
             cg.clip()
-            cg.saveGState()
-            cg.concatenate(localTransform)
-            jellyGradient(in: cg)
-            cg.restoreGState()
+            fill(lobe.tube, material.shell, in: cg)
             var m = shift
             if let lit = lobe.tube.copy(using: &m) {
                 cg.saveGState()
                 cg.addPath(huge)
                 cg.addPath(lit)
                 cg.clip(using: .evenOdd)
-                fill(lobe.tube, jellyShade, 0.8, in: cg)
+                fill(lobe.tube, material.inner, 0.55, in: cg)
                 cg.restoreGState()
             }
-            stroke(lobe.tube, .white, theme.isDark ? 0.22 : 0.16, width: 0.08 * R, in: cg)
+            if detail >= .medium { stroke(lobe.tube, material.rimLight, width: 0.06 * R, in: cg) }
             cg.restoreGState()
         }
         // 2. Over the body (or the other arm): a contact shadow just outside the lobe and the
@@ -148,7 +146,7 @@ extension SlimeCGRenderer {
             cg.clip(using: .evenOdd)
             stroke(lobe.tube, deep, 0.2, width: 0.16 * R * bs, in: cg)
             cg.restoreGState()
-            stroke(lobe.tube, inkLine, 0.75, width: lineW, in: cg)
+            stroke(lobe.tube, inkLine, 0.9, width: lineW, in: cg)
             cg.setBlendMode(.destinationOut)
             let sh = px(a.shoulder)
             cg.drawRadialGradient(gradient([(.white, 0), (.white, 0.3), (RGBA.white.opacity(0), 1)]),

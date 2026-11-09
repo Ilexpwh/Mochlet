@@ -14,31 +14,41 @@ public struct SlimeCGRenderer {
     /// The palette (colours) of `appearance`.
     public var theme: SlimeTheme { appearance.palette }
 
+    /// What goes under the body: a soft glow on the black island, a soft dark shadow on the
+    /// desktop, or nothing (thumbnails on a clear background).
+    public enum FloorShadow: Sendable, Equatable { case none, glow, dark }
+    public let floorShadow: FloorShadow
+
     let rim: RGBA
     let deep: RGBA
     let mid: RGBA
     let core: RGBA
+    /// The two-layer cel material of the palette under the frame's tint.
+    let material: SlimeTheme.Material
     private static let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
-    public init(frame: SlimeFrame, appearance: SlimeAppearance, origin: CGPoint, radius: CGFloat) {
+    public init(frame: SlimeFrame, appearance: SlimeAppearance, origin: CGPoint, radius: CGFloat, floorShadow: FloorShadow = .glow) {
         self.frame = frame
         self.appearance = appearance
         self.origin = origin
         self.R = radius
+        self.floorShadow = floorShadow
         let theme = appearance.palette
         let t = frame.tint
         rim = theme.rim.mixed(with: t.color, t.opacity).desaturated(t.desaturation)
         deep = theme.deep.mixed(with: t.color, t.opacity * 0.8).desaturated(t.desaturation)
         mid = theme.mid.mixed(with: t.color, t.opacity * 0.6).desaturated(t.desaturation)
         core = theme.core.desaturated(t.desaturation)
+        material = theme.material(tint: t)
     }
 
     public init(frame: SlimeFrame, theme: SlimeTheme, origin: CGPoint, radius: CGFloat) {
         self.init(frame: frame, appearance: SlimeAppearance(palette: theme), origin: origin, radius: radius)
     }
 
-    public static func draw(_ frame: SlimeFrame, appearance: SlimeAppearance, in cg: CGContext, origin: CGPoint, radius: CGFloat) {
-        SlimeCGRenderer(frame: frame, appearance: appearance, origin: origin, radius: radius).draw(in: cg)
+    public static func draw(_ frame: SlimeFrame, appearance: SlimeAppearance, in cg: CGContext, origin: CGPoint, radius: CGFloat,
+                            floorShadow: FloorShadow = .glow) {
+        SlimeCGRenderer(frame: frame, appearance: appearance, origin: origin, radius: radius, floorShadow: floorShadow).draw(in: cg)
     }
 
     public static func draw(_ frame: SlimeFrame, theme: SlimeTheme, in cg: CGContext, origin: CGPoint, radius: CGFloat) {
@@ -143,83 +153,57 @@ public struct SlimeCGRenderer {
         cg.restoreGState()
     }
 
-    // 1. Floor contact glow (the notch is black, so no dark shadow).
+    // 1. Floor contact: a soft glow of the body's own light on the black island, a soft dark
+    //    shadow on the desktop. It widens with the contact patch and fades as the body lifts off.
     func drawGlow(in cg: CGContext) {
-        guard frame.profile != .ghost else { return }
+        guard frame.profile != .ghost, floorShadow != .none else { return }
         let lift = max(0, -frame.root.y)
         let fade = 1 - smoothstep(0, 0.9, lift)
         guard fade > 0.01 else { return }
-        let w = (CGFloat(frame.contactWidth) + 0.5) * R * (1 + 0.4 * CGFloat(frame.glowBoost))
-        let hgt = 0.16 * R
+        let boost = CGFloat(frame.glowBoost)
+        let w = (CGFloat(frame.contactWidth) + 0.7) * R * (1 + 0.4 * boost)
+        let hgt = 0.18 * R
         let cx = origin.x + CGFloat(frame.root.x) * R
         let rect = CGRect(x: cx - w / 2, y: origin.y - hgt / 2, width: w, height: hgt)
+        let tone: RGBA = floorShadow == .dark ? theme.ink.opacity(0.25) : material.glow.opacity(1 + 0.6 * frame.glowBoost)
         // Squash the gradient to the ellipse by drawing in a scaled space.
         cg.saveGState()
         cg.translateBy(x: rect.midX, y: rect.midY)
         cg.scaleBy(x: 1, y: hgt / w)
         let circle = CGPath(ellipseIn: CGRect(x: -w / 2, y: -w / 2, width: w, height: w), transform: nil)
-        fillRadial(circle, [(mid.opacity(0.22 * fade * (1 + 0.6 * frame.glowBoost)), 0), (mid.opacity(0), 1)], center: .zero, radius: w / 2, in: cg)
+        fillRadial(circle, [(tone.opacity(fade), 0), (tone.opacity(fade * 0.7), 0.5), (tone.opacity(0), 1)], center: .zero, radius: w / 2, in: cg)
         cg.restoreGState()
     }
 
-    /// The jelly's base tone in local (reference) space: a soft top-left light on the mid tone.
-    /// Shared with the arm pass so a lobe over the body is the same material.
-    func jellyGradient(in cg: CGContext) {
-        let c = bodyCenterLocal
-        let big = CGPath(rect: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8), transform: nil)
-        fillRadial(big, [(core.mixed(with: mid, 0.3), 0), (mid, 0.72), (mid.mixed(with: rim, 0.35), 1)], center: CGPoint(x: c.x - 0.42, y: c.y - 0.55), radius: 1.7, in: cg)
-    }
-
-    /// The flat cel-shadow tone below the terminator.
-    var jellyShade: RGBA { mid.mixed(with: deep, theme.isDark ? 0.7 : 0.5) }
-
-    // 2–6. The jelly: gradient fill, lagging core, rim darkening, inner stroke, highlights.
+    // 2–8. The jelly, in the anime's two-layer translucent cel: a pale flat shell over the whole
+    //      silhouette (goo included), the darker inner mass with its windows, droplets, the look's
+    //      surface effect, a band of reflected light along the lower edge, hard specular highlights
+    //      fixed to the light, and one ink line around everything.
     func drawBodyFill(in cg: CGContext, bodyPath: CGPath, goo: Bool) {
+        let m = material
         cg.saveGState()
         cg.addPath(bodyPath)
         cg.clip(using: .evenOdd)
-
-        // Local (reference-space) drawing through the body's affine fit: a soft top-left light on
-        // the mid tone, then cel shading in the anime's language: one flat darker tone below a
-        // terminator that bows up through the lower body (thicker on the right, away from the
-        // light), with a thin band of reflected light along the silhouette inside the shadow.
-        cg.saveGState()
-        cg.concatenate(localTransform)
-        let c = bodyCenterLocal
-        let big = CGPath(rect: CGRect(x: c.x - 4, y: c.y - 4, width: 8, height: 8), transform: nil)
-        jellyGradient(in: cg)
-        let shade = jellyShade
-        let litR: CGFloat = 6.45
-        let lit = CGPath(ellipseIn: CGRect(x: c.x - 0.6 - litR, y: c.y - 6.0 - litR, width: 2 * litR, height: 2 * litR), transform: nil)
-        cg.saveGState()
-        cg.addPath(big)
-        cg.addPath(lit)
-        cg.clip(using: .evenOdd)
-        fill(big, shade, 0.92, in: cg)
-        var inv = localTransform.inverted()
-        if let localBody = bodyPath.copy(using: &inv) {
-            stroke(localBody, core.mixed(with: .white, 0.25), theme.isDark ? 0.35 : 0.55, width: 0.15, join: goo ? .bevel : .round, in: cg)
-        }
-        cg.restoreGState()
-        cg.restoreGState()
-        drawInnerMass(in: cg)
+        fill(bodyPath, m.shell, in: cg)
+        drawCoreMass(in: cg)
         drawInnerItems(in: cg)
 
         if goo {
+            // Droplets are small bodies of the same material: shell from the fill above, their own
+            // inner mass low in the drop, one glint.
             for b in frame.blobs where b.radius > 1e-4 && b.shaded {
                 let bc = px(b.position)
                 let r = CGFloat(b.radius) * R
-                fillRadial(Self.ellipse(bc, r * 1.4, r * 1.4), [(core.opacity(0.9), 0), (mid, 0.6), (rim, 1)],
-                           center: CGPoint(x: bc.x - r * 0.35, y: bc.y - r * 0.4), radius: r * 1.4, in: cg)
-                fill(Self.ellipse(CGPoint(x: bc.x - r * 0.3, y: bc.y - r * 0.45), r * 0.18, r * 0.12), theme.highlight, 0.9, in: cg)
+                fill(Self.ellipse(CGPoint(x: bc.x + r * 0.05, y: bc.y + r * 0.18), r * 0.78, r * 0.6), m.inner, 0.95, in: cg)
+                fill(Self.ellipse(CGPoint(x: bc.x - r * 0.3, y: bc.y - r * 0.45), r * 0.18, r * 0.12), m.highlight, 0.95, in: cg)
             }
         }
 
         drawSurface(in: cg, bodyPath: bodyPath)
 
-        // Core glow when excited (world space).
+        // Core glow when excited (world space, full detail).
         let boost = frame.coreBoost
-        if boost > 0.02 {
+        if boost > 0.02, detail >= .full {
             let coreCenter = px(frame.core)
             let cw = 0.62 * R * CGFloat(frame.body.scaleX)
             let ch = 0.50 * R * CGFloat(frame.body.scaleY)
@@ -227,59 +211,123 @@ public struct SlimeCGRenderer {
             cg.translateBy(x: coreCenter.x, y: coreCenter.y)
             cg.scaleBy(x: 1, y: ch / max(cw, 0.001))
             fillRadial(CGPath(ellipseIn: CGRect(x: -cw, y: -cw, width: 2 * cw, height: 2 * cw), transform: nil),
-                       [(core.opacity(0.5 * boost), 0), (core.opacity(0), 1)], center: .zero, radius: cw, in: cg)
+                       [(core.opacity(0.35 * boost), 0), (core.opacity(0), 1)], center: .zero, radius: cw, in: cg)
             cg.restoreGState()
         }
 
-        // Inner rim (half clipped away): the lit edge of the shell.
-        stroke(bodyPath, .white, theme.isDark ? 0.3 : 0.2, width: 0.08 * R, join: goo ? .bevel : .round, in: cg)
-
-        // Specular highlights, hard-edged, shifted against the gaze: a long oval, a small oval
-        // further down the curve, and a dot.
-        cg.saveGState()
-        cg.concatenate(localTransform)
-        let shift = CGPoint(x: frame.highlightShift.x, y: frame.highlightShift.y)
-        if frame.profile != .mini {
-            let hc = CGPoint(x: c.x - 0.34 + shift.x, y: c.y - 0.5 + shift.y)
-            var t = CGAffineTransform(translationX: hc.x, y: hc.y).rotated(by: -32 * .pi / 180)
-            let ell = CGPath(ellipseIn: CGRect(x: -0.34, y: -0.165, width: 0.68, height: 0.33), transform: &t)
-            fill(ell, theme.highlight, 0.95, in: cg)
-            if detail >= .medium {
-                let sc = CGPoint(x: c.x - 0.66 + shift.x * 0.8, y: c.y - 0.1 + shift.y * 0.8)
-                var t2 = CGAffineTransform(translationX: sc.x, y: sc.y).rotated(by: -58 * .pi / 180)
-                let small = CGPath(ellipseIn: CGRect(x: -0.11, y: -0.055, width: 0.22, height: 0.11), transform: &t2)
-                fill(small, theme.highlight, 0.9, in: cg)
-            }
-        }
-        let dc = CGPoint(x: c.x - 0.14 + shift.x * 0.7, y: c.y - 0.66 + shift.y * 0.7)
-        let dr: CGFloat = frame.profile == .mini ? 0.11 : 0.07
-        fill(Self.ellipse(dc, dr, dr), theme.highlight, 0.95, in: cg)
+        if detail >= .medium { drawRimBand(in: cg, bodyPath: bodyPath) }
+        drawHighlights(in: cg)
         cg.restoreGState()
 
-        cg.restoreGState()
-
-        // Outline: a thin line in the body's own ink tint (light on a dark body).
-        stroke(bodyPath, theme.ink.mixed(with: mid, 0.45), 0.75, width: max(1.0, 0.025 * R), join: goo ? .bevel : .round, in: cg)
+        // Outline: one thin opaque line in the body's own ink (light on a dark body).
+        stroke(bodyPath, m.inkLine, width: max(1.0, 0.035 * R), join: goo ? .bevel : .round, in: cg)
     }
 
-    /// The darker jelly mass seen through the shell. It sloshes with the core and its edge
-    /// undulates slowly, so the body reads as liquid rather than a painted ball.
-    func drawInnerMass(in cg: CGContext) {
-        guard detail >= .medium, frame.profile != .ghost else { return }
-        let centre = px(frame.core)
-        let rx = 0.56 * R * CGFloat(frame.body.scaleX)
-        let ry = 0.46 * R * CGFloat(frame.body.scaleY)
-        let t = frame.time
+    /// The darker mass inside the shell: a cloud-topped, flat-bottomed body of jelly filling the
+    /// lower three quarters, offset a little to the right, with one to three pale windows. It
+    /// trails the shell (the core spring) and its upper edge drifts slowly, so the slime reads as
+    /// liquid in a skin rather than a painted ball. Drawn in reference space so it squashes,
+    /// leans and stretches with the body.
+    func drawCoreMass(in cg: CGContext) {
+        guard frame.profile != .ghost else { return }
+        let m = material
+        let bf = frame.body
+        let kx = bf.referenceHalfWidth / 1.17
+        let ky = bf.referenceTopHeight / 1.70
+        // Where the core trails the shell, in reference units (the spring rests 0.04 above the centroid).
+        let lagWorld = frame.core - bf.origin - bf.transformVector(SIMD2(0, -0.04))
+        let raw = bf.matrix.inverse * lagWorld
+        let lag = raw.x.isFinite && raw.y.isFinite ? SIMD2(clamp(raw.x, -0.5, 0.5), clamp(raw.y, -0.5, 0.5)) : SIMD2<Double>.zero
+        let centre = SIMD2(0.05 * kx, -0.66 * ky) + lag * 0.6
+        let rx = 0.92 * kx
+        let ryUp = 0.60 * ky
+        let ryDown = 0.58 * ky
+        let n = detail == .full ? 20 : (detail == .medium ? 14 : 10)
+        let phase = 2 * .pi * frame.time / 12 + 4 * lag.x
         var pts: [CGPoint] = []
-        let n = 14
+        pts.reserveCapacity(n)
         for i in 0..<n {
             let a = Double(i) / Double(n) * 2 * .pi
-            let wobble = 1 + 0.09 * sin(3 * a + t * 1.1) + 0.05 * sin(5 * a - t * 0.7)
-            pts.append(CGPoint(x: centre.x + rx * CGFloat(cos(a) * wobble), y: centre.y + ry * CGFloat(sin(a) * wobble)))
+            let up = sin(a) < 0
+            var r = 1.0
+            if up {
+                r += 0.10 * sin(2.3 * a + phase)
+                if detail == .full { r += 0.06 * sin(4.1 * a - 0.7 + 0.6 * phase) }
+            }
+            let x = centre.x + rx * cos(a) * r
+            let y = min(centre.y + (up ? ryUp : ryDown) * sin(a) * r, -0.08 * ky)
+            pts.append(CGPoint(x: x, y: y))
         }
+        cg.saveGState()
+        cg.concatenate(localTransform)
         let path = BodyPath.closed(through: pts).cgPath
-        let tone: RGBA = theme.isDark ? core.mixed(with: mid, 0.5) : mid.mixed(with: deep, 0.45)
-        fill(path, tone, theme.isDark ? 0.22 : 0.3, in: cg)
+        let tone = m.inner.mixed(with: m.shell, 0.3 * frame.coreBoost)
+        fill(path, tone, 0.95 * (1 - clamp(look.transparency, 0, 0.8)), in: cg)
+        if detail >= .medium {
+            cg.saveGState()
+            cg.addPath(path)
+            cg.clip()
+            let win = RGBA(r: m.window.r, g: m.window.g, b: m.window.b, a: min(1, m.window.a + 0.3 * frame.coreBoost))
+            let w1 = CGPoint(x: centre.x - 0.26 * kx + 0.4 * lag.x, y: centre.y - 0.12 * ky + 0.4 * lag.y)
+            var t1 = CGAffineTransform(translationX: w1.x, y: w1.y).rotated(by: -15 * .pi / 180)
+            fill(CGPath(ellipseIn: CGRect(x: -0.15, y: -0.11, width: 0.30, height: 0.22), transform: &t1), win, in: cg)
+            let w2 = CGPoint(x: centre.x + 0.36 * kx + 0.4 * lag.x, y: centre.y + 0.08 * ky + 0.4 * lag.y)
+            fill(Self.ellipse(w2, 0.075, 0.075), win, in: cg)
+            if detail >= .full {
+                let w3 = CGPoint(x: centre.x + 0.08 * kx, y: centre.y + 0.30 * ky)
+                fill(Self.ellipse(w3, 0.045, 0.045), win, in: cg)
+            }
+            cg.restoreGState()
+        }
+        cg.restoreGState()
+    }
+
+    /// Reflected light: a thin pale crescent inside the outline along the lower right and the
+    /// base, where light comes back through the jelly. The even-odd of the body and a copy of it
+    /// shifted toward the light leaves exactly that band. World space, so it stays with the light.
+    func drawRimBand(in cg: CGContext, bodyPath: CGPath) {
+        let d = 0.075 * R * CGFloat((frame.body.scaleX * frame.body.scaleY).squareRoot())
+        var shift = CGAffineTransform(translationX: -d * 0.85, y: -d)
+        guard let lit = bodyPath.copy(using: &shift) else { return }
+        cg.saveGState()
+        cg.addPath(bodyPath)
+        cg.addPath(lit)
+        cg.clip(using: .evenOdd)
+        fill(bodyPath, material.rimLight, in: cg)
+        cg.restoreGState()
+    }
+
+    /// Specular highlights, hard-edged and never blurred: one long pill upper-left tilted 20°
+    /// toward the light, a small dot further down the curve and a tiny one near the crown. They
+    /// ride the body's squash and the gaze shift but keep their angle, fixed to the light; minis
+    /// and the tiny tier get one short pill.
+    func drawHighlights(in cg: CGContext) {
+        let bf = frame.body
+        let kx = bf.referenceHalfWidth / 1.17
+        let ky = bf.referenceTopHeight / 1.70
+        let shift = frame.highlightShift
+        let s = R * CGFloat((bf.scaleX * bf.scaleY).squareRoot())
+        func place(_ local: SIMD2<Double>, _ draw: (CGContext) -> Void) {
+            let p = px(bf.transform(local + shift))
+            cg.saveGState()
+            cg.translateBy(x: p.x, y: p.y)
+            cg.rotate(by: -20 * .pi / 180)
+            cg.scaleBy(x: s, y: s)
+            draw(cg)
+            cg.restoreGState()
+        }
+        let highlight = material.highlight
+        if frame.profile == .mini || detail == .tiny {
+            place(SIMD2(-0.40 * kx, -1.25 * ky)) { cg in fill(Self.ellipse(.zero, 0.18, 0.065), highlight, in: cg) }
+            return
+        }
+        place(SIMD2(-0.46 * kx, -1.28 * ky)) { cg in fill(Self.ellipse(.zero, 0.225, 0.08), highlight, in: cg) }
+        if detail >= .medium {
+            place(SIMD2(-0.72 * kx, -1.02 * ky)) { cg in fill(Self.ellipse(.zero, 0.05, 0.05), highlight, in: cg) }
+        }
+        if detail >= .full {
+            place(SIMD2(-0.24 * kx, -1.50 * ky)) { cg in fill(Self.ellipse(.zero, 0.035, 0.035), highlight, in: cg) }
+        }
     }
 
     // 7–9. Blush, eyes, mouth (clipped to the body).
@@ -612,10 +660,14 @@ public struct SlimeCGRenderer {
                 // The bead on the head under the mark: the same jelly, with its own rim and glint.
                 let c = px(b), br = CGFloat(a.beadRadius) * R
                 let dot = Self.ellipse(c, br, br)
-                fillRadial(dot, [(core.mixed(with: mid, 0.3), 0), (mid, 0.75), (mid.mixed(with: rim, 0.4), 1)],
-                           center: CGPoint(x: c.x - br * 0.3, y: c.y - br * 0.35), radius: br * 1.3, in: cg)
-                stroke(dot, inkLine, 0.8, width: max(1, 0.03 * R), in: cg)
-                fill(Self.ellipse(CGPoint(x: c.x - br * 0.3, y: c.y - br * 0.35), br * 0.3, br * 0.2), theme.highlight, 0.85, in: cg)
+                fill(dot, material.shell, in: cg)
+                cg.saveGState()
+                cg.addPath(dot)
+                cg.clip()
+                fill(Self.ellipse(CGPoint(x: c.x + br * 0.05, y: c.y + br * 0.3), br * 0.8, br * 0.55), material.inner, 0.95, in: cg)
+                cg.restoreGState()
+                stroke(dot, material.inkLine, width: max(1, 0.03 * R), in: cg)
+                fill(Self.ellipse(CGPoint(x: c.x - br * 0.3, y: c.y - br * 0.35), br * 0.3, br * 0.2), material.highlight, 0.9, in: cg)
             }
             cg.saveGState()
             cg.translateBy(x: p.x, y: p.y)

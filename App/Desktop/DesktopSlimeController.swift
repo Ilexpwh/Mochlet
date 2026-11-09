@@ -236,6 +236,7 @@ final class DesktopSlimeController {
             return CGPoint(x: Self.contact.x * scale, y: Self.contact.y * scale)
         })
         v.include = { $0.id == nil }
+        v.floorShadow = .dark
         v.drainsCues = false
         v.pointer = { [weak self] in self?.viewPoint(NSEvent.mouseLocation) }
         v.onTick = { [weak self] view, _ in self?.tick(view) }

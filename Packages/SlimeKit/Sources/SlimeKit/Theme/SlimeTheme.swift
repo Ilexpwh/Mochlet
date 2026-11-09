@@ -122,6 +122,58 @@ public struct SlimeTheme: Sendable, Codable, Equatable, Hashable, Identifiable {
         tongue = try c.decodeIfPresent(RGBA.self, forKey: .tongue) ?? RGBA(hex: 0xE2607F)
     }
 
+    // MARK: Material
+
+    /// The two-layer translucent cel material the renderer paints a palette with, as in the
+    /// anime: a pale flat shell, a darker inner mass with paler windows, one ink line, a thin
+    /// band of reflected light along the lower edge and a soft glow on the floor.
+    public struct Material: Sendable, Equatable {
+        public var shell: RGBA
+        public var inner: RGBA
+        /// Alpha included: the pale windows inside the inner mass.
+        public var window: RGBA
+        /// Alpha included: the outline and the ink of features drawn in the body's own tint.
+        public var inkLine: RGBA
+        /// Alpha included: light coming back through the jelly along the lower-right edge.
+        public var rimLight: RGBA
+        /// Alpha included: the contact glow under the body on a dark surface.
+        public var glow: RGBA
+        public var highlight: RGBA
+    }
+
+    /// The material under a transient tint (the tint lands on mid, rim and deep the way the
+    /// renderer applies it). Light bodies get a shell between core and mid and an inner mass
+    /// between mid and rim, pulled toward deep when the two would read as one tone (lemon, mint,
+    /// honey); dark bodies keep the shell dim so white ink still stands out.
+    public func material(tint: StateTint = .none) -> Material {
+        let t = tint
+        let rim = self.rim.mixed(with: t.color, t.opacity).desaturated(t.desaturation)
+        let deep = self.deep.mixed(with: t.color, t.opacity * 0.8).desaturated(t.desaturation)
+        let mid = self.mid.mixed(with: t.color, t.opacity * 0.6).desaturated(t.desaturation)
+        let core = self.core.desaturated(t.desaturation)
+        if isDark {
+            let shell = core.mixed(with: mid, 0.25)
+            let inner = mid.mixed(with: rim, 0.60)
+            return Material(shell: shell, inner: inner, window: core.opacity(0.35),
+                            inkLine: ink.mixed(with: mid, 0.35).opacity(0.9),
+                            rimLight: core.mixed(with: .white, 0.3).opacity(0.30),
+                            glow: shell.mixed(with: mid, 0.5).opacity(0.18), highlight: highlight)
+        }
+        let shell = core.mixed(with: mid, 0.40).desaturated(0.10)
+        var inner = mid.mixed(with: rim, 0.55).desaturated(0.15)
+        // Pale saturated hues (lemon, mint, a custom yellow) have no dark tone in their own
+        // ramp: pull the inner mass toward deep and down in lightness until the two layers read.
+        var steps = 0
+        while shell.luminance - inner.luminance < 0.20, steps < 8 {
+            inner = inner.mixed(with: deep, 0.35).lightened(0.94)
+            steps += 1
+        }
+        return Material(shell: shell, inner: inner, window: shell.mixed(with: core, 0.5).opacity(0.55),
+                        inkLine: ink.mixed(with: deep, 0.70).desaturated(0.30),
+                        rimLight: shell.mixed(with: .white, 0.5).opacity(0.35),
+                        glow: shell.mixed(with: mid, 0.5).opacity(0.18), highlight: highlight)
+    }
+
     /// Heart eyes and hearts: the blush pushed toward a saturated rose.
     public var heart: RGBA { blush.mixed(with: RGBA(hex: 0xFF4F7D), 0.55) }
     /// Stars: the accent pushed toward gold.
@@ -134,10 +186,11 @@ public struct SlimeTheme: Sendable, Codable, Equatable, Hashable, Identifiable {
 
     // MARK: Presets
 
+    /// The anime's sky-blue jelly: a pale periwinkle shell over a deeper blue core, navy ink.
     public static let rimuru = SlimeTheme(
         name: "rimuru",
-        core: RGBA(hex: 0xD6F6FF), mid: RGBA(hex: 0x7FD4FF), rim: RGBA(hex: 0x2F8FE0), deep: RGBA(hex: 0x1C6BC2),
-        blush: RGBA(hex: 0xFFA3BE), ink: RGBA(hex: 0x1F2D47))
+        core: RGBA(hex: 0xE6F5FF), mid: RGBA(hex: 0x9FD0F4), rim: RGBA(hex: 0x6AA6E2), deep: RGBA(hex: 0x3F77BC),
+        blush: RGBA(hex: 0xF2A2C4), ink: RGBA(hex: 0x2B4C78))
 
     public static let sakura = SlimeTheme(
         name: "sakura",

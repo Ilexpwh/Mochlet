@@ -8,23 +8,27 @@ import simd
 @MainActor
 @Suite struct ExpressionTests {
     @Test func everyEmoteRunsAndEnds() {
-        for e in SlimeEmote.allCases {
-            let eng = SlimeEngine(profile: .main, seed: 5)
-            eng.simulate(0.5)
-            eng.trigger(e)
-            #expect(eng.emote == e, "\(e) starts")
-            var t = 0.0
-            while t < e.duration + 0.7 {
-                eng.simulate(1.0 / 60.0)
-                t += 1.0 / 60.0
-                let f = eng.frame()
-                #expect(f.eyes.count == 2)
-                #expect(f.ring.allSatisfy { $0.x.isFinite && $0.y.isFinite }, "\(e): finite ring")
-                #expect(f.blobs.allSatisfy { $0.radius.isFinite && $0.position.x.isFinite && $0.position.y.isFinite }, "\(e): finite blobs")
+        for face in FaceStyle.allCases {
+            for e in SlimeEmote.allCases {
+                let eng = SlimeEngine(profile: .main, seed: 5)
+                eng.appearance.faceStyle = face
+                eng.simulate(0.5)
+                eng.trigger(e)
+                #expect(eng.emote == e, "\(e) starts")
+                var t = 0.0
+                while t < e.duration + 0.7 {
+                    eng.simulate(1.0 / 60.0)
+                    t += 1.0 / 60.0
+                    let f = eng.frame()
+                    #expect(f.eyes.count == 2)
+                    if face == .anime { #expect(f.eyes.allSatisfy { !$0.shape.isBall }, "\(e): no ball eyes on the anime face") }
+                    #expect(f.ring.allSatisfy { $0.x.isFinite && $0.y.isFinite }, "\(e): finite ring")
+                    #expect(f.blobs.allSatisfy { $0.radius.isFinite && $0.position.x.isFinite && $0.position.y.isFinite }, "\(e): finite blobs")
+                }
+                #expect(eng.emote == nil, "\(e) ends after its duration")
+                // Morph bulges, stalks and arms are all gone again once the emote has released.
+                #expect(eng.frame().blobs.allSatisfy { $0.radius < 1e-3 }, "\(e): no blobs left")
             }
-            #expect(eng.emote == nil, "\(e) ends after its duration")
-            // Morph bulges, stalks and arms are all gone again once the emote has released.
-            #expect(eng.frame().blobs.allSatisfy { $0.radius < 1e-3 }, "\(e): no blobs left")
         }
     }
 
@@ -134,17 +138,21 @@ import simd
         let ctx = CGContext(data: nil, width: 256, height: 192, bitsPerComponent: 8, bytesPerRow: 0,
                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
         for radius in [56.0, 18.0] {
-            for s in EyeShape.allCases {
-                var f = base
-                f.eyes[0].shape = s
-                f.eyes[1].shape = s
-                SlimeCGRenderer.draw(f, appearance: .rimuru, in: ctx, origin: CGPoint(x: 110, y: 170), radius: radius)
-            }
-            for m in MouthShape.allCases {
-                var f = base
-                f.mouth.shape = m
-                f.mouth.open = 0.8
-                SlimeCGRenderer.draw(f, appearance: .rimuru, in: ctx, origin: CGPoint(x: 110, y: 170), radius: radius)
+            for face in FaceStyle.allCases {
+                let appearance = SlimeAppearance(faceStyle: face)
+                for s in EyeShape.allCases {
+                    var f = base
+                    f.eyes[0].shape = s
+                    f.eyes[1].shape = s
+                    f.eyes[1].openness = 0.4
+                    SlimeCGRenderer.draw(f, appearance: appearance, in: ctx, origin: CGPoint(x: 110, y: 170), radius: radius)
+                }
+                for m in MouthShape.allCases {
+                    var f = base
+                    f.mouth.shape = m
+                    f.mouth.open = 0.8
+                    SlimeCGRenderer.draw(f, appearance: appearance, in: ctx, origin: CGPoint(x: 110, y: 170), radius: radius)
+                }
             }
             for k in [AccessoryKind.question, .exclamation, .dots, .badge, .micBars, .recDot, .note, .anger] {
                 for grown in [false, true] {

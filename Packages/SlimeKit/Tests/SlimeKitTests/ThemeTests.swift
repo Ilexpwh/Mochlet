@@ -87,7 +87,7 @@ import Foundation
     }
 
     @Test func appearanceRoundTripsAndToleratesOldJSON() throws {
-        var a = SlimeAppearance(look: .cat, palette: .derived(hue: 120, saturation: 0.7, lightness: 0.55), outfit: SlimeOutfit.set(named: "king")!, glyphStyle: .bubble, armsEnabled: false, lighterMinis: true)
+        var a = SlimeAppearance(look: .cat, palette: .derived(hue: 120, saturation: 0.7, lightness: 0.55), outfit: SlimeOutfit.set(named: "king")!, glyphStyle: .bubble, faceStyle: .round, armsEnabled: false, lighterMinis: true)
         a.look.name = "mine"
         let data = try JSONEncoder().encode(a)
         let back = try JSONDecoder().decode(SlimeAppearance.self, from: data)
@@ -98,6 +98,7 @@ import Foundation
         #expect(partial.outfit.isEmpty)
         #expect(partial.palette.accent == RGBA(hex: 0xFFC14D))
         #expect(partial.glyphStyle == .grown)
+        #expect(partial.faceStyle == .anime, "older settings get the anime face")
     }
 
     @Test func looksAndOutfits() {

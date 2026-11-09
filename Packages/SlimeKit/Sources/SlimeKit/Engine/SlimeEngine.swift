@@ -9,7 +9,10 @@ public final class SlimeEngine {
     /// Species, colour and clothes. Set by the stage; the renderer reads it next to the frame.
     /// A new look reshapes the body (silhouette, feel) and refits the face.
     public var appearance: SlimeAppearance = .rimuru {
-        didSet { if oldValue.look != appearance.look { applyLook() } }
+        didSet {
+            if oldValue.look != appearance.look { applyLook() }
+            if oldValue.faceStyle != appearance.faceStyle { applyFaceStyle() }
+        }
     }
     /// What the host can afford at its pixel size (surface effects and idle flutter need ≥ 24 px/R).
     public var detail: DetailLevel = .full
@@ -200,10 +203,11 @@ public final class SlimeEngine {
         clock = SlimeClock(step: SoftBodyParams.substep)
         breath = BreathOscillator(seed: seed, phase: Double(seed % 7) * 0.9)
         coreSpring = Spring2D(value: b.centroid, omega: 18, zeta: 0.5)
-        baseBlush = profile.blushEnabled ? 0.35 : 0
+        baseBlush = FaceTable.baseBlush(kind: profile.kind, face: .anime, blushEnabled: profile.blushEnabled)
         blush = AnimatedValue(baseBlush)
         blink.prime(at: 0, rng: &rng)
         enterState(.idle)
+        applyFaceStyle()
     }
 
     // MARK: - Time
@@ -377,14 +381,14 @@ public final class SlimeEngine {
             hoverSince = time
             shyFired = false
             if state.isQuiet || state == .working || state == .thinking {
-                eyeScale.animate(to: StateStyle.style(for: state).eyeScale * 1.06, duration: 0.25, ease: .outBack, at: time)
+                eyeScale.animate(to: currentStyle().eyeScale * 1.06, duration: 0.25, ease: .outBack, at: time)
                 if !reduceMotion {
                     body.apply(.wobble(angle: rng.range(-2.4...(-0.7)), strength: 0.25))
                 }
                 cue(.hover, gain: 0.7)
             }
         } else {
-            eyeScale.animate(to: StateStyle.style(for: state).eyeScale, duration: 0.3, at: time)
+            eyeScale.animate(to: currentStyle().eyeScale, duration: 0.3, at: time)
         }
     }
 
@@ -460,7 +464,7 @@ public final class SlimeEngine {
         dragDirection = nil
         eyeOverride = nil
         mouthOverride = nil
-        let style = StateStyle.style(for: state)
+        let style = currentStyle()
         lean.animate(to: style.lean, duration: 0.3, ease: .outBack, at: time)
         mouthOpen.animate(to: style.mouthOpen, duration: 0.25, at: time)
     }
@@ -904,7 +908,10 @@ public final class SlimeEngine {
         emoteUntil = time + e.duration
         let until = emoteUntil
         onEvent?(.emoteTriggered(e))
-        let style = StateStyle.style(for: state)
+        let style = currentStyle()
+        let pose = FaceTable.emote(e, faceStyle)
+        eyeOverride = (pose.left, pose.right, until)
+        if let m = pose.mouth { mouthOverride = (m, until) }
         switch e {
         case .proud, .excited: gesture(.cheer, for: e.duration, owner: .emote)
         case .yawn: gesture(.rubEyes, for: e.duration, owner: .emote)
@@ -918,13 +925,9 @@ public final class SlimeEngine {
         }
         switch e {
         case .happy:
-            eyeOverride = (.happyArc, .happyArc, until)
-            mouthOverride = (.omega, until)
             hop(1.4)
             blush.animate(to: max(baseBlush, 0.55), duration: 0.2, at: time)
         case .love:
-            eyeOverride = (.heart, .heart, until)
-            mouthOverride = (.omega, until)
             lean.animate(keys: [.init(to: 0.08, duration: 0.3, ease: .inOutSine), .init(to: -0.08, duration: 0.33, ease: .inOutSine),
                                 .init(to: 0.08, duration: 0.33, ease: .inOutSine), .init(to: -0.08, duration: 0.33, ease: .inOutSine),
                                 .init(to: style.lean, duration: 0.3, ease: .inOutSine)], at: time)
@@ -939,8 +942,6 @@ public final class SlimeEngine {
             }
             cue(.love)
         case .proud:
-            eyeOverride = (.half, .half, until)
-            mouthOverride = (.smileTiny, until)
             flatten.animate(keys: [.init(to: 0.92, duration: 0.12, ease: .outQuad), .init(to: 1.0, duration: 0.4, ease: .outBack)], at: time)
             lean.animate(keys: [.init(to: 0.1, duration: 0.2, ease: .outBack), .init(to: style.lean, duration: 0.7, ease: .outBack)], at: time)
             let c = body.centroid
@@ -950,53 +951,39 @@ public final class SlimeEngine {
             }
             cue(.proud)
         case .surprised:
-            eyeOverride = (.dot, .dot, until)
-            mouthOverride = (.o, until)
             mouthOpen.animate(to: 0.7, duration: 0.1, at: time)
             eyeScale.animate(keys: [.init(to: style.eyeScale * 1.25, duration: 0.1, ease: .outBack), .init(to: style.eyeScale, duration: 0.5, ease: .outCubic)], at: time)
             hop(1.8)
             addAccessory(.exclamation, owner: .emote)
             cue(.pop)
         case .wink:
-            eyeOverride = (.happyArc, .open, until)
-            mouthOverride = (.smileTiny, until)
             cue(.pop)
         case .yawn:
-            eyeOverride = (.tired, .tired, until)
-            mouthOverride = (.openRound, until)
             mouthOpen.animate(keys: [.init(to: 1, duration: 0.45, ease: .inOutSine), .init(to: 1, duration: 0.4, ease: .linear),
                                      .init(to: style.mouthOpen, duration: 0.5, ease: .inOutSine)], at: time)
             lean.animate(keys: [.init(to: -0.06, duration: 0.5, ease: .inOutSine), .init(to: style.lean, duration: 0.9, ease: .inOutSine)], at: time)
             cue(.sleep, rate: 0.9)
         case .annoyed:
-            eyeOverride = (.flat, .flat, until)
-            mouthOverride = (.flat, until)
             let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
             lean.animate(to: -0.14 * side, duration: 0.2, ease: .outBack, at: time)
+            addAccessory(.anger, owner: .emote)
             cue(.annoyed)
         case .shy:
-            eyeOverride = (.half, .half, until)
             blush.animate(to: 0.85, duration: 0.35, at: time)
             sizeScale.animate(to: 0.96, duration: 0.4, ease: .outCubic, at: time)
             let side: Double = (pointer?.x ?? 1) >= 0 ? -1 : 1
             glance = (SIMD2(0.45 * side, -0.05), until)
             cue(.hover, gain: 0.6)
         case .confused:
-            eyeOverride = (.dot, .open, until)
-            mouthOverride = (.wavy, until)
             glance = (SIMD2(0.3, 0.2), until)
             spawnSweat()
         case .excited:
-            eyeOverride = (.star, .star, until)
-            mouthOverride = (.omega, until)
             hop(1.6)
             scheduler.schedule(at: time + 0.5, tag: Self.emoteTag) { [weak self] in self?.hop(1.6) }
             scheduler.schedule(at: time + 0.2, tag: Self.emoteTag) { [weak self] in self?.spawnSparkles(count: 6) }
             cue(.finish, gain: 0.8)
         case .melt:
             // とけている: the body sags into a puddle and spreads at the base, eyes drooping.
-            eyeOverride = (.tired, .tired, until)
-            mouthOverride = (.squiggle, until)
             startMorph(.melt, duration: 0.7, ease: .inOutSine)
             flatten.animate(keys: [.init(to: 0.62, duration: 0.7, ease: .inOutSine), .init(to: 0.62, duration: 1.0, ease: .linear),
                                    .init(to: 1, duration: 0.5, ease: .outBack)], at: time)
@@ -1016,8 +1003,6 @@ public final class SlimeEngine {
             cue(.squish, rate: 0.7, gain: 0.8)
         case .puff:
             // ふくらむ: cheeks balloon out, a glare, a pout and steam off the top.
-            eyeOverride = (.glare, .glare, until)
-            mouthOverride = (.pout, until)
             startMorph(.puff, duration: 0.3, ease: .outBack)
             sizeScale.animate(to: 1.06, duration: 0.3, ease: .outBack, at: time)
             blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
@@ -1032,8 +1017,6 @@ public final class SlimeEngine {
             cue(.annoyed, rate: 0.85)
         case .shock:
             // A startled jolt: ring eyes, a wide-open mouth, a quick stretch upward and a "!".
-            eyeOverride = (.shock, .shock, until)
-            mouthOverride = (.openWide, until)
             mouthOpen.animate(to: 0.9, duration: 0.08, at: time)
             eyeScale.animate(keys: [.init(to: style.eyeScale * 1.3, duration: 0.08, ease: .outBack), .init(to: style.eyeScale * 1.15, duration: 0.6, ease: .outCubic)], at: time)
             flatten.animate(keys: [.init(to: 1.14, duration: 0.08, ease: .outQuad), .init(to: 0.96, duration: 0.14, ease: .outQuad),
@@ -1043,8 +1026,6 @@ public final class SlimeEngine {
             cue(.pyu, gain: 0.8)
         case .cry:
             // Welling eyes, a droopy mouth and tears running down both cheeks.
-            eyeOverride = (.teary, .teary, until)
-            mouthOverride = (.squiggle, until)
             blush.animate(to: max(baseBlush, 0.4), duration: 0.3, at: time)
             flatten.animate(to: 0.94, duration: 0.4, ease: .inOutSine, at: time)
             for k in 0..<5 {
@@ -1060,15 +1041,11 @@ public final class SlimeEngine {
             cue(.mu, rate: 0.8, gain: 0.6)
         case .hum:
             // A note grows out of the head and the body sways to it.
-            eyeOverride = (.relaxed, .relaxed, until)
-            mouthOverride = (.smileTiny, until)
             addAccessory(.note, owner: .emote)
             lean.animate(keys: [.init(to: 0.07, duration: 0.45, ease: .inOutSine), .init(to: -0.07, duration: 0.5, ease: .inOutSine),
                                 .init(to: 0.07, duration: 0.5, ease: .inOutSine), .init(to: style.lean, duration: 0.45, ease: .inOutSine)], at: time)
             cue(.note, gain: 0.6)
         case .cheer:
-            eyeOverride = (.happyArc, .happyArc, until)
-            mouthOverride = (.grin, until)
             hop(1.7)
             scheduler.schedule(at: time + 0.45, tag: Self.emoteTag) { [weak self] in self?.hop(1.5) }
             let c = body.centroid
@@ -1079,8 +1056,6 @@ public final class SlimeEngine {
             cue(.pika)
         case .hug:
             // A self-hug: arms wrap round the belly, the top bulges into a heart, cheeks warm.
-            eyeOverride = (.pleased, .pleased, until)
-            mouthOverride = (.smileTiny, until)
             startMorph(.heartBody, duration: 0.45, ease: .outBack)
             blush.animate(to: 0.75, duration: 0.3, at: time)
             lean.animate(keys: [.init(to: 0.06, duration: 0.4, ease: .inOutSine), .init(to: -0.06, duration: 0.5, ease: .inOutSine),
@@ -1094,27 +1069,19 @@ public final class SlimeEngine {
             }
             cue(.love, gain: 0.7)
         case .nod:
-            eyeOverride = (.pleased, .pleased, until)
-            mouthOverride = (.smileTiny, until)
             flatten.animate(keys: [.init(to: 0.9, duration: 0.16, ease: .inOutSine), .init(to: 1.0, duration: 0.16, ease: .inOutSine),
                                    .init(to: 0.92, duration: 0.16, ease: .inOutSine), .init(to: 1, duration: 0.3, ease: .outBack)], at: time)
             glance = (SIMD2(0, 0.35), time + 0.3)
             cue(.approve, gain: 0.6)
         case .shakeNo:
-            eyeOverride = (.flat, .flat, until)
-            mouthOverride = (.pout, until)
             if !reduceMotion { shakeKicks([(0, 2.2), (0.1, -3.6), (0.2, 3.0), (0.3, -1.8)]) }
             lean.animate(keys: [.init(to: 0.1, duration: 0.14, ease: .inOutSine), .init(to: -0.1, duration: 0.16, ease: .inOutSine),
                                 .init(to: 0.08, duration: 0.16, ease: .inOutSine), .init(to: style.lean, duration: 0.3, ease: .outBack)], at: time)
             cue(.annoyed, gain: 0.5)
         case .thumbsUp:
-            eyeOverride = (.open, .happyArc, until)
-            mouthOverride = (.grin, until)
             cue(.approve)
         case .stretch:
             // A morning stretch: arms up, the body tall, a small "mu" sigh.
-            eyeOverride = (.relaxed, .relaxed, until)
-            mouthOverride = (.o, until)
             mouthOpen.animate(keys: [.init(to: 0.45, duration: 0.3, ease: .inOutSine), .init(to: 0.45, duration: 0.4, ease: .linear),
                                      .init(to: style.mouthOpen, duration: 0.3, ease: .inOutSine)], at: time)
             flatten.animate(keys: [.init(to: 1.25, duration: 0.45, ease: .outQuad), .init(to: 1.25, duration: 0.35, ease: .linear),
@@ -1123,8 +1090,6 @@ public final class SlimeEngine {
         case .poked:
             // ツンツン: a side squish away from the finger with "> <" eyes.
             let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
-            eyeOverride = (.squeeze, .squeeze, until)
-            mouthOverride = (.o, until)
             mouthOpen.animate(to: 0.25, duration: 0.08, at: time)
             if !reduceMotion { body.apply(.slap(side: side, strength: 0.55)) }
             lean.animate(keys: [.init(to: -0.12 * side, duration: 0.1, ease: .outQuad), .init(to: style.lean, duration: 0.45, ease: .outBack)], at: time)
@@ -1152,7 +1117,7 @@ public final class SlimeEngine {
         if let o = eyeOverride, o.until == emoteUntil { eyeOverride = nil }
         if let m = mouthOverride, m.until == emoteUntil { mouthOverride = nil }
         if let g = glance, g.until == emoteUntil { glance = nil }
-        let style = StateStyle.style(for: state)
+        let style = currentStyle()
         blush.animate(to: baseBlush, duration: 0.5, at: time)
         sizeScale.animate(to: userState == .split ? sizeScale.value : 1, duration: 0.3, ease: .outBack, at: time)
         eyeScale.animate(to: style.eyeScale * (isHovering ? 1.06 : 1), duration: 0.3, at: time)
@@ -1257,7 +1222,7 @@ public final class SlimeEngine {
     }
 
     private func enterState(_ s: SlimeState) {
-        let style = StateStyle.style(for: s)
+        let style = currentStyle(s)
         breath.amplitude.animate(to: style.breathAmplitude, duration: 0.8, at: time)
         breath.rate.animate(to: style.breathRate, duration: 0.8, at: time)
         blink.interval = style.blinkInterval
@@ -1605,9 +1570,9 @@ public final class SlimeEngine {
     // MARK: - Frame
 
     private func resolvedEye(_ side: Double) -> EyeShape {
-        if isAway { return .closedLine }
-        if let o = eyeOverride { return side < 0 ? o.left : o.right }
-        return baseEye
+        let shape: EyeShape
+        if isAway { shape = .closedLine } else if let o = eyeOverride { shape = side < 0 ? o.left : o.right } else { shape = baseEye }
+        return faceStyle == .anime ? shape.strokeEquivalent : shape
     }
 
     private func frameNow() -> SlimeFrame {
@@ -1704,7 +1669,7 @@ public final class SlimeEngine {
                                center: bf.transform(eyeRig.local(mp)), foreshorten: mp.foreshorten, visible: mp.visible)
         var blushCenters: [SIMD2<Double>] = []
         var blushFore: [SIMD2<Double>] = []
-        if profile.blushEnabled {
+        if profile.blushEnabled || faceStyle == .anime {
             for side in [-1.0, 1.0] {
                 let bp = eyeRig.project(yawOffset: side * eyeRig.blushYaw, pitchOffset: eyeRig.blushPitch, yaw: yaw, pitch: pitch)
                 if bp.visible {
@@ -1751,7 +1716,44 @@ public final class SlimeEngine {
         } else if want != body.params {
             body.setParams(want)
         }
-        eyeRig = profile.eyeRig.fitted(to: RestProfile.forSilhouette(appearance.look.silhouette, mini: mini))
+        eyeRig = baseEyeRig.fitted(to: RestProfile.forSilhouette(appearance.look.silhouette, mini: mini))
+    }
+
+    // MARK: - Face style
+
+    var faceStyle: FaceStyle { appearance.faceStyle }
+
+    /// The eye rig of the face style before fitting to the silhouette.
+    private var baseEyeRig: EyeRig { FaceTable.rig(kind: profile.kind, face: faceStyle, fallback: profile.eyeRig) }
+
+    /// The style of a state in the current face.
+    private func currentStyle(_ s: SlimeState? = nil) -> StateStyle { StateStyle.style(for: s ?? state, face: faceStyle) }
+
+    /// Swaps the rig, the gaze range, the blink timing and the resting blush for the face
+    /// style, and re-resolves the state's eyes and mouth. The anime face is painted on the
+    /// surface: its eyes slide only a little with the pointer and blink as a quick flatten.
+    private func applyFaceStyle() {
+        let mini = profile.kind == .mini
+        eyeRig = baseEyeRig.fitted(to: RestProfile.forSilhouette(appearance.look.silhouette, mini: mini))
+        switch faceStyle {
+        case .anime:
+            gaze.yawGain = 0.10
+            gaze.pitchGain = 0.08
+            blink.closeDuration = 0.05
+            blink.holdDuration = 0.015
+            blink.openDuration = 0.07
+        case .round:
+            gaze.yawGain = 0.62
+            gaze.pitchGain = 0.50
+            blink.closeDuration = 0.07
+            blink.holdDuration = 0.02
+            blink.openDuration = 0.13
+        }
+        baseBlush = FaceTable.baseBlush(kind: profile.kind, face: faceStyle, blushEnabled: profile.blushEnabled)
+        if blush.isAnimating { blush.animate(to: baseBlush, duration: 0.3, at: time) } else { blush = AnimatedValue(baseBlush) }
+        let style = currentStyle()
+        baseEye = style.eye
+        baseMouth = style.mouth
     }
 
     /// Ear twitches, tail wag, wing flap, antenna lag and surface particles.

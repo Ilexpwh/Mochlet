@@ -8,7 +8,7 @@ import SlimeKitAudio
 
 // slimekit-tools render-filmstrip --state finished --frames 48 --fps 24 --radius 64 --seed 7 --out ./out/finished
 //                                 [--script "0:greet,1.6:click,2.2:emote:happy"] [--theme rimuru] [--pointer x,y] [--mini]
-//                                 [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion]
+//                                 [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion] [--face anime|round]
 // slimekit-tools gen-sounds --out <dir>
 // slimekit-tools lab            (Emote Lab window, debug builds)
 // slimekit-tools play <sound>   (plays one generated sound)
@@ -51,6 +51,7 @@ func renderFilmstrip(_ args: Args) throws {
     o.seed = UInt64(args.int("seed", 7))
     o.theme = SlimeTheme.named(args.string("palette", args.string("theme", "rimuru")))
     o.appearance.look = SlimeLook.named(args.string("look", "rimuru"))
+    o.appearance.faceStyle = FaceStyle(rawValue: args.string("face", "anime")) ?? .anime
     if let set = args.values["outfit"], let outfit = SlimeOutfit.set(named: set) { o.appearance.outfit = outfit }
     o.columns = args.int("columns", 8)
     o.preroll = args.double("preroll", 0.6)
@@ -319,7 +320,8 @@ do {
         if args.values["sets"] != nil {
             sheet = try Catalog.renderSets(look: looks.first ?? .rimuru, palette: palettes.first ?? .rimuru, radius: CGFloat(args.double("radius", 56)))
         } else {
-            sheet = try Catalog.render(palettes: palettes, looks: looks, outfit: outfit, radius: CGFloat(args.double("radius", 56)))
+            sheet = try Catalog.render(palettes: palettes, looks: looks, outfit: outfit, radius: CGFloat(args.double("radius", 56)),
+                                       face: FaceStyle(rawValue: args.string("face", "anime")) ?? .anime)
         }
         try FileManager.default.createDirectory(at: out.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Filmstrip.writePNG(sheet, to: out)
@@ -328,13 +330,13 @@ do {
         print("""
         slimekit-tools render-filmstrip --state <state|emote|pinch|sessions|ghost|ghostdrop> | --script "t:action,…"
                        [--frames 48] [--fps 24] [--radius 64] [--seed 7] [--out dir] [--palette name] [--look name] [--pointer x,y] [--mini]
-                       [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion]
+                       [--width 4.4 --height 3.0 --originx 0.42] [--reduce-motion] [--face anime|round]
         slimekit-tools gen-sounds --out <dir> [--pack puni|classic|all]
         slimekit-tools lab
         slimekit-tools play <sound|all> [--pack puni|classic]
         slimekit-tools bench [--seconds 20]
         slimekit-tools icon --out <AppIcon.appiconset>
-        slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--outfit king] [--sets 1] [--radius 56]
+        slimekit-tools render-catalog [--out catalog.png] [--palettes rimuru,ruby,obsidian] [--looks cat,fox] [--outfit king] [--sets 1] [--radius 56] [--face anime|round]
         actions:
         \(Filmstrip.actionHelp)
         """)

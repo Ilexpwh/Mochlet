@@ -7,6 +7,9 @@ public enum EyeShape: String, Sendable, Codable, CaseIterable {
     /// ticks, an angled glare, a half-lidded smug look, a welling teary eye, concentric shock rings,
     /// a sideways glance and a soft "︶" pleased arc.
     case relaxed, squeeze, glare, smug, teary, shock, sideGlance, pleased
+    /// The stroke face (`FaceStyle.anime`): the content chevron with its short hook, a sad
+    /// outward-down arc, a closed stroke with two tear ribbons, and a four-point sparkle.
+    case content, sad, cryStream, sparkle
 
     /// Shapes drawn as a ball (an ink ellipse with highlights) that blinks shut.
     public var isBall: Bool {
@@ -15,12 +18,28 @@ public enum EyeShape: String, Sendable, Codable, CaseIterable {
         default: return false
         }
     }
+
+    /// The stroke that stands in for a ball shape on an anime face, so nothing that sets an eye
+    /// (states, emotes, drag-in, digesting, micro-idle, the stage) can put a sclera on it.
+    public var strokeEquivalent: EyeShape {
+        switch self {
+        case .open, .dot, .sideGlance: return .content
+        case .half, .focused: return .relaxed
+        case .wide: return .shock
+        case .tired, .smug: return .flat
+        case .teary: return .cryStream
+        case .glare: return .squint
+        default: return self
+        }
+    }
 }
 
 public enum MouthShape: String, Sendable, Codable, CaseIterable {
     case none, smileTiny, omega, openRound, o, flat, wavy, sleepy
     /// A big rounded shout, a puckered pout, a tongue out, a wide toothy grin and a droopy squiggle.
     case openWide, pout, tongue, grin, squiggle
+    /// The small "∧" pout of the stroke face.
+    case caret
 }
 
 /// Eyes live on a sphere inside the jelly: they slide across it as the gaze turns and
@@ -52,6 +71,28 @@ public struct EyeRig: Sendable, Codable, Equatable {
         r.eyeRadius = 0.19
         r.eyeAspect = 1.25
         r.separation = 0.40
+        return r
+    }
+
+    /// The stroke face, authored for the bun: eye strokes 0.42 R long and 0.93 R apart at
+    /// (±0.47, −1.04), the mouth 0.35 R under them, blush ovals at (±0.78, −0.97).
+    public static var anime: EyeRig {
+        var r = EyeRig()
+        r.separation = 0.57
+        r.basePitch = 0.14
+        r.eyeRadius = 0.21
+        r.eyeAspect = 0.6
+        r.mouthPitch = -0.32
+        r.blushYaw = 1.10
+        r.blushPitch = 0.06
+        return r
+    }
+
+    /// The stroke face on a mini: a little wider apart and longer so it reads at 7 px.
+    public static var animeMini: EyeRig {
+        var r = anime
+        r.separation = 0.60
+        r.eyeRadius = 0.24
         return r
     }
 

@@ -12,6 +12,8 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
     public var palette: SlimeTheme
     public var outfit: SlimeOutfit
     public var glyphStyle: GlyphStyle
+    /// Ink-stroke face (the anime) or round ball eyes.
+    public var faceStyle: FaceStyle
     public var armsEnabled: Bool
     /// Minis use the same palette, or a lighter tint of it.
     public var lighterMinis: Bool
@@ -19,17 +21,19 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
     public var dressForOccasion: Bool
 
     public init(look: SlimeLook = .plain, palette: SlimeTheme = .rimuru, outfit: SlimeOutfit = SlimeOutfit(),
-                glyphStyle: GlyphStyle = .grown, armsEnabled: Bool = true, lighterMinis: Bool = false, dressForOccasion: Bool = true) {
+                glyphStyle: GlyphStyle = .grown, faceStyle: FaceStyle = .anime, armsEnabled: Bool = true, lighterMinis: Bool = false,
+                dressForOccasion: Bool = true) {
         self.look = look
         self.palette = palette
         self.outfit = outfit
         self.glyphStyle = glyphStyle
+        self.faceStyle = faceStyle
         self.armsEnabled = armsEnabled
         self.lighterMinis = lighterMinis
         self.dressForOccasion = dressForOccasion
     }
 
-    enum CodingKeys: String, CodingKey { case look, palette, outfit, glyphStyle, armsEnabled, lighterMinis, dressForOccasion }
+    enum CodingKeys: String, CodingKey { case look, palette, outfit, glyphStyle, faceStyle, armsEnabled, lighterMinis, dressForOccasion }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -37,6 +41,7 @@ public struct SlimeAppearance: Sendable, Codable, Equatable, Hashable {
         palette = try c.decodeIfPresent(SlimeTheme.self, forKey: .palette) ?? .rimuru
         outfit = try c.decodeIfPresent(SlimeOutfit.self, forKey: .outfit) ?? SlimeOutfit()
         glyphStyle = try c.decodeIfPresent(GlyphStyle.self, forKey: .glyphStyle) ?? .grown
+        faceStyle = try c.decodeIfPresent(FaceStyle.self, forKey: .faceStyle) ?? .anime
         armsEnabled = try c.decodeIfPresent(Bool.self, forKey: .armsEnabled) ?? true
         lighterMinis = try c.decodeIfPresent(Bool.self, forKey: .lighterMinis) ?? false
         dressForOccasion = try c.decodeIfPresent(Bool.self, forKey: .dressForOccasion) ?? true

@@ -340,7 +340,22 @@ public struct SlimeCGRenderer {
         let rot = CGFloat(frame.body.rotation)
         let sx = CGFloat(frame.body.scaleX)
         let sy = CGFloat(frame.body.scaleY)
-        if frame.blush > 0.01 {
+        if frame.blush > 0.01, appearance.faceStyle == .anime {
+            // The anime blush: two flat pink ovals with a hard edge, foreshortening a little as
+            // the face turns.
+            let mini = frame.profile == .mini
+            let bw: CGFloat = mini ? 0.10 : 0.14
+            let bh: CGFloat = mini ? 0.06 : 0.08
+            for (i, c) in frame.blushCenters.enumerated() {
+                let f = frame.blushForeshorten[i]
+                let k = CGFloat(0.75 + 0.25 * f.x)
+                let w = bw * R * k * sx
+                let h = bh * R * k * sy
+                let p = px(c)
+                var t = CGAffineTransform(translationX: p.x, y: p.y).rotated(by: rot)
+                fill(CGPath(ellipseIn: CGRect(x: -w, y: -h, width: 2 * w, height: 2 * h), transform: &t), theme.blush, frame.blush, in: cg)
+            }
+        } else if frame.blush > 0.01 {
             for (i, c) in frame.blushCenters.enumerated() {
                 let f = frame.blushForeshorten[i]
                 let w = 0.22 * R * CGFloat(f.x) * sx
@@ -365,11 +380,20 @@ public struct SlimeCGRenderer {
         cg.restoreGState()
     }
 
+    /// Half the brush width of an anime eye stroke at its middle, in pixels: 0.09 R wide, and
+    /// never under 2 px so the face still reads on a compact mini.
+    var strokeHalfWidth: CGFloat { max(0.95, 0.045 * R) }
+
+    /// The face is inked darker than the outline, as on the figures: the outline is a soft
+    /// edge, the strokes carry the expression.
+    var faceInk: RGBA { appearance.faceStyle == .anime && !theme.isDark ? theme.ink.mixed(with: .black, 0.3) : theme.ink }
+
     func drawEye(_ e: EyeFrame, rotation: CGFloat, scale: CGPoint, in cg: CGContext) {
         let c = px(e.center)
         let w = R * CGFloat(e.radius * e.scale * e.foreshorten.x) * scale.x
         let h = R * CGFloat(e.radius * e.aspect * e.scale * e.foreshorten.y) * scale.y
         let ink = max(1.2, 0.06 * R)
+        let anime = appearance.faceStyle == .anime
         cg.saveGState()
         cg.translateBy(x: c.x, y: c.y)
         cg.rotate(by: rotation)
@@ -378,6 +402,30 @@ public struct SlimeCGRenderer {
         if shape.isBall, open < 0.12 { shape = .closedLine }
         // Toward the middle of the face (+x for the left eye).
         let inward: CGFloat = e.side < 0 ? 1 : -1
+
+        // Line shapes share one centre polyline: a tapered brush stroke on the anime face (where a
+        // blink flattens the polyline toward the eye line instead of switching shapes), a round-
+        // capped line on the round face.
+        func line(_ pts: [CGPoint], widthScale: CGFloat = 1, opacity: Double = 1) {
+            var p = pts
+            if anime, open < 0.999 { p = p.map { CGPoint(x: $0.x, y: $0.y * open) } }
+            if anime {
+                fill(BrushStroke.path(along: p, halfWidth: strokeHalfWidth * widthScale), faceInk, opacity, in: cg)
+            } else {
+                let path = CGMutablePath()
+                path.addLines(between: p)
+                stroke(path, theme.ink, opacity, width: ink * widthScale, in: cg)
+            }
+        }
+        func quad(_ a: CGPoint, _ b: CGPoint, control k: CGPoint, samples: Int = 14) -> [CGPoint] {
+            (0...samples).map { i in
+                let t = CGFloat(i) / CGFloat(samples)
+                let u = 1 - t
+                return CGPoint(x: u * u * a.x + 2 * u * t * k.x + t * t * b.x, y: u * u * a.y + 2 * u * t * k.y + t * t * b.y)
+            }
+        }
+        let chevron = [CGPoint(x: -0.7 * w * inward, y: -0.75 * h), CGPoint(x: 0.55 * w * inward, y: 0), CGPoint(x: -0.7 * w * inward, y: 0.75 * h)]
+
         switch shape {
         case .open, .half, .wide, .focused, .tired, .dot, .smug, .sideGlance, .glare, .teary:
             var ww = w
@@ -441,55 +489,61 @@ public struct SlimeCGRenderer {
                 fill(Self.ellipse(CGPoint(x: -ww * 0.3, y: hh * 0.42), ww * 0.2, hh * 0.1), .white, 0.9, in: cg)
             default: break
             }
+        case .content:
+            // The content face from the figure sheets: a bold dash with a hint of an upward bow,
+            // tilted a little inward-down, and two short parallel lash ticks at its inner end.
+            line(quad(CGPoint(x: -inward * w, y: -h * 0.10), CGPoint(x: inward * w * 0.5, y: h * 0.12), control: CGPoint(x: -inward * w * 0.2, y: -h * 0.12)))
+            line([CGPoint(x: inward * w * 0.62, y: -h * 0.48), CGPoint(x: inward * w * 1.02, y: -h * 0.16)], widthScale: 0.6)
+            line([CGPoint(x: inward * w * 0.62, y: h * 0.26), CGPoint(x: inward * w * 1.02, y: h * 0.58)], widthScale: 0.6)
+        case .sad:
+            // Outward-down arcs with a slight bow.
+            line(quad(CGPoint(x: inward * w, y: -h * 0.4), CGPoint(x: -inward * w, y: h * 0.4), control: CGPoint(x: 0, y: -h * 0.3)))
         case .relaxed:
-            // "ー" with a small tick at the outer corner: the content face from the references.
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -w, y: 0))
-            p.addQuadCurve(to: CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.22))
-            p.move(to: CGPoint(x: -inward * w, y: h * 0.05))
-            p.addLine(to: CGPoint(x: -inward * w * 1.2, y: h * 0.42))
-            stroke(p, theme.ink, width: ink, in: cg)
+            // "ー" with a small tick at the outer corner.
+            line(quad(CGPoint(x: -w, y: 0), CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.22)))
+            line([CGPoint(x: -inward * w, y: h * 0.05), CGPoint(x: -inward * w * 1.2, y: h * 0.42)], widthScale: 0.7)
         case .squeeze:
             // "> <" with three effort ticks radiating from the outer side.
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -0.7 * w * inward, y: -0.75 * h))
-            p.addLine(to: CGPoint(x: 0.55 * w * inward, y: 0))
-            p.addLine(to: CGPoint(x: -0.7 * w * inward, y: 0.75 * h))
+            line(chevron)
             for k in -1...1 {
                 let a = CGFloat(k) * 0.55
                 let dx = -inward * cos(a), dy = sin(a)
-                p.move(to: CGPoint(x: dx * w * 1.0, y: dy * h * 0.9))
-                p.addLine(to: CGPoint(x: dx * w * 1.4, y: dy * h * 1.25))
+                line([CGPoint(x: dx * w * 1.0, y: dy * h * 0.9), CGPoint(x: dx * w * 1.4, y: dy * h * 1.25)], widthScale: 0.6)
             }
-            stroke(p, theme.ink, width: ink, in: cg)
+        case .squint:
+            line(chevron)
         case .pleased:
             // "︶": a soft bowl, the eyes closed in contentment.
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -w, y: -h * 0.25))
-            p.addQuadCurve(to: CGPoint(x: w, y: -h * 0.25), control: CGPoint(x: 0, y: h * 0.85))
-            stroke(p, theme.ink, width: ink * 1.1, in: cg)
+            line(quad(CGPoint(x: -w, y: -h * 0.25), CGPoint(x: w, y: -h * 0.25), control: CGPoint(x: 0, y: h * 0.85)), widthScale: 1.1)
         case .shock:
             // Concentric rings with a pin-point pupil.
             stroke(Self.ellipse(.zero, w * 1.05, h * 0.95), theme.ink, width: ink * 0.9, in: cg)
             stroke(Self.ellipse(.zero, w * 0.6, h * 0.55), theme.ink, 0.85, width: ink * 0.7, in: cg)
             fill(Self.ellipse(.zero, w * 0.22, w * 0.22), theme.ink, in: cg)
         case .closedLine:
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -w, y: 0))
-            p.addQuadCurve(to: CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.5))
-            stroke(p, theme.ink, width: ink, in: cg)
+            line(quad(CGPoint(x: -w, y: 0), CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.5)))
         case .happyArc:
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -w, y: h * 0.3))
-            p.addQuadCurve(to: CGPoint(x: w, y: h * 0.3), control: CGPoint(x: 0, y: -h * 0.95))
-            stroke(p, theme.ink, width: ink * 1.15, in: cg)
-        case .squint:
-            let p = CGMutablePath()
-            let dir: CGFloat = e.side < 0 ? 1 : -1
-            p.move(to: CGPoint(x: -0.7 * w * dir, y: -0.75 * h))
-            p.addLine(to: CGPoint(x: 0.55 * w * dir, y: 0))
-            p.addLine(to: CGPoint(x: -0.7 * w * dir, y: 0.75 * h))
-            stroke(p, theme.ink, width: ink, in: cg)
+            line(quad(CGPoint(x: -w, y: h * 0.3), CGPoint(x: w, y: h * 0.3), control: CGPoint(x: 0, y: -h * 0.95)), widthScale: 1.15)
+        case .cryStream:
+            // A closed stroke with two tear ribbons running down the cheek.
+            line(quad(CGPoint(x: -w, y: 0), CGPoint(x: w, y: 0), control: CGPoint(x: 0, y: h * 0.3)))
+            let tear = RGBA(hex: 0xBFE9FF)
+            let len = 0.45 * R * scale.y
+            let top = h * 0.15
+            for sx in [-0.35, 0.35] as [CGFloat] {
+                let x = sx * w
+                let ribbon = CGPath(roundedRect: CGRect(x: x - 0.045 * R, y: top, width: 0.09 * R, height: len),
+                                    cornerWidth: 0.04 * R, cornerHeight: 0.04 * R, transform: nil)
+                fill(ribbon, tear, 0.92, in: cg)
+                let gleam = CGMutablePath()
+                gleam.move(to: CGPoint(x: x - 0.018 * R, y: top + 0.06 * R))
+                gleam.addLine(to: CGPoint(x: x - 0.018 * R, y: top + len - 0.07 * R))
+                stroke(gleam, .white, 0.85, width: max(1, 0.018 * R), in: cg)
+            }
+        case .sparkle:
+            let star = BodyPath.sparkle(center: .zero, radius: max(w, h) * 1.1).cgPath
+            fill(star, theme.star, in: cg)
+            stroke(star, theme.ink, width: ink * 0.5, in: cg)
         case .spiral:
             let p = CGMutablePath()
             let turns = 2.2
@@ -503,10 +557,8 @@ public struct SlimeCGRenderer {
             }
             stroke(p, theme.ink, width: ink * 0.8, in: cg)
         case .cross:
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -0.7 * w, y: -0.7 * h)); p.addLine(to: CGPoint(x: 0.7 * w, y: 0.7 * h))
-            p.move(to: CGPoint(x: 0.7 * w, y: -0.7 * h)); p.addLine(to: CGPoint(x: -0.7 * w, y: 0.7 * h))
-            stroke(p, theme.ink, width: ink, in: cg)
+            line([CGPoint(x: -0.7 * w, y: -0.7 * h), CGPoint(x: 0.7 * w, y: 0.7 * h)])
+            line([CGPoint(x: 0.7 * w, y: -0.7 * h), CGPoint(x: -0.7 * w, y: 0.7 * h)])
         case .heart:
             fill(BodyPath.heart(center: CGPoint(x: 0, y: -h * 0.1), size: w * 0.95).cgPath, theme.heart, in: cg)
         case .star:
@@ -514,9 +566,7 @@ public struct SlimeCGRenderer {
             fill(star, theme.star, in: cg)
             stroke(star, theme.ink, width: ink * 0.5, in: cg)
         case .flat:
-            let p = CGMutablePath()
-            p.move(to: CGPoint(x: -0.9 * w, y: 0)); p.addLine(to: CGPoint(x: 0.9 * w, y: 0))
-            stroke(p, theme.ink, width: ink, in: cg)
+            line([CGPoint(x: -0.9 * w, y: 0), CGPoint(x: 0.9 * w, y: 0)])
         }
         cg.restoreGState()
     }
@@ -534,6 +584,10 @@ public struct SlimeCGRenderer {
         switch m.shape {
         case .none:
             break
+        case .caret:
+            // The small "∧" pout of the stroke face, as one tapered brush stroke.
+            let pts = [CGPoint(x: -0.07 * R * fx, y: 0.035 * R * fy), CGPoint(x: 0, y: -0.035 * R * fy), CGPoint(x: 0.07 * R * fx, y: 0.035 * R * fy)]
+            fill(BrushStroke.path(along: pts, halfWidth: strokeHalfWidth * 0.8), faceInk, in: cg)
         case .smileTiny:
             let w = 0.16 * R * fx
             let p = CGMutablePath()

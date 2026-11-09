@@ -44,6 +44,11 @@ struct CharacterSettingsView: View {
                         }
                     }
                 }
+                Picker("Face", selection: $s.character.faceStyle) {
+                    Text("Anime strokes").tag(FaceStyle.anime)
+                    Text("Round eyes").tag(FaceStyle.round)
+                }
+                .pickerStyle(.segmented)
             }
             Section("Outfit") {
                 LazyVGrid(columns: Self.lookColumns, alignment: .leading, spacing: 6) {

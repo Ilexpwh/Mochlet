@@ -20,13 +20,15 @@ struct CharacterConfig: Codable, Equatable, Sendable {
     var soundPack = "puni"
     var voiceSqueaks = true
     var glyphStyle = GlyphStyle.grown
+    /// Ink-stroke face (the anime) or round ball eyes.
+    var faceStyle = FaceStyle.anime
     var armsEnabled = true
     var lighterMinis = false
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case paletteName, hue, saturation, lightness, lookName, look, outfit, dressForOccasion, soundPack, voiceSqueaks, glyphStyle, armsEnabled, lighterMinis
+        case paletteName, hue, saturation, lightness, lookName, look, outfit, dressForOccasion, soundPack, voiceSqueaks, glyphStyle, faceStyle, armsEnabled, lighterMinis
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +44,7 @@ struct CharacterConfig: Codable, Equatable, Sendable {
         soundPack = try c.decodeIfPresent(String.self, forKey: .soundPack) ?? "puni"
         voiceSqueaks = try c.decodeIfPresent(Bool.self, forKey: .voiceSqueaks) ?? true
         glyphStyle = try c.decodeIfPresent(GlyphStyle.self, forKey: .glyphStyle) ?? .grown
+        faceStyle = try c.decodeIfPresent(FaceStyle.self, forKey: .faceStyle) ?? .anime
         armsEnabled = try c.decodeIfPresent(Bool.self, forKey: .armsEnabled) ?? true
         lighterMinis = try c.decodeIfPresent(Bool.self, forKey: .lighterMinis) ?? false
     }
@@ -57,7 +60,8 @@ struct CharacterConfig: Codable, Equatable, Sendable {
     }
 
     var appearance: SlimeAppearance {
-        SlimeAppearance(look: resolvedLook, palette: palette, outfit: outfit, glyphStyle: glyphStyle, armsEnabled: armsEnabled, lighterMinis: lighterMinis, dressForOccasion: dressForOccasion)
+        SlimeAppearance(look: resolvedLook, palette: palette, outfit: outfit, glyphStyle: glyphStyle, faceStyle: faceStyle, armsEnabled: armsEnabled,
+                        lighterMinis: lighterMinis, dressForOccasion: dressForOccasion)
     }
 
     // MARK: Edits

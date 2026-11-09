@@ -22,7 +22,7 @@ import MochletCore
 ///   click?real=1&x=&y=[&warp=1] synthesised mouse down/up through the panel (AppKit hit-testing, reaches card buttons)
 ///   arms?pose=<pose>[&seconds=]      one-off arm pose (wave, thumbsUp, cheer, holdSide:phone:-1, hug:heart, hug:self, sip…)
 ///   chew?[kind=pdf][&seconds=]        eat a pretend file; chew?phase=biting:0.5|digesting|filing drives the timeline
-///   look?palette=ruby | hue=&sat=&light= | look=cat | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | pack=puni|classic | voice=1|0 | reset=1
+///   look?palette=ruby | hue=&sat=&light= | look=cat | face=anime|round | minis=lighter|same | outfit=king | headwear=&eyewear=&wrap=&charm= | dress=1|0 | occasion=reading|call|rest|working | pack=puni|classic | voice=1|0 | reset=1
 ///   pointer?x=&y= (island coords) | pointer?sx=&sy= (screen) | pointer?away=1
 ///   desktop?on=1|0 | desktop?sx=&sy=
 @MainActor
@@ -184,6 +184,7 @@ enum DebugCommands {
                 c.setCustom(hue: num("hue"), saturation: num("sat"), lightness: num("light"))
             }
             if let name = arg("look") { c.selectLook(name) }
+            if let f = arg("face"), let face = FaceStyle(rawValue: f) { c.faceStyle = face }
             if let m = arg("minis") { c.lighterMinis = m == "lighter" }
             if let set = arg("outfit") { c.outfit = SlimeOutfit.set(named: set) ?? SlimeOutfit() }
             if let h = arg("headwear") { c.outfit.headwear = SlimeOutfit.Headwear(rawValue: h) ?? .none }
@@ -197,7 +198,7 @@ enum DebugCommands {
             if arg("reset") != nil { c = CharacterConfig() }
             app.settings.character = c
             app.applySettings()
-            result = "ok look \(c.lookName) outfit \(c.outfit.setName ?? "custom") palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex)) pack \(app.slime.sound.pack.rawValue) voice \(app.slime.sound.voiceEnabled)"
+            result = "ok look \(c.lookName) face \(c.faceStyle.rawValue) outfit \(c.outfit.setName ?? "custom") palette \(c.paletteName) mid #\(String(format: "%06X", c.palette.mid.hex)) ink #\(String(format: "%06X", c.palette.ink.hex)) pack \(app.slime.sound.pack.rawValue) voice \(app.slime.sound.voiceEnabled)"
         case "click":
             let p = islandPoint(app, num("x"), num("y"))
             let count = Int(num("count") ?? 1)

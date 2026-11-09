@@ -65,18 +65,25 @@ import simd
         for s in Self.silhouettes {
             let profile = RestProfile.forSilhouette(s)
             let body = SoftBody(params: SoftBodyParams.main.applying(look: SlimeLook(name: "t", silhouette: s), mini: false))
-            let rig = EyeRig.main.fitted(to: profile)
-            for side in [-1.0, 1.0] {
-                let p = rig.local(rig.eye(side: side, yaw: 0, pitch: 0))
-                let d = Metaball.polygonDistance(p, body.referenceRing)
-                #expect(d < -0.12, "\(s) eye \(side) inside the body (distance \(d))")
-                let edge = p + SIMD2(side * rig.eyeRadius, 0)
-                #expect(Metaball.polygonDistance(edge, body.referenceRing) < 0, "\(s) eye edge inside")
+            for (name, base) in [("round", EyeRig.main), ("anime", EyeRig.anime)] {
+                let rig = base.fitted(to: profile)
+                for side in [-1.0, 1.0] {
+                    let p = rig.local(rig.eye(side: side, yaw: 0, pitch: 0))
+                    let d = Metaball.polygonDistance(p, body.referenceRing)
+                    #expect(d < -0.12, "\(s) \(name) eye \(side) inside the body (distance \(d))")
+                    let edge = p + SIMD2(side * rig.eyeRadius, 0)
+                    #expect(Metaball.polygonDistance(edge, body.referenceRing) < 0, "\(s) \(name) eye edge inside")
+                }
+                let m = rig.local(rig.project(yawOffset: 0, pitchOffset: rig.mouthPitch, yaw: 0, pitch: 0))
+                #expect(Metaball.polygonDistance(m, body.referenceRing) < -0.08, "\(s) \(name) mouth inside")
+                for side in [-1.0, 1.0] {
+                    let b = rig.local(rig.project(yawOffset: side * rig.blushYaw, pitchOffset: rig.blushPitch, yaw: 0, pitch: 0))
+                    #expect(Metaball.polygonDistance(b, body.referenceRing) < -0.06, "\(s) \(name) blush \(side) inside")
+                }
             }
-            let m = rig.local(rig.project(yawOffset: 0, pitchOffset: rig.mouthPitch, yaw: 0, pitch: 0))
-            #expect(Metaball.polygonDistance(m, body.referenceRing) < -0.08, "\(s) mouth inside")
         }
         #expect(EyeRig.main.fitted(to: .dome) == EyeRig.main)
+        #expect(EyeRig.anime.fitted(to: .dome) == EyeRig.anime)
     }
 
     @Test func traitsRideTheRing() {

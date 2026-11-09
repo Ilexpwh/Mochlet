@@ -128,6 +128,7 @@ struct StateStyle: Sendable {
     var breathRate: Double = 0.21
     var blinkInterval: ClosedRange<Double> = 2.2...5.4
     var blinkSuppressed = false
+    /// Eyes and mouth come from `FaceTable` for the face style.
     var eye: EyeShape = .open
     var mouth: MouthShape = .smileTiny
     var mouthOpen: Double = 0
@@ -140,7 +141,7 @@ struct StateStyle: Sendable {
     var clearsEmote = false
     var accessory: AccessoryKind? = nil
 
-    static func style(for state: SlimeState) -> StateStyle {
+    static func style(for state: SlimeState, face: FaceStyle) -> StateStyle {
         var s = StateStyle()
         switch state {
         case .idle:
@@ -149,7 +150,6 @@ struct StateStyle: Sendable {
             s.clearsEmote = true
         case .listening:
             s.eyeScale = 1.12
-            s.mouth = .o
             s.mouthOpen = 0.35
             s.breathRate = 0.30
             s.blinkInterval = 3.0...4.5
@@ -158,7 +158,6 @@ struct StateStyle: Sendable {
             s.gazeOverride = SIMD2(0, 0.12)
             s.gazeBlend = 0.5
         case .thinking:
-            s.eye = .focused
             s.gazeOverride = SIMD2(0.45, 0.35)
             s.gazeBlend = 0.6
             s.accessory = .dots
@@ -166,12 +165,10 @@ struct StateStyle: Sendable {
             s.entrySound = SoundCue(.think)
             s.blinkInterval = 2.6...5.8
         case .working:
-            s.eye = .focused
             s.accessory = .badge
             s.blinkInterval = 2.6...5.8
             s.entrySound = SoundCue(.work)
         case .waiting:
-            s.eye = .wide
             s.eyeScale = 1.08
             s.accessory = .exclamation
             s.tint = .waiting
@@ -182,25 +179,18 @@ struct StateStyle: Sendable {
             s.entrySound = SoundCue(.question)
             s.clearsEmote = true
         case .chewing:
-            s.mouth = .openRound
             s.mouthOpen = 1
             s.clearsEmote = true
             s.blinkInterval = 3.0...6.0
         case .finished:
-            s.eye = .happyArc
-            s.mouth = .omega
             s.entrySound = SoundCue(.finish)
             s.clearsEmote = true
             s.blinkSuppressed = true
         case .error:
-            s.eye = .flat
-            s.mouth = .flat
             s.tint = .error
             s.entrySound = SoundCue(.error)
             s.blinkInterval = 3.0...6.0
         case .sleeping:
-            s.eye = .tired
-            s.mouth = .sleepy
             s.breathAmplitude = 0.035
             s.breathRate = 0.14
             s.blinkSuppressed = true
@@ -208,22 +198,21 @@ struct StateStyle: Sendable {
             s.entrySound = SoundCue(.sleep)
             s.clearsEmote = true
         case .dizzy:
-            s.eye = .spiral
-            s.mouth = .wavy
             s.tint = .dizzy
             s.entrySound = SoundCue(.dizzy)
             s.blinkSuppressed = true
             s.clearsEmote = true
         case .recording:
-            s.eye = .focused
             s.accessory = .recDot
             s.breathAmplitude = 0.012
             s.entrySound = SoundCue(.blip, rate: 1.3)
         case .split:
-            s.eye = .spiral
             s.blinkSuppressed = true
             s.clearsEmote = true
         }
+        let pose = FaceTable.state(state, face)
+        s.eye = pose.left
+        s.mouth = pose.mouth ?? .none
         return s
     }
 }

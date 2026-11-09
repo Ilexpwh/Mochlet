@@ -6,17 +6,17 @@ import SlimeKit
 public enum Catalog {
     @MainActor
     public static func render(palettes: [SlimeTheme] = [.rimuru, .ruby, .obsidian], looks: [SlimeLook] = SlimeLook.all,
-                              outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat = 56, columns: Int? = nil) throws -> CGImage {
+                              outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat = 56, columns: Int? = nil, face: FaceStyle = .anime) throws -> CGImage {
         var images: [CGImage] = []
         var labels: [String] = []
         let sizes: [CGFloat] = [radius, 22, 15]
         for look in looks {
             for palette in palettes {
-                images.append(try cell(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: radius))
+                images.append(try cell(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: radius, face: face))
                 labels.append("\(look.name) · \(palette.name)")
             }
             for r in sizes.dropFirst() {
-                images.append(try cell(look: look, palette: palettes[0], outfit: outfit, radius: r, cellRadius: radius))
+                images.append(try cell(look: look, palette: palettes[0], outfit: outfit, radius: r, cellRadius: radius, face: face))
                 labels.append("\(look.name) · R \(Int(r))")
             }
         }
@@ -46,8 +46,9 @@ public enum Catalog {
 
     /// One settled slime drawn at `radius` px/R inside a cell sized for `cellRadius`.
     @MainActor
-    static func cell(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat, cellRadius: CGFloat) throws -> CGImage {
-        guard let cg = render(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: cellRadius, scale: 1, background: .black) else {
+    static func cell(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat, cellRadius: CGFloat,
+                     face: FaceStyle = .anime) throws -> CGImage {
+        guard let cg = render(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: cellRadius, scale: 1, background: .black, face: face) else {
             throw NSError(domain: "SlimeKitUI.Catalog", code: 2, userInfo: [NSLocalizedDescriptionKey: "render failed for \(look.name)"])
         }
         return cg
@@ -56,14 +57,16 @@ public enum Catalog {
     /// A transparent thumbnail of one look for pickers (settings, menus); `scale` is the backing
     /// scale, so the image is `4.2·radius × 3.1·radius` points.
     @MainActor
-    public static func thumbnail(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat = 16, scale: CGFloat = 2) -> CGImage? {
-        render(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: radius, scale: scale, background: .clear)
+    public static func thumbnail(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit = SlimeOutfit(), radius: CGFloat = 16, scale: CGFloat = 2,
+                                 face: FaceStyle = .anime) -> CGImage? {
+        render(look: look, palette: palette, outfit: outfit, radius: radius, cellRadius: radius, scale: scale, background: .clear, face: face)
     }
 
     @MainActor
-    static func render(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit, radius: CGFloat, cellRadius: CGFloat, scale: CGFloat, background: Color) -> CGImage? {
+    static func render(look: SlimeLook, palette: SlimeTheme, outfit: SlimeOutfit, radius: CGFloat, cellRadius: CGFloat, scale: CGFloat, background: Color,
+                       face: FaceStyle = .anime) -> CGImage? {
         let engine = SlimeEngine(profile: .main, seed: 3)
-        engine.appearance = SlimeAppearance(look: look, palette: palette, outfit: outfit, dressForOccasion: false)
+        engine.appearance = SlimeAppearance(look: look, palette: palette, outfit: outfit, faceStyle: face, dressForOccasion: false)
         engine.detail = DetailLevel(pixelsPerUnit: Double(radius * scale))
         engine.simulate(1.4)
         let size = CGSize(width: cellRadius * 4.2, height: cellRadius * 3.1)

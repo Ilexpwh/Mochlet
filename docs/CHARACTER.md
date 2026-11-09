@@ -45,7 +45,7 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 
 | Feeling | Eyes | Mouth | Extras |
 | --- | --- | --- | --- |
-| content (idle, greeting, question, waiting) | ᐳ ᐸ strokes, 0.42 R long, 0.94 R apart, 12° inward-down, outer hook | none | blush 0.70 |
+| content (idle, greeting, question, waiting) | bold dash 0.34 R long with a slight upward bow, two short lash ticks at the inner end (ー= =ー, from the Bandai figures); eyes 0.94 R apart | none | blush 0.70 |
 | happy / finished / cheer | ᵔ ᵔ arcs | ω / open wide | sparkles |
 | thinking / working | relaxed line with a tick | none | |
 | sleeping | — — | none | zzz |
@@ -62,7 +62,13 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 - Eyes sit ≈ 0.14 R above the body centroid at (±0.47, −1.04); they slide ≤ 0.08 R with the gaze.
 - Blush: flat `blush` ovals (0.28 R × 0.16 R) at (±0.78, −0.97), hard edge, alpha 0.70 at rest.
 - Blink: the stroke lerps to a flat line and back (50 / 15 / 70 ms) every 3–6 s.
-- Strokes are tapered brush shapes: w(t) = wMax · max(0.15, 1 − |2t − 1|^2.2), wMax = 0.045 R.
+- Strokes are tapered brush shapes (`BrushStroke`): half-width w(t) = wMax · max(0.3, 1 − |2t − 1|^1.6),
+  wMax = max(0.95 px, 0.045 R). Face ink is `ink` pulled 30 % toward black on light bodies, darker than
+  the outline, as on the figures. Ball shapes map to strokes through `EyeShape.strokeEquivalent`, so an
+  anime face never shows a sclera whatever sets the eye (drag-in, digesting, micro-idle, the stage).
+- The face catalogue lives in `FaceTable` (state and emote columns per `FaceStyle`); `round` reproduces the
+  character's earlier face. Settings → Character → Face, debug `look?face=anime|round`,
+  tools `--face anime|round`.
 
 ## Motion (anime timing)
 

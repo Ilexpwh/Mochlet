@@ -430,3 +430,11 @@ tempest idle 0.55, cat 0.43, king outfit 0.37; the engine costs 0.19 ms per simu
 idle stage. Greeting trace: airborne 0.05–0.42 s, landing 0.80 tall / 1.09 wide, rebound 1.17,
 crossings every 0.47 s; happy hop: anticipation 0.94 / 1.07 for 0.12 s, stretch 1.25, landing
 0.76 / 1.18, rebound 1.21. SlimeKit 142 tests green.
+Idle on this Mac (release build, island collapsed, Settings closed, the What's new card already
+seen): `scripts/measure-idle.sh 120` averaged 6.17 % of a core with one live coding-agent session
+attached (the main slime and its mini in the working animation; C6 measured 4.97 % the same way).
+The no-session figure cannot be taken from inside a Claude Code session, whose hooks keep a session
+live; measure it with no agent running before a release. App shots in `~/Library/Logs/Mochlet/debug/
+a-*.png` (compact, home, ask, puff, melt, shock, cry, cheer, press, round face, obsidian, lemon,
+error) matched the catalog and filmstrips; during the cheer landing squash the raised arms reach
+≈ 200 pt, a hair past the 190 pt content leading, for one beat.

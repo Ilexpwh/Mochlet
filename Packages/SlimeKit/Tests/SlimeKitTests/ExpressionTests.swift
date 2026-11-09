@@ -154,7 +154,7 @@ import simd
                     SlimeCGRenderer.draw(f, appearance: appearance, in: ctx, origin: CGPoint(x: 110, y: 170), radius: radius)
                 }
             }
-            for k in [AccessoryKind.question, .exclamation, .dots, .badge, .micBars, .recDot, .note, .anger] {
+            for k in [AccessoryKind.question, .exclamation, .dots, .badge, .micBars, .recDot, .note, .anger, .sweat] {
                 for grown in [false, true] {
                     var f = base
                     f.accessories = [AccessoryFrame(kind: k, anchor: SIMD2(1.1, -2.1), pop: 1, phase: 0.4, levels: [0.2, 0.5, 0.8, 0.4, 0.1],

@@ -29,6 +29,8 @@ public enum AccessoryKind: String, Sendable, Codable, Equatable {
     case question, exclamation, dots, badge, micBars, recDot
     /// A music note (humming) and the anime's anger mark on the body.
     case note, anger
+    /// A sweat drop of the body's own jelly on the upper cheek, sliding down and fading.
+    case sweat
 
     /// Marks that can grow out of the body as slime (`GlyphStyle.grown`).
     public var canGrow: Bool {
@@ -59,6 +61,18 @@ public struct AccessoryFrame: Sendable, Equatable {
     public var bead: SIMD2<Double>? = nil
     /// Radius of the bead in R units (already scaled by the pop).
     public var beadRadius: Double = 0
+}
+
+/// A short ink crease on the surface where the body is squeezed (poke, puff, melt).
+public struct CreaseFrame: Sendable, Equatable {
+    /// World start of the stroke, just inside the outline (R units).
+    public var anchor: SIMD2<Double>
+    /// Unit direction the stroke runs in (inward).
+    public var direction: SIMD2<Double>
+    /// Length in R units.
+    public var length: Double
+    /// 0…1 strength (drawn alpha).
+    public var alpha: Double
 }
 
 public struct Particle: Sendable, Equatable {
@@ -145,6 +159,10 @@ public struct SlimeFrame: Sendable, Equatable {
     public var innerItems: [InnerItem] = []
     /// Where the eating timeline is, while chewing with arms.
     public var chewPhase: ChewPhase? = nil
+    /// Strain creases on the surface this frame.
+    public var creases: [CreaseFrame] = []
+    /// World scale of the inner core mass (trails `body.scaleX/Y` and overshoots).
+    public var coreScale: SIMD2<Double> = SIMD2(1, 1)
 
     /// Topmost y of the ring (most negative).
     public var topY: Double { ring.map(\.y).min() ?? 0 }

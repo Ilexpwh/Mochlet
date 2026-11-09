@@ -94,6 +94,19 @@ public enum TraitRig {
         return ((i % n) + n) % n
     }
 
+    /// Point on the ring at an angle (−π/2 = top, clockwise), interpolated between the two
+    /// nearest ring points so it slides smoothly.
+    public static func point(angle: Double, ring: [SIMD2<Double>]) -> SIMD2<Double> {
+        let n = ring.count
+        guard n > 1 else { return ring.first ?? .zero }
+        var f = (angle + .pi / 2) / (2 * .pi) * Double(n)
+        f = f - (f / Double(n)).rounded(.down) * Double(n)
+        let i0 = Int(f.rounded(.down)) % n
+        let i1 = (i0 + 1) % n
+        let t = f - f.rounded(.down)
+        return ring[i0] * (1 - t) + ring[i1] * t
+    }
+
     public static func unit(_ v: SIMD2<Double>) -> SIMD2<Double> {
         let l = simd_length(v)
         return l > 1e-9 ? v / l : SIMD2(0, -1)

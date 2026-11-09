@@ -60,6 +60,12 @@ public struct FilmstripTrace: Codable, Sendable {
     public var minis: Int
     public var accessories: [String]
     public var frameInterval: Double?
+    /// Scripted squash on the anchors (1 = none), the core's vertical lag behind the ring centroid
+    /// (R), the number of strain creases and whether a sweat drop is showing.
+    public var squash: Double = 1
+    public var coreDy: Double = 0
+    public var creases: Int = 0
+    public var sweat: Bool = false
 }
 
 public struct FilmstripResult {
@@ -252,7 +258,7 @@ public enum Filmstrip {
             }
             images.append(cg)
             labels.append(String(format: "%03d %.2fs %@%@", i, t, frame.state.rawValue, frame.emote.map { " +\($0.rawValue)" } ?? ""))
-            trace.append(FilmstripTrace(
+            var tr = FilmstripTrace(
                 frame: i, t: t, state: frame.state.rawValue, emote: frame.emote?.rawValue,
                 rootX: frame.root.x, rootY: frame.root.y, areaRatio: engine.body.areaRatio,
                 sx: frame.body.scaleX, sy: frame.body.scaleY, rotation: frame.body.rotation,
@@ -262,7 +268,13 @@ public enum Filmstrip {
                 mouth: frame.mouth.shape.rawValue, gazeYaw: frame.gaze.x, gazePitch: frame.gaze.y,
                 airborne: frame.airborne, particles: frame.particles.count, blobs: frame.blobs.count,
                 minis: placed.count - 1,
-                accessories: frame.accessories.map(\.kind.rawValue), frameInterval: miniEngine?.frameInterval ?? stage.frameInterval))
+                accessories: frame.accessories.map(\.kind.rawValue), frameInterval: miniEngine?.frameInterval ?? stage.frameInterval)
+            let centroid = frame.ring.reduce(SIMD2<Double>.zero, +) / Double(max(1, frame.ring.count))
+            tr.squash = engine.body.squash
+            tr.coreDy = frame.core.y - centroid.y
+            tr.creases = frame.creases.count
+            tr.sweat = frame.accessories.contains { $0.kind == .sweat }
+            trace.append(tr)
             t += dt
         }
         let sheet = contactSheet(images, labels: labels, columns: o.columns)

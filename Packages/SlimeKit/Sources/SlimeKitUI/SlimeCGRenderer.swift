@@ -237,11 +237,13 @@ public struct SlimeCGRenderer {
         // Where the core trails the shell, in reference units (the spring rests 0.04 above the centroid).
         let lagWorld = frame.core - bf.origin - bf.transformVector(SIMD2(0, -0.04))
         let raw = bf.matrix.inverse * lagWorld
-        let lag = raw.x.isFinite && raw.y.isFinite ? SIMD2(clamp(raw.x, -0.5, 0.5), clamp(raw.y, -0.5, 0.5)) : SIMD2<Double>.zero
+        let lag = raw.x.isFinite && raw.y.isFinite ? SIMD2(clamp(raw.x, -0.4, 0.4), clamp(raw.y, -0.4, 0.4)) : SIMD2<Double>.zero
         let centre = SIMD2(0.05 * kx, -0.66 * ky) + lag * 0.6
-        let rx = 0.92 * kx
-        let ryUp = 0.60 * ky
-        let ryDown = 0.58 * ky
+        // The core's scale trails the shell's: wider and shorter for a beat after a landing.
+        let rel = SIMD2(clamp(frame.coreScale.x / max(bf.scaleX, 1e-6), 0.7, 1.4), clamp(frame.coreScale.y / max(bf.scaleY, 1e-6), 0.7, 1.4))
+        let rx = 0.92 * kx * rel.x
+        let ryUp = 0.60 * ky * rel.y
+        let ryDown = 0.58 * ky * rel.y
         let n = detail == .full ? 20 : (detail == .medium ? 14 : 10)
         let phase = 2 * .pi * frame.time / 12 + 4 * lag.x
         var pts: [CGPoint] = []
@@ -369,6 +371,14 @@ public struct SlimeCGRenderer {
                            [(theme.blush.opacity(0.85 * frame.blush), 0), (theme.blush.opacity(0.55 * frame.blush), 0.6), (theme.blush.opacity(0), 1)],
                            center: .zero, radius: w, in: cg)
                 cg.restoreGState()
+            }
+        }
+        if detail >= .medium {
+            // Strain creases: short tapered ink ticks pointing in from the squeezed surface.
+            for c in frame.creases where c.alpha > 0.02 && c.length > 1e-3 {
+                let a = px(c.anchor)
+                let b = px(c.anchor + c.direction * c.length)
+                fill(BrushStroke.path(along: [a, b], halfWidth: max(0.6, 0.0175 * R)), faceInk, 0.85 * c.alpha, in: cg)
             }
         }
         for e in frame.eyes where e.visible {
@@ -800,6 +810,22 @@ public struct SlimeCGRenderer {
                     let x = -total / 2 + CGFloat(i) * (bw + gap)
                     let bar = CGPath(roundedRect: CGRect(x: x, y: -hgt / 2, width: bw, height: hgt), cornerWidth: bw / 2, cornerHeight: bw / 2, transform: nil)
                     fill(bar, mid, 0.95, in: cg)
+                }
+            case .sweat:
+                // A drop of the body's own jelly on the cheek, tip up, hanging just outside the
+                // outline along the surface normal.
+                let r = (detail == .tiny ? 0.07 : 0.09) * R
+                let c = CGPoint(x: CGFloat(a.direction.x) * r * 0.35, y: CGFloat(a.direction.y) * r * 0.35)
+                let drop = BodyPath.teardrop(center: c, radius: r * 0.55).cgPath
+                fill(drop, material.shell, 0.96, in: cg)
+                cg.saveGState()
+                cg.addPath(drop)
+                cg.clip()
+                fill(Self.ellipse(CGPoint(x: c.x, y: c.y + r * 0.35), r * 0.5, r * 0.4), material.inner, 0.9, in: cg)
+                cg.restoreGState()
+                stroke(drop, material.inkLine, width: max(1, 0.03 * R), in: cg)
+                if detail != .tiny {
+                    fill(Self.ellipse(CGPoint(x: c.x - r * 0.2, y: c.y - r * 0.15), r * 0.14, r * 0.1), material.highlight, 0.9, in: cg)
                 }
             case .recDot:
                 let r = 0.14 * R

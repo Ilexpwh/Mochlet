@@ -41,9 +41,15 @@ public extension SlimeFrame {
             switch a.kind {
             case .dots, .badge, .recDot, .anger: if diff(a.phase, b.phase, 0.04) { return true }
             case .micBars: for k in a.levels.indices where k < b.levels.count && diff(a.levels[k], b.levels[k], 0.03) { return true }
-            case .question, .exclamation, .note: break
+            case .question, .exclamation, .note, .sweat: break
             }
         }
+        if creases.count != o.creases.count { return true }
+        for i in creases.indices {
+            let a = creases[i], b = o.creases[i]
+            if moved(a.anchor, b.anchor) || diff(a.length, b.length, tol) || diff(a.alpha, b.alpha, 0.03) { return true }
+        }
+        if diff(coreScale.x, o.coreScale.x, max(0.01, tol)) || diff(coreScale.y, o.coreScale.y, max(0.01, tol)) { return true }
         for i in particles.indices {
             let a = particles[i], b = o.particles[i]
             if a.kind != b.kind || moved(a.position, b.position) || diff(a.progress, b.progress, 0.02) || diff(a.spin * a.age, b.spin * b.age, 0.03) { return true }

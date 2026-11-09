@@ -130,6 +130,16 @@ public final class SlimeEngine {
     private var shakeY = AnimatedValue(0)
     private var pulse: Double = 0
     private var coreSpring: Spring2D
+    /// The inner core's scale trails the body's and overshoots (secondary motion).
+    private var coreScaleSpring = Spring2D(value: SIMD2(1, 1), omega: 10, zeta: 0.35)
+    /// The face slides down the body while melting (R, +down).
+    private var faceSlide = AnimatedValue(0)
+    /// Strain creases radiating from where the body was last squeezed.
+    private var strainAngle: Double = 0
+    private var strainAmount = AnimatedValue(0)
+    /// Quick successive presses: the third one draws a sweat drop.
+    private var pressBurst = 0
+    private var lastPressAt: Double = -10
     private var tint = StateTint.none
     private var tintTarget = StateTint.none
     private var glowBoost: Double = 0
@@ -187,6 +197,8 @@ public final class SlimeEngine {
         var startedAt: Double
         var removeAt: Double?
         var owner: Owner
+        /// Which cheek a sweat drop sits on (+1 right).
+        var side: Double = 1
     }
 
     private static let stateTag = "state"
@@ -202,7 +214,7 @@ public final class SlimeEngine {
         rng = SeededRandom(seed: seed)
         clock = SlimeClock(step: SoftBodyParams.substep)
         breath = BreathOscillator(seed: seed, phase: Double(seed % 7) * 0.9)
-        coreSpring = Spring2D(value: b.centroid, omega: 18, zeta: 0.5)
+        coreSpring = Spring2D(value: b.centroid, omega: 10, zeta: 0.35)
         baseBlush = FaceTable.baseBlush(kind: profile.kind, face: .anime, blushEnabled: profile.blushEnabled)
         blush = AnimatedValue(baseBlush)
         blink.prime(at: 0, rng: &rng)
@@ -252,6 +264,11 @@ public final class SlimeEngine {
         sizeScale.advance(to: time)
         morphAmount.advance(to: time)
         if morph != nil, !morphAmount.isAnimating, morphAmount.value < 1e-3 { morph = nil }
+        faceSlide.advance(to: time)
+        strainAmount.advance(to: time)
+        for i in accessories.indices where accessories[i].kind == .sweat && accessories[i].removeAt == nil && time - accessories[i].startedAt > 0.62 {
+            accessories[i].removeAt = time
+        }
         shakeX.advance(to: time)
         shakeY.advance(to: time)
         eyeScale.advance(to: time)
@@ -296,6 +313,15 @@ public final class SlimeEngine {
         stepParticles()
         coreSpring.target = body.centroid + SIMD2(0, -0.04)
         coreSpring.advance(h)
+        // Extents without allocating: this runs every substep.
+        var rMinX = Double.infinity, rMaxX = -Double.infinity, rTop = Double.infinity
+        for q in body.referenceRing { rMinX = min(rMinX, q.x); rMaxX = max(rMaxX, q.x); rTop = min(rTop, q.y) }
+        var minX = Double.infinity, maxX = -Double.infinity, top = Double.infinity
+        for q in body.points { minX = min(minX, q.x); maxX = max(maxX, q.x); top = min(top, q.y) }
+        if rMaxX - rMinX > 1e-6, rTop < -1e-6 {
+            coreScaleSpring.target = SIMD2((maxX - minX) / (rMaxX - rMinX), top / rTop)
+        }
+        coreScaleSpring.advance(h)
         tint.opacity = approach(tint.opacity, toward: tintTarget.opacity, tau: 0.25, dt: h)
         tint.desaturation = approach(tint.desaturation, toward: tintTarget.desaturation, tau: 0.25, dt: h)
         if tintTarget.opacity > 0 { tint.color = tintTarget.color }
@@ -395,8 +421,16 @@ public final class SlimeEngine {
     public func pressBegan(at local: SIMD2<Double>) {
         isPressed = true
         lastInteractionAt = time
-        let side: Double = local.x >= body.centroid.x ? 1 : -1
+        let c = body.centroid
+        let side: Double = local.x >= c.x ? 1 : -1
         if !reduceMotion { body.apply(.slap(side: side, strength: 0.35)) }
+        // Strain creases radiate from the finger and fade; a third quick poke draws sweat.
+        strainAngle = atan2(local.y - c.y, local.x - c.x)
+        strainAmount = AnimatedValue(1)
+        strainAmount.animate(to: 0, duration: 0.5, ease: .outQuad, at: time)
+        pressBurst = time - lastPressAt < 0.9 ? pressBurst + 1 : 1
+        lastPressAt = time
+        if pressBurst == 3 { spawnSweat(side: side) }
         cue(.blip)
         if state == .sleeping { wake() }
         _ = clickGrammar.pressBegan(at: time, position: local)
@@ -976,7 +1010,7 @@ public final class SlimeEngine {
             cue(.hover, gain: 0.6)
         case .confused:
             glance = (SIMD2(0.3, 0.2), until)
-            spawnSweat()
+            spawnSweat(side: 1, owner: .emote)
         case .excited:
             hop(1.6)
             scheduler.schedule(at: time + 0.5, tag: Self.emoteTag) { [weak self] in self?.hop(1.6) }
@@ -987,9 +1021,11 @@ public final class SlimeEngine {
             startMorph(.melt, duration: 0.7, ease: .inOutSine)
             flatten.animate(keys: [.init(to: 0.62, duration: 0.7, ease: .inOutSine), .init(to: 0.62, duration: 1.0, ease: .linear),
                                    .init(to: 1, duration: 0.5, ease: .outBack)], at: time)
+            faceSlide.animate(to: 0.25, duration: 0.6, ease: .inOutSine, at: time)
             scheduler.schedule(at: time + 1.7, tag: Self.emoteTag) { [weak self] in
                 guard let self else { return }
                 self.morphAmount.animate(to: 0, duration: 0.5, ease: .inOutSine, at: self.time)
+                self.faceSlide.animate(to: 0, duration: 0.5, ease: .inOutSine, at: self.time)
             }
             for k in 0..<3 {
                 scheduler.schedule(at: time + 0.5 + Double(k) * 0.4, tag: Self.emoteTag) { [weak self] in
@@ -1119,6 +1155,7 @@ public final class SlimeEngine {
         if let g = glance, g.until == emoteUntil { glance = nil }
         let style = currentStyle()
         blush.animate(to: baseBlush, duration: 0.5, at: time)
+        if faceSlide.value > 1e-3 || faceSlide.isAnimating { faceSlide.animate(to: 0, duration: 0.4, ease: .inOutSine, at: time) }
         sizeScale.animate(to: userState == .split ? sizeScale.value : 1, duration: 0.3, ease: .outBack, at: time)
         eyeScale.animate(to: style.eyeScale * (isHovering ? 1.06 : 1), duration: 0.3, at: time)
         lean.animate(to: style.lean, duration: 0.3, ease: .outBack, at: time)
@@ -1509,9 +1546,14 @@ public final class SlimeEngine {
         }
     }
 
-    private func spawnSweat() {
-        let world = frameNow().body.transform(SIMD2(0.72, -1.38))
-        spawn(.drop, at: world, velocity: SIMD2(0.05, 0.25), life: 0.95, size: 0.15)
+    /// One sweat drop at a time: it rides the upper cheek on `side`, slides down and fades
+    /// (0.62 s plus the removal fade).
+    private func spawnSweat(side: Double = 1, owner: AccessoryInstance.Owner = .state) {
+        if let i = accessories.firstIndex(where: { $0.kind == .sweat }) {
+            if accessories[i].removeAt == nil { return }
+            accessories.remove(at: i)
+        }
+        accessories.append(AccessoryInstance(kind: .sweat, startedAt: time, removeAt: nil, owner: owner, side: side))
     }
 
     private func stepParticles() {
@@ -1591,6 +1633,9 @@ public final class SlimeEngine {
         let s = profile.kind == .mini ? 0.85 : 1.0
         var acc: [AccessoryFrame] = []
         var extraBlobs: [Blob] = []
+        var ringCentroid = SIMD2<Double>.zero
+        for p in ring { ringCentroid += p }
+        ringCentroid /= Double(max(1, ring.count))
         accessories.removeAll { r in r.removeAt.map { time - $0 > 0.18 } ?? false }
         let grownStyle = appearance.glyphStyle == .grown && detail >= .medium
         for a in accessories where !(a.kind == .micBars && holdsMic) {
@@ -1619,6 +1664,12 @@ public final class SlimeEngine {
                 anchor = base + dir * (0.2 * s + 0.52 * s * grow)
                 bead = base + dir * (0.1 * s)
                 beadR = 0.085 * s * min(1, grow)
+            } else if a.kind == .sweat {
+                // The drop sits on the upper cheek and slides down the surface over its life.
+                let slide = Ease.outQuad.apply(min(1, age / 0.8))
+                let theta = -Double.pi / 2 + a.side * (0.75 + 0.30 * slide)
+                anchor = TraitRig.point(angle: theta, ring: ring)
+                dir = TraitRig.unit(anchor - ringCentroid)
             } else {
                 let local: SIMD2<Double>
                 switch a.kind {
@@ -1628,6 +1679,7 @@ public final class SlimeEngine {
                 case .micBars: local = SIMD2(1.75, -1.0)
                 case .recDot: local = SIMD2(1.25, -1.8)
                 case .anger: local = SIMD2(0.72, -1.46)
+                case .sweat: local = SIMD2(0.72, -1.38)
                 }
                 anchor = bf.transform(local)
             }
@@ -1648,6 +1700,29 @@ public final class SlimeEngine {
                 }
             }
         }
+        // Strain creases: short inward ticks just inside the outline where the body is squeezed.
+        var creases: [CreaseFrame] = []
+        func addCreases(angle: Double, amount: Double, ticks: [Double]) {
+            guard amount > 0.02 else { return }
+            for k in ticks {
+                let p = TraitRig.point(angle: angle + 0.28 * k, ring: ring)
+                let inward = TraitRig.unit(ringCentroid - p)
+                creases.append(CreaseFrame(anchor: p + inward * (0.05 * s), direction: inward, length: 0.18 * s * amount, alpha: amount))
+            }
+        }
+        if strainAmount.value > 0.02 { addCreases(angle: strainAngle, amount: strainAmount.value, ticks: [-1, 0, 1]) }
+        if let m = morph {
+            let k = morphAmount.value
+            switch m {
+            case .puff:
+                addCreases(angle: 0, amount: k, ticks: [-0.6, 0.6])
+                addCreases(angle: .pi, amount: k, ticks: [-0.6, 0.6])
+            case .melt:
+                addCreases(angle: .pi / 2 - 0.7, amount: k, ticks: [-0.6, 0.6])
+                addCreases(angle: .pi / 2 + 0.7, amount: k, ticks: [-0.6, 0.6])
+            case .heartBody: break
+            }
+        }
         let look = appearance.look
         var rig = TraitRig.build(look: look, ring: ring, anim: traitAnim, time: time, detail: detail, mini: profile.kind == .mini)
         let worn = resolvedOutfit
@@ -1656,22 +1731,24 @@ public final class SlimeEngine {
         let pitch = gaze.pitch
         let open = blink.openness
         let es = eyeScale.value * (state == .listening ? 1 + 0.06 * audioLevel : 1)
+        // Melting slides the whole face down the sphere (and foreshortens it).
+        let slide = faceSlide.value / max(eyeRig.sphereRadius, 1e-6)
         var eyes: [EyeFrame] = []
         for side in [-1.0, 1.0] {
-            let proj = eyeRig.eye(side: side, yaw: yaw, pitch: pitch)
+            let proj = eyeRig.project(yawOffset: side * eyeRig.separation, pitchOffset: eyeRig.basePitch - slide, yaw: yaw, pitch: pitch)
             let world = bf.transform(eyeRig.local(proj))
             eyes.append(EyeFrame(side: side, shape: resolvedEye(side), center: world, radius: eyeRig.eyeRadius,
                                  aspect: eyeRig.eyeAspect, foreshorten: proj.foreshorten,
                                  openness: side < 0 ? open.x : open.y, visible: proj.visible, scale: es))
         }
-        let mp = eyeRig.project(yawOffset: 0, pitchOffset: eyeRig.mouthPitch, yaw: yaw, pitch: pitch)
+        let mp = eyeRig.project(yawOffset: 0, pitchOffset: eyeRig.mouthPitch - slide, yaw: yaw, pitch: pitch)
         let mouth = MouthFrame(shape: mouthOverride?.shape ?? baseMouth, open: mouthOpen.value,
                                center: bf.transform(eyeRig.local(mp)), foreshorten: mp.foreshorten, visible: mp.visible)
         var blushCenters: [SIMD2<Double>] = []
         var blushFore: [SIMD2<Double>] = []
         if profile.blushEnabled || faceStyle == .anime {
             for side in [-1.0, 1.0] {
-                let bp = eyeRig.project(yawOffset: side * eyeRig.blushYaw, pitchOffset: eyeRig.blushPitch, yaw: yaw, pitch: pitch)
+                let bp = eyeRig.project(yawOffset: side * eyeRig.blushYaw, pitchOffset: eyeRig.blushPitch - slide, yaw: yaw, pitch: pitch)
                 if bp.visible {
                     blushCenters.append(bf.transform(eyeRig.local(bp)))
                     blushFore.append(bp.foreshorten)
@@ -1679,6 +1756,7 @@ public final class SlimeEngine {
             }
         }
         let moving = body.airborne || flatten.isAnimating || sizeScale.isAnimating || shakeX.isAnimating || !particles.isEmpty || morph != nil
+            || strainAmount.isAnimating || faceSlide.isAnimating || accessories.contains(where: { $0.kind == .sweat })
             || blobs.contains(where: { $0.radius > 1e-3 }) || isPressed || state == .split || state == .chewing || state == .dizzy || state == .greeting
             || armRig.isAnimating(at: time) || armRig.hasMotion || (propLive && simd_length(propSpring.velocity) > 1e-3) || !limbs.inner.isEmpty
         // A resting pointer is not activity: the gaze counts only while it is still turning.
@@ -1686,7 +1764,7 @@ public final class SlimeEngine {
         let lively = blink.isBlinking || lean.isAnimating || opacityAnim.isAnimating || faceOpacityAnim.isAnimating || eyeScale.isAnimating || blush.isAnimating || mouthOpen.isAnimating
             || glance != nil || eyeOverride != nil || emote != nil || !acc.isEmpty || !state.isQuiet || gazeMoving || !limbs.arms.isEmpty
         activity = moving ? 2 : (lively ? 1 : 0)
-        return SlimeFrame(
+        var out = SlimeFrame(
             profile: profile.kind, state: state, emote: emote, ring: ring, root: body.root, body: bf,
             contactWidth: body.contactWidth, airborne: body.airborne, eyes: eyes, mouth: mouth,
             blush: blush.value, blushCenters: blushCenters, blushForeshorten: blushFore,
@@ -1695,6 +1773,9 @@ public final class SlimeEngine {
             blobs: blobs + rig.blobs + limbs.blobs + extraBlobs, opacity: opacity, faceOpacity: faceOpacity, glowBoost: glowBoost, sizeScale: sizeScale.value,
             ghostStretch: ghostStretch, ghostHeading: ghostHeading, traits: rig.traits, outfit: worn, time: time,
             arms: limbs.arms, props: limbs.props, innerItems: limbs.inner, chewPhase: chewPhase)
+        out.creases = creases
+        out.coreScale = coreScaleSpring.value
+        return out
     }
 
     // MARK: - Looks
@@ -1712,7 +1793,7 @@ public final class SlimeEngine {
             b.sizeScale = body.sizeScale
             b.gravityScale = body.gravityScale
             body = b
-            coreSpring = Spring2D(value: b.centroid, omega: 18, zeta: 0.5)
+            coreSpring = Spring2D(value: b.centroid, omega: 10, zeta: 0.35)
         } else if want != body.params {
             body.setParams(want)
         }

@@ -1,258 +1,212 @@
 # Mochlet
 
-A glossy little slime that lives in the MacBook notch. It watches your local coding agents
-(Claude Code, Codex, Gemini CLI and friends), splits off a mini slime per session, answers
-approvals and questions from the notch, eats files and links into a local knowledge base,
-listens when you hold it, takes meeting notes and gathers daily AI signals.
+A small anime slime that lives in your MacBook notch, watches your coding agents, remembers
+what you drop on it, and listens when you hold it.
 
-This is the v2 rewrite (native Swift 6, SwiftUI + AppKit, macOS 26). The previous
-implementation is kept in git history under the tag `v1-final`.
+macOS 26 · Swift 6 · SwiftPM · local-first · one person, one slime
 
-## Talking to the slime
+![Mochlet's island: the slime at home, with the ask, talk and chew hints and the plan pills](docs/images/hero.png)
 
-Everything starts from the character, not from forms:
+## What it is
+
+Mochlet is a native macOS app that turns the notch into a tiny island with a character in it.
+The character is a soft-body slime drawn in the style of a Japanese TV anime: a translucent bun
+of jelly with a pale shell, a darker core, one hard highlight and a thin ink line. It breathes,
+blinks, looks at your pointer, wobbles when it lands and dents where you poke it.
+
+Everything you do starts from the slime. Click it to ask something, hold it to talk, drop a file
+on it to file the file, drag it out of the notch to keep it on your desk. When a coding agent
+runs in a terminal, a mini slime pinches off and reports on that session until it ends.
+
+## What it does for you
+
+- **Watches your coding agents.** Claude Code, Codex, Gemini CLI and a few more send their hook
+  events to Mochlet. Each session becomes a mini slime with a one-line ticker. Permission
+  requests, plan approvals and AskUserQuestion prompts become cards you answer from the notch.
+  `⌃⌥T` jumps to the exact terminal tab or tmux pane. Plan-usage pills show how much of your
+  Claude and Codex plan is used.
+- **Keeps a knowledge base you own.** Drop a PDF, a slide deck, a link, an image, a recording or
+  a paragraph of text on it. Mochlet reads it in full, writes a report page, files it under a
+  project and updates the entity and concept pages it touches. Everything lands in
+  `~/Mochlet/Knowledge/` as plain Markdown you can open in Obsidian. Ask it a question and the
+  answer streams back with citations. Your agents reach the same pages over MCP.
+- **Listens.** Hold the slime or press `⌃⌥V`, say what you want, let go. Speech is transcribed on
+  this Mac with Apple's `SpeechAnalyzer`. Clear phrasings are routed by rules: a note to self, a
+  task for a project, a link to save, a question for the knowledge base. The rest goes to chat.
+- **Takes meeting notes.** Triple-click in a call. It captures your microphone and the system
+  audio, transcribes both sides on this Mac, tells speakers apart, and writes a transcript and a
+  summary with decisions, action items and timestamps. It notices calls on its own and asks
+  before capturing.
+- **Follows AI news.** A local pipeline fetches feeds, filters and scores items against a rubric,
+  groups them into events and ranks them by heat. A daily digest lands in the knowledge base.
+- **Chats and runs tasks.** Type anything into the ask bubble. Chat goes to Claude Code, Codex or
+  Gemini on your subscription, or to an API provider with a key kept in your Keychain. "Work on
+  mochlet: fix the build" opens a terminal in that project with the agent already on the task.
+
+## Meet the slime
 
 | Gesture | What happens |
 |---|---|
-| hover | it looks at the pointer; the island grows a little |
-| click | `?` bubble with suggestions and the ask field |
-| double-click | quick menu (terminal, sessions, projects, knowledge, signals, meetings, settings…) |
-| triple-click | meeting note-taker on/off |
+| hover | it looks at the pointer and the island grows a little |
+| click | the ask bubble, with suggestions |
+| double-click | the quick menu: sessions, projects, knowledge, signals, meetings, settings |
+| triple-click | meeting note-taker on or off |
 | five clicks | it splits into droplets and pulls itself back together |
-| hold ≥ 250 ms (or `⌃⌥V`) | push-to-talk: speak, release; the words show as they form and the request is carried out (see Voice) |
-| drag anywhere | take it out of the notch: drop it in any corner or edge of any screen and it lives there (eyes on the cursor, same clicks) until you drag it back onto the notch |
-| ⌥ drag onto a window | attach that window as context |
-| right-click | the full menu |
-| drop a file, folder, link or text on it | it chews it into the knowledge base |
+| hold, or `⌃⌥V` | push-to-talk |
+| drag | take it out of the notch to any corner or edge of any screen |
+| ⌥ drag onto a window | attach that window as context for the next message |
+| drop a file, folder, link or text | it chews it into the knowledge base |
 
-The desktop position is remembered across launches ("Let me out" / "Back to the notch" in the menu).
+The slime is yours to shape. Fifteen looks change the body itself (cat and fox with jiggling
+ears, tempest and bat with wings, horns, a ghost, a flame, a crystal). Twelve colours or a hue
+of your own. Outfit sets and single pieces, with round glasses while it reads and a nightcap
+while it sleeps. Two sound packs: squishy puni foley with tiny voice squeaks, or the classic
+chimes. The round-eyed face from earlier versions is still there under Settings → Character → Face.
 
-### Looks, colours, outfits, hands and sounds
+It has hands and moods. A dropped file is caught, hugged, bitten and filed with a gulp. It waves
+hello, gives a thumbs up to an approval, cheers a hot signal, facepalms an error, melts when the
+Mac runs hot and puffs up when you deny it something. The style guide the renderer is tuned
+against is [docs/CHARACTER.md](docs/CHARACTER.md).
 
-Settings → Character (also "Look ▸" and "Dress up ▸" in the right-click menu) is where the slime
-becomes yours. Fifteen looks change the body itself: cat and fox (ears that jiggle, a tail that
-wags), tempest and bat (wings that flap on every hop), demon lord, oni and unicorn horns, fairy,
-flame, crystal, ghost, honey, spark and galaxy surfaces. Twelve colours, or a hue / saturation /
-lightness of your own; minis can be a shade lighter. Outfit sets (King, Scholar, Wizard, Santa,
-Summer, Onsen, Night, Idol) or any headwear, eyewear, wrap and charm; with "Dress for the occasion"
-round glasses appear while it reads, a phone while it is on a call, a nightcap while it sleeps.
+## Install
 
-The character has hands now: a dropped file is caught, hugged, bitten (pages swirl inside while it
-digests) and filed with a gulp; it waves hello, gives a thumbs up to an approval, cheers a hot
-signal, facepalms an error, holds a mic while you talk and sips a mug when left alone. Speech
-marks (`?`, `!`, `♪`) grow out of the body as slime, and twelve extra moods (melt, puff, shock,
-cry, hum, cheer, hug, nod, shake, thumbs up, stretch, poked) answer what happens around it: a
-click pokes it, a denied approval puffs it, a rate limit or a hot Mac melts it. Since 2.1.1 it is
-drawn to the standard of the anime it is modelled on: a wide flat-based bun of translucent jelly
-(pale shell, darker cloud-topped core, one hard highlight, a thin ink line), stroke eyes with lash
-ticks and flat blush, and anime timing (a crouch before a hop, a stretch in the air, a squash and
-two or three wobbles on landing; a poke dents where you touch). Settings → Character → Face keeps
-the round-eyed face as an option; `docs/CHARACTER.md` is the style guide. Sounds come in two
-packs, the squishy "puni" foley with tiny voice squeaks (kyu, pyu, mu) and the classic 2.0
-chimes; the voice can be switched off on its own.
+Mochlet needs macOS 26. It is designed for the notch, and the slime can also live loose on the
+desktop. There is no signed download yet, so build it from source with the Swift 6 toolchain
+that ships with Xcode 26:
 
-## Watching your coding agents
+```sh
+git clone git@github.com:Ilexpwh/Mochlet.git
+cd Mochlet
+scripts/build-app.sh release      # → build/release/Mochlet.app
+open build/release/Mochlet.app
+```
 
-Install the hooks from Settings → Agents (Claude Code, Codex, Gemini CLI; any other agent can call
-the relay, see `docs/AGENTS.md`). Every session you run in a terminal, Cursor or Claude Desktop
-becomes a mini slime next to the notch with a one-line ticker; edits become diff chips; permission
-requests and AskUserQuestion prompts become cards you answer from the notch (or hand back to the
-terminal); the finished turn makes the slime jump; `⌃⌥T` jumps to the exact terminal tab or tmux
-pane; plan-usage pills show how much of your Claude and Codex subscription is used.
+No Xcode project is needed. SwiftPM builds the app, the three helpers and the resource bundles,
+and the script assembles the bundle and signs it ad hoc. `scripts/release.sh` is the signed and
+notarised path once you have a Developer ID.
 
-## Projects and chat
+### First five minutes
 
-Drop a folder on the slime (or say "make ~/path a project", "clone git@github.com:you/repo.git") and
-it lands in `~/Mochlet/projects.json`, a plain file you can edit. Then:
-
-- "work on <project>: <task>" opens a new terminal window (iTerm, Ghostty, Warp, kitty, WezTerm,
-  Alacritty or Terminal.app) in that folder running Claude Code, Codex or Gemini with the task; the
-  hooks turn it into a mini slime named after the project. With "run tasks in the background" on,
-  the agent runs headless instead and reports into the same card.
-- "resume <project>" reopens the last session of that agent; "open <project> in cursor".
-- Anything else you type is a chat: Claude Code (your subscription), Codex, Gemini, or an API
-  provider (Anthropic, OpenRouter, OpenAI, DeepSeek, Qwen, Moonshot, Google, Ollama, LM Studio)
-  with a key kept in your keychain. Threads are kept in `store.sqlite`; `⌘K` starts a new one.
-- ⌥-drag the slime onto a window, or Attach window in the menu: its title, URL (browsers) and,
-  optionally, a screenshot become context for the next message. Dropped text files and links do too.
-
-## Knowledge base
-
-Drop a file, a link or some text on the slime and it chews it into `~/Mochlet/Knowledge/`, an OKF
-Markdown bundle (open it in Obsidian). PDFs (with OCR for scanned pages), Word/RTF/ODT, PowerPoint
-(slides and speaker notes), images (OCR plus a description when the brain can see), audio and video
-(on-device transcription), code and plain text are read in full; links are rendered in a hidden web
-view and reduced to the article (arXiv, GitHub repos and files, and YouTube have their own readers).
-The brain writes a `report` page (summary, key points, entities, action items, open questions, quotes),
-the source is mirrored next to it, a router picks the project (asking you when unsure, with a 10 s
-default), and an integrator revises the entity and concept pages the source touches. The ingest card
-shows every stage, offers Open / Ask / Move / Re-chew, and a chewing ring sits on the compact strip.
-Quick menu → Knowledge (or type `kb: <question>` into the ask bubble) asks the base: the answer streams
-with `[n]` citations whose chips open the page at the line, and "File this answer" keeps it as a
-`syntheses/` page with backlinks. Lint lists orphans, broken links and pages never integrated. Search is
-BM25 over Chinese bigrams and English words plus on-device Apple embeddings. Coding agents reach the same
-pages through MCP:
+1. Launch it. The slime drops into the notch, greets you and settles.
+2. Settings → Agents → Install for the agents you use. Mochlet shows the whole settings file
+   before it writes anything and keeps a dated backup next to it.
+3. Run `claude` in a terminal. A mini slime appears for the session; ask Claude to run a shell
+   command and the approval card shows up in the notch.
+4. Drop a PDF on the slime. Watch it chew, then open `~/Mochlet/Knowledge/inbox/`.
+5. Hold the slime and say "note to self: try Mochlet for a week". The note lands in
+   `Knowledge/notes/` under today's date.
+6. Give your agents the same knowledge:
 
 ```sh
 claude mcp add mochlet -- "$HOME/Library/Application Support/Mochlet/bin/mochlet-mcp"
 ```
 
-Details in [docs/KNOWLEDGE.md](docs/KNOWLEDGE.md); `scripts/smoke-ingest.sh` exercises the engine
-without the app through `mochlet-cli`.
+## Privacy
 
-## Voice
+Mochlet is built to keep your data on your Mac. Speech recognition, meeting transcription,
+speaker separation, document extraction and search embeddings run on device with Apple
+frameworks. The knowledge base, meeting notes, projects and signal sources are plain files
+under `~/Mochlet`. API keys live in the Keychain, never in logs or defaults.
 
-Hold the slime (or `⌃⌥V`), talk, let go. Speech stays on this Mac: Apple's `SpeechAnalyzer` writes the
-words into the bubble as they form (grey while still changing), the model for your language downloads on
-first use (Settings → Voice & Meetings: automatic, 简体, 繁體, 粵語, English, 日本語), and `esc` cancels. What
-you said is routed, not just transcribed:
+The parts that need a language model (report pages, knowledge answers, signal scoring, chat)
+go to the provider you choose: your Claude Code, Codex or Gemini subscription, an API key you
+add, or a local Ollama or LM Studio server. Links handed to Mochlet by an agent or a feed may
+only reach public hosts. Each macOS permission is requested by the feature that first needs it,
+and Settings → General lists where every one of them stands.
 
-| You say | It does |
-|---|---|
-| "记一下，明天给老王打电话" · "note to self: buy oat milk" | appends to `Knowledge/notes/YYYY/MM/DD.md` under the minute |
-| "work on mochlet: fix the build" · "让咕咕帮我跑一下测试" · "resume mochlet" | opens a terminal with the agent on that project |
-| "read https://arxiv.org/abs/2404.16130" · "把这个链接存起来" (a link on the clipboard) | chews it into the knowledge base |
-| "what did I save about Vision Pro" · "知识库：头显价格" | asks the knowledge base, with citations |
-| "open settings" · "start taking meeting notes" · "what's hot in AI today" | the obvious thing |
-| anything else | goes to chat; with the chat open, it is dictated into the box instead |
+## How it works
 
-Clear phrasings are matched by rules in a millisecond. The rest, and "which project did you mean", go
-to a typed decision: a TypeSafe Jev key if you add one (Settings → Voice & Meetings, with a probe
-button), else Apple's on-device model when it is available, else the brain. A missing project is asked
-for with chips; say its name or tap, within 20 s. "Speak short replies" answers "Noted" / "On it" aloud.
+```
+ coding agents (Claude Code, Codex, Gemini, …)        your files, links, voice, meetings, feeds
+        │ hooks (stdin JSON)                                   │
+        ▼                                                      ▼
+  mochlet-hook (relay)  ──one JSON line──▶  ~/Library/Application Support/Mochlet/mochlet.sock
+                                                               │
+  Mochlet.app: AppCoordinator wires stores and controllers; NotchWindowController owns the panel;
+  SlimeBridge is the only caller of SlimeKit (main slime, one mini per session, droplets, ghost)
+        │ files                                              │ loopback HTTP: MCP + ingest endpoint
+        ▼                                                    ▼
+  ~/Mochlet/{Knowledge, Meetings, Projects, signals/}        mochlet-mcp (stdio shim)
+```
 
-## Meetings
+Three SwiftPM packages, each with its own tests:
 
-Triple-click the slime in a call (or say "start taking meeting notes"): it records your microphone and
-what the Mac plays through a Core Audio process tap (macOS asks once for System Audio Recording; you keep
-hearing the call), transcribes both sides on this Mac as the call runs, and shows the last lines with
-level meters, a Mark button and a note field in the island; the compact strip carries a red REC pill.
-Stop, and it writes `~/Mochlet/Meetings/<date>-<slug>/`: `transcript.md` in the form Lark Minutes
-exports (header, keywords, `Name HH:MM:SS.mmm` turns), `summary.md` (overview, decisions, action items,
-open questions, topics with timestamps, your marks), `meta.json`, `diarization.json`, and a
-`Knowledge/meetings/` page with the summary and the full transcript, so "what did we decide about
-pricing?" has an answer with a timestamp. You are "Me"; the others are told apart on the system channel
-(a light on-device diarizer; the echo of their voices in your microphone is removed) and come back as
-"Person 2, 3…" with the brain's name suggestions to accept, or rename and merge them on the card. Calls
-are noticed on their own: when a known app (Zoom, Teams, Meet, Lark, Webex, Discord, FaceTime…) holds
-the microphone, the slime asks "Capture this meeting?" with Not now / Always / Never per app, quiet
-hours, and a 30-minute snooze; a call that ends is stopped on its own. Audio retention is yours to
-choose (delete, a 7-day AAC mixdown, or keep the WAVs), and a recording cut short by a crash is
-finished on the next launch.
+- **SlimeKit** is the character. The body is a ring of 24 Verlet points with anchor, edge, bend
+  and pressure forces, stepped at 1/240 s with volume kept by construction. Arms are pseudopods
+  published as goo blobs and merged into the silhouette by metaballs. The face is strokes
+  projected onto a sphere. Every state and emote is a table, every motion is seeded and
+  time-injected, so filmstrips and tests are reproducible. `SlimeKitUI` renders one `SlimeFrame`
+  with CoreGraphics in layers (two-tone cel body, brush-stroke face, outfits, props, glyphs) and
+  redraws only the frames that differ. `slimekit-tools` renders filmstrips and catalogs, runs
+  the benchmark, opens a live Emote Lab and draws the app icon.
+- **MochletCore** is pure logic with no AppKit: the notch state machine, hook normalisation and
+  the session reducer, the approval queue, the diff engine, project intents, the OKF
+  reader and writer, the knowledge index (SQLite FTS5 plus on-device
+  embeddings), voice intent rules, meeting models and the signals pipeline. Reducers return
+  effects; tests drive them with an injected clock. `MochletServices` wraps the Apple
+  frameworks headlessly: speech, Core Audio taps, extractors, embeddings, the loopback server.
+- **App** is a thin shell: the panel over the notch, the SwiftUI island, gestures, drag-out,
+  settings and the `mochlet://debug/…` channel that lets a debug build be driven and
+  photographed from a terminal.
 
-## Signals
+The full tour is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Hook formats per agent are in
+[docs/AGENTS.md](docs/AGENTS.md), the knowledge bundle in [docs/KNOWLEDGE.md](docs/KNOWLEDGE.md),
+and the manual pass before a release in [docs/VERIFY.md](docs/VERIFY.md).
 
-Mochlet gathers AI news the way AIHOT does, on this Mac, with no server: `~/Mochlet/signals/sources.json`
-(AIHOT's format, so its `industry/sources.json` imports unchanged; 21 feeds to start, from OpenAI,
-DeepMind, Hugging Face, arXiv cs.AI, Hacker News, The Verge, 量子位, Simon Willison, Import AI and
-others) is fetched every minute where due, three sources at a time, 15 min to 3 h apart depending on
-what each yields. New items are deduplicated (canonical URL, simhash within 72 h), pass a no-model
-prefilter from `rubric.md` (deny list; T2 sources need an industry term), get two independent 0–100
-scores from the brain against the rubric, and the ones above their tier's threshold (T1 60, T1.5 65,
-T2 76; the rubric's frontmatter overrides them) are written in Chinese and English, embedded on device,
-grouped into events (title overlap and centred embeddings propose pairs, the brain confirms them), and
-ranked by hotness: independent sources in 48 h, weighted by tier, halving every 24 h. The Signals card
-(double-click → Signals, or "what's hot") shows today's count and the top events; a story that is
-suddenly everywhere (hotness ≥ 3 while new) makes the slime excited, once an hour at most and never in
-quiet hours. At 08:00 (Settings → Signals) the day's digest goes to `Knowledge/signals/YYYY-MM-DD.md` as
-a `digest` page: 热点/Hot · 精选/Selected · 简讯/Briefs, one line per event with footnotes to the
-sources, an overview from the brain, so it is searchable and Claude Code can read it through the
-`signals_latest` MCP tool. Add a source by URL (feeds and list pages are detected, with a preview),
-import an AIHOT `sources.json`, push items from other programs (`POST /api/ingest/items` on the local
-server with a bearer token, AIHOT's shape, ≤ 50 per call) or drop JSON files into
-`~/Mochlet/signals/inbox/`. `x_search` sources need a SocialData key; WeChat accounts need AIHOT's
-relay and import disabled. A daily budget caps brain calls (T2 waits first).
+## Status
 
-## Permissions, logs and housekeeping
+Version 2.1.2. The 2.x line is a rewrite from scratch in native Swift; the first implementation
+is kept under the git tag `v1-final`. The character has just been through its third pass
+(the anime look: bun silhouette, two-layer material, stroke face, anime timing), and it is still
+being tuned by eye against the reference stills.
 
-Mochlet asks for each macOS permission the first time a feature needs it (microphone for
-push-to-talk, system audio for meetings, Accessibility for window titles, Screen Recording only
-if you turn window screenshots on, Automation when it talks to a terminal or browser). Settings →
-General → Permissions shows where each one stands with Ask and Open buttons. Diagnostics on the
-same tab exports the last two hours of Mochlet's log (`~/Library/Logs/Mochlet/`), opens the data
-folders, measures them and cleans up derived files (daily by itself; never anything under
-`~/Mochlet`). A What's new card appears once per version after the greeting.
+What is next, roughly in order: publish signed builds, give the knowledge base its
+`memories/` section, and keep polishing the slime. Nothing here is a promise; this is one
+person's project and it moves at the pace of evenings.
 
-## Layout
+## Why I built this
 
-- `Package.swift` – the SwiftPM app build: executable target `Mochlet` (sources in `App/`),
-  tests in `Tests/App`. `project.yml` is the XcodeGen project for Xcode/release builds.
-- `Packages/SlimeKit` – the character: soft-body physics, face, states, emotes, click grammar,
-  the stage (main slime, one mini per session, split droplets, drag-out ghost) and the sound
-  table with synthesised recipes (`SlimeKit`); the CoreGraphics renderer, metaball contours,
-  the display-link `NSView`, filmstrips and the Emote Lab (`SlimeKitUI`); the AVAudioPlayer
-  pool over the generated WAVs (`SlimeKitAudio`); and `slimekit-tools`.
-- `Packages/MochletCore` – pure app logic (notch FSM and layout, hooks, sessions, projects,
-  knowledge, signals, meetings) and headless services.
-- `App/` – the notch app shell: `Notch/` (panel, window controller, SwiftUI island),
-  `Desktop/` (the slime loose on the desktop), `Interaction/` (hit view, drag-out, drops),
-  `Slime/` (the only caller of SlimeKit), `Settings/`, `Debug/` (debug URL channel).
-- `Helpers/mochlet-hook` – the hook relay (Foundation only, embedded in the app bundle, copied to
-  `~/Library/Application Support/Mochlet/bin/` on launch). `mochlet-mcp` and `mochlet-cli` follow.
+I wanted the thing on my screen that watches my agents to feel alive, not like another panel of
+status text. A character you poke, feed and talk to makes a Mac feel like company. Everything
+else in Mochlet grew out of that: if the slime is going to eat my files, it should remember them;
+if it is going to listen, it should do something with what it hears.
 
 ## Developing
 
 ```sh
-scripts/build-app.sh debug        # → build/debug/Mochlet.app (SwiftPM; no Xcode project needed)
-scripts/build-app.sh release      # → build/release/Mochlet.app (hardened runtime, ad-hoc signed)
-SIGN_IDENTITY="Developer ID Application: …" NOTARY_PROFILE=mochlet scripts/release.sh   # signed, notarised zip + DMG
-scripts/dev-run.sh                # build debug and launch; USE_XCODE=1 builds with xcodebuild instead
-scripts/test.sh                   # SlimeKit + MochletCore + app tests
-scripts/bootstrap.sh              # installs xcodegen, generates Mochlet.xcodeproj (optional)
+scripts/build-app.sh debug        # → build/debug/Mochlet.app
+scripts/dev-run.sh                # build debug and launch (kills a running copy first)
+scripts/test.sh                   # SlimeKit, MochletCore and app tests, then the relay check
 
 cd Packages/SlimeKit
 swift run slimekit-tools render-filmstrip --state greeting --out ../../out/greeting
-swift run slimekit-tools lab              # live Emote Lab window with sliders and every state
-swift run slimekit-tools play finish      # audition one synthesised sound (play all --pack classic for the 2.0 chimes)
-swift run -c release slimekit-tools bench # engine + draw cost
+swift run slimekit-tools render-catalog --radius 56 --out ../../out/catalog.png
+swift run slimekit-tools lab              # live Emote Lab with sliders and every state
+swift run -c release slimekit-tools bench # engine and draw cost per frame
 ```
 
-Look at `out/<state>/contact.png` and `trace.json` to review motion frame by frame. Sounds can
-be replaced per file in `~/Library/Application Support/Mochlet/Sounds/<name>.wav` (or `<pack>/<name>.wav`
-for one pack only); Settings → Character → Sounds picks the pack (puni squish + squeaks, or classic chimes)
-and whether the slime's voice squeaks play.
+Debug builds answer `mochlet://debug/…` URLs with a per-launch token, so the island can be posed,
+poked and photographed from a script without screen-recording permission. The command list is
+in [docs/VERIFY.md](docs/VERIFY.md). `scripts/replay-hooks.sh` plays recorded agent sessions
+through the real relay and socket, and `scripts/smoke-ingest.sh` exercises the knowledge engine
+without the app.
 
-### Driving a debug build without a mouse
+## Contributing and feedback
 
-Debug builds answer `mochlet://debug/...` URLs, so the app can be exercised and photographed
-from a terminal (no screen-recording permission needed; it captures its own windows):
+This is a personal project, built in the open. Issues with a screenshot or a filmstrip are the
+most useful thing you can send, especially anything about how the slime looks or moves. Small
+fixes as pull requests are welcome. Larger changes are best discussed in an issue first, since
+the character and the feel of the thing are the point.
 
-```sh
-T="token=$(cat ~/Library/Logs/Mochlet/debug/token)" # per-launch secret, required on every command
-open "mochlet://debug/state?$T"                    # ~/Library/Logs/Mochlet/debug/state.json
-open "mochlet://debug/shot?name=home&$T"           # …/debug/home.png (+ home-desktop.png when out)
-open "mochlet://debug/fsm?input=reveal&$T"         # reveal | collapse | hide | click | launch | …
-open "mochlet://debug/view?name=menu&$T"           # home | ask | menu | greeting | …
-open "mochlet://debug/pointer?sx=735&sy=940&$T"    # warp the cursor (screen pts); away=1 to leave
-open "mochlet://debug/click?count=2&$T"            # 1 ask · 2 menu · 3 meeting · 5 split
-open "mochlet://debug/hold?seconds=1.2&$T"
-open "mochlet://debug/drag?sx=1400&sy=60&$T"       # drag the slime out (or back onto the notch)
-open "mochlet://debug/desktop?sx=1400&sy=60&$T"    # fly out / move; on=0 flies home
-open "mochlet://debug/emote?name=love&$T"          # agent?state=working · mini?id=a&state=waiting · split
-open "mochlet://debug/hookfile?path=$PWD/Tests/Fixtures/hooks/claude-session.jsonl&$T"   # replay hook events
-open "mochlet://debug/approve?decision=allow&$T"   # answer?pick=Label · answer?other=text · session?id= · jump
-open "mochlet://debug/settings?tab=agents&shot=1&$T"
-open "mochlet://debug/project?add=$PWD&name=Mochlet&$T"   # remove=slug · offer=/path · open=1
-open "mochlet://debug/voice?text=记一下，买牛奶&$T"          # route words as if spoken; file=/path.aiff replays audio through the transcriber
-open "mochlet://debug/voice?pick=mochlet&$T"               # answer "which project?" (pick=cancel) · start=1 / stop=1 · cancel=1
-open "mochlet://debug/meeting?mic=/path/me.wav&sys=/path/them.wav&title=Planning&$T"   # two recordings processed as a meeting
-open "mochlet://debug/meeting?start=1&$T"                  # stop=1 · mark=text · detect=1 (what the call detector sees) · rename=p2:Alice · merge=p3:p2
-.build/debug/mochlet-cli diarize call.wav                    # who speaks when on one recording, with the similarity matrix behind it
-open "mochlet://debug/signals?run=1&$T"                    # fetch every source and run the pipeline; digest=1 · detect=https://… · add=feed|list · import=/path/sources.json
-open "mochlet://debug/signals?pushtest=1&$T"               # POST two items to the local endpoint with the stored token (newtoken=1 makes one); push=1 reads inbox/*.json
-open "mochlet://debug/diag?perms=1&$T"                     # permission states → result.txt; logs=1 exports the log, clean=1 runs housekeeping, whatsnew=1 shows the card
-open "mochlet://debug/ask?text=work%20on%20mochlet%3A%20say%20hi&$T"   # what the ask bubble would do
-open "mochlet://debug/workon?project=mochlet&task=say%20hi&headless=1&$T"
-open "mochlet://debug/chat?text=hello&$T"               # chat?new=1 · chatstop · attach
-open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/knowledge/vision-pro.md&$T"   # kb?find=… · ask=… · file=1 · lint=1 · url=… · text=…
-open "mochlet://debug/kb?add=$PWD/Tests/Fixtures/ingest/sample.pptx&force=1&question=1&$T"   # re-chew, always ask; pick=inbox · move=slug · window=1 · retry=1
-```
+## Licence
 
-How the pieces fit is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); the manual pass before a
-release is [docs/VERIFY.md](docs/VERIFY.md).
+No licence has been chosen yet. Until one is added, the source is here to read and build for
+yourself, not to redistribute.
 
-`scripts/replay-hooks.sh <fixture> [delay] [--ask]` sends the same fixtures through the real relay
-and socket; `scripts/test-hook.sh` checks the relay against a fake socket (`scripts/fake-socket.py`).
+## Credits
 
-Rendering is one CoreGraphics path driven by a display link; it only redraws frames that
-visibly differ, and it pauses entirely while the island is hidden.
+The slime is fan art after Rimuru Tempest from *That Time I Got Reincarnated as a Slime*, drawn
+to the standard of the anime, the sticker sheets and the Bandai figures. Mochlet is not
+affiliated with or endorsed by the rights holders. The knowledge base follows the
+[OKF](https://okf.md) bundle format and the "LLM wiki" idea; the signals pipeline reads AIHOT's
+source files. Speech, audio, extraction and embeddings use Apple frameworks.

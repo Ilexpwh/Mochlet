@@ -95,7 +95,7 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 | poke | local dent ≈ 0.25 R that ripples around the ring and recovers in 0.5 s; eyes squint; sweat on the third quick poke | dent 0.25 R at the finger, antipode still; recovered to 0.06 R by 0.7 s; squint 0.25 s; sweat at the third press |
 | idle | breath ±2.5 % at 0.29 Hz; weight shift ±4° over 2 s; micro-wobble every 8–15 s | height ±3 %, blink to 0 |
 | core | lags the shell by ≈ 70 ms and overshoots ≈ 30 % | peaks 0.3–0.5 R behind on hops (clamped to 0.4 when drawn) |
-| melt | spread over 0.6 s, face slides down 0.25 R | 0.61 tall / 1.39 wide by +0.35 s, held to +1.8 s, back up with a 1.06 boing |
+| melt | spread over 0.6 s, face slides down 0.25 R | 0.65 tall / 1.34 wide by +0.35 s (flatten 0.66 keeps the puddle inside the island), held to +1.8 s, back up with a 1.05 boing |
 | puff | cheeks in 0.2 s (outBack), hold, release with one wobble | 1.05 wide / 1.11 tall (sizeScale 1.06), release wobble ±1 % |
 | shock | jump + stretch, `!` grows in 0.28 s | airborne at once for 0.28 s, stretch 1.22, land 0.82 / 1.13 |
 

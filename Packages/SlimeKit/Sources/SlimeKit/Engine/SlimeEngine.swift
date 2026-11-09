@@ -1047,7 +1047,8 @@ public final class SlimeEngine {
             // とけている: the body sags into a puddle and spreads at the base, eyes drooping.
             startMorph(.melt, duration: 0.7, ease: .inOutSine)
             // The release eases straight back: the jelly ring supplies the overshoot on its own.
-            flatten.animate(keys: [.init(to: 0.62, duration: 0.7, ease: .inOutSine), .init(to: 0.62, duration: 1.0, ease: .linear),
+            // 0.66 keeps the wider bun's puddle inside the expanded island (hero at x 96 of 640).
+            flatten.animate(keys: [.init(to: 0.66, duration: 0.7, ease: .inOutSine), .init(to: 0.66, duration: 1.0, ease: .linear),
                                    .init(to: 1, duration: 0.5, ease: .inOutSine)], at: time)
             faceSlide.animate(to: 0.25, duration: 0.6, ease: .inOutSine, at: time)
             scheduler.schedule(at: time + 1.7, tag: Self.emoteTag) { [weak self] in

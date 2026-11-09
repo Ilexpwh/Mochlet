@@ -791,7 +791,7 @@ public final class SlimeEngine {
                 let arm = ArmFrame(side: i == 0 ? -1 : 1, shoulder: shoulder,
                                    elbow: bf.transform(bf.referenceCentroid + j.elbow * k),
                                    hand: bf.transform(bf.referenceCentroid + j.hand * k),
-                                   reach: j.reach, handRadius: ArmRig.handRadius, shape: j.shape)
+                                   reach: j.reach, handRadius: ArmRig.handRadius(for: j.shape), shape: j.shape)
                 arms.append(arm)
                 goo += ArmRig.blobs(for: arm, bodyScale: bodyScale)
             }

@@ -11,9 +11,9 @@ enum WhatsNew {
     }
 
     static let notes: [Note] = [
-        Note(version: "2.1.2", title: "Character 3.1: longer eyes, cone arms", lines: [
+        Note(version: "2.1.2", title: "Character 3.1: longer eyes, nub arms", lines: [
             "The resting eyes are two long thin strokes, closer together and gently arched, as on the sticker sheets.",
-            "Arms are small cones of jelly: broad where they leave the body, tapering to a rounded tip with barely a hand. Short nubs for a wave, a cheer or a thumbs up; thin tentacles for a hug or a file held at the mouth.",
+            "Arms are small triangles of jelly that poke out of the body, as in the stills: a sharp nub for a wave, a cheer or a thumbs up, and a thin tentacle only when something is held.",
             "The approval card shows its scroll bars and marks long runs of blanks, so a command cannot hide its tail.",
         ]),
         Note(version: "2.1.1", title: "Character 3: drawn like the anime", lines: [

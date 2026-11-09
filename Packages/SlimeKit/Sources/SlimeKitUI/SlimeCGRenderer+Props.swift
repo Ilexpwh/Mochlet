@@ -52,6 +52,9 @@ extension SlimeCGRenderer {
         /// The two sides and the tip from a third of the way out, open at the shoulder: what
         /// gets an ink line where the lobe lies over the body.
         let edge: CGPath
+        /// The whole outline from the shoulder, open at the base: inked wherever the lobe is in
+        /// the air, outside the goo silhouette.
+        let edgeAir: CGPath
         /// Where the edge starts, and the radius of the fade that softens its start.
         let edgeStart: CGPoint
         let hole: CGFloat
@@ -91,6 +94,7 @@ extension SlimeCGRenderer {
             outline.closeSubpath()
             let kEdge = Int((Double(n) * (0.3 - t0) / (1 - t0)).rounded())
             let edgePath = sides(from: kEdge)
+            let airPath = sides(from: 0)
             edgeStart = r.px(ArmRig.centre(a, t0 + (1 - t0) * Double(kEdge) / Double(n)))
             // A thumb nub or a pointing finger: a capsule added as its own subpath (the fill
             // rule merges it, no path boolean needed), never smaller than it needs to be to read.
@@ -103,17 +107,19 @@ extension SlimeCGRenderer {
                 return line.copy(strokingWithWidth: width, lineCap: .round, lineJoin: .round, miterLimit: 1)
             }
             let finger: CGPath? = switch a.shape {
-            case .thumbsUp: capsule(from: 0.5, to: 1.15, width: dr * 0.7)
+            case .thumbsUp: capsule(from: 0.3, to: 1.5, width: dr * 0.7)
             case .point: capsule(from: 0, to: 1.5, width: dr * 0.8)
             default: nil
             }
             if let finger {
                 outline.addPath(finger)
                 edgePath.addPath(finger)
+                airPath.addPath(finger)
             }
             let shape: CGPath = outline
             tube = shape
             edge = edgePath
+            edgeAir = airPath
             hole = CGFloat(max(0.22, 0.3 * ArmRig.length(a)) * a.reach * bodyScale) * r.R
             handR = hr
             let ts = 0.68
@@ -126,12 +132,12 @@ extension SlimeCGRenderer {
         }
     }
 
-    /// Arms are body material: the engine adds them to the goo as blobs, so the silhouette and
-    /// the one-pass jelly shading already include them. This pass gives each lobe its own form
-    /// where it lies over the body or a held prop: the jelly tone again (so a hand covers the
-    /// face or the edge of a file), a cel shadow along its underside, a soft contact shadow and
-    /// an ink line along its edge over the body, and a specular on the hand. Nothing is drawn
-    /// around the shoulder, where the lobe simply grows out of the jelly.
+    /// Arms are body material. The engine adds a few blobs at the base of each one to the goo,
+    /// so the silhouette flares where the pseudopod leaves the body; the lobe itself is drawn
+    /// here as a sharp polygon on top of everything, in the air as well as over the body. Each
+    /// lobe gets the jelly tone (shell, the inner tone along its underside, a rim light), its
+    /// ink line (the whole outline where it is in the air; over the body only from a third of
+    /// the way out, fading in, so nothing is drawn around the shoulder) and a small specular.
     func drawArms(in cg: CGContext, bodyPath: CGPath) {
         guard !frame.arms.isEmpty else { return }
         let bs = bodyScale
@@ -142,7 +148,7 @@ extension SlimeCGRenderer {
         let ring = BodyPath.closed(through: frame.ring.map(px)).cgPath
         let huge = CGPath(rect: CGRect(x: -1e5, y: -1e5, width: 2e5, height: 2e5), transform: nil)
         let lineW = max(1.0, 0.025 * R)
-        let shift = CGAffineTransform(translationX: -0.06 * R * bs, y: -0.09 * R * bs)
+        let shift = CGAffineTransform(translationX: -0.05 * R * bs, y: -0.07 * R * bs)
         let boxes = lobes.map { $0.tube.boundingBoxOfPath.insetBy(dx: -0.1 * R, dy: -0.1 * R) }
         var overlapping = false
         for i in boxes.indices { for k in boxes.indices where k > i && boxes[i].intersects(boxes[k]) { overlapping = true } }
@@ -161,7 +167,7 @@ extension SlimeCGRenderer {
                 cg.addPath(huge)
                 cg.addPath(lit)
                 cg.clip(using: .evenOdd)
-                fill(lobe.tube, material.inner, 0.55, in: cg)
+                fill(lobe.tube, material.inner, 0.4, in: cg)
                 cg.restoreGState()
             }
             if detail >= .medium { stroke(lobe.tube, material.rimLight, width: 0.06 * R, in: cg) }
@@ -171,7 +177,14 @@ extension SlimeCGRenderer {
         //    ink line along its edge, both fading out toward the shoulder, where the lobe simply
         //    grows out of the jelly.
         func edge(_ i: Int, _ lobe: Lobe, in cg: CGContext) {
-            let a = lobe.arm
+            // In the air: the outline, as heavy as the body's own.
+            cg.saveGState()
+            cg.addPath(huge)
+            cg.addPath(bodyPath)
+            cg.clip(using: .evenOdd)
+            stroke(lobe.edgeAir, inkLine, 1.0, width: max(1.0, 0.035 * R), in: cg)
+            cg.restoreGState()
+            // Over the body (or the other arm): a contact shadow and the ink line.
             cg.saveGState()
             cg.addPath(ring)
             for (k, other) in lobes.enumerated() where k != i && boxes[k].intersects(boxes[i]) { cg.addPath(other.tube) }
@@ -204,21 +217,12 @@ extension SlimeCGRenderer {
         if overlapping {
             // Crossed arms (a hug): each lobe's edge goes on before the next lobe's jelly covers it.
             for (i, lobe) in lobes.enumerated() {
-                cg.saveGState()
-                cg.addPath(bodyPath)
-                cg.clip(using: .evenOdd)
                 jelly(lobe, in: cg)
-                cg.restoreGState()
                 edge(i, lobe, in: cg)
                 specular(lobe, in: cg)
             }
         } else {
-            // Apart: one silhouette clip serves every lobe.
-            cg.saveGState()
-            cg.addPath(bodyPath)
-            cg.clip(using: .evenOdd)
             for lobe in lobes { jelly(lobe, in: cg) }
-            cg.restoreGState()
             for (i, lobe) in lobes.enumerated() {
                 edge(i, lobe, in: cg)
                 specular(lobe, in: cg)

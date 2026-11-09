@@ -19,13 +19,17 @@ which code owns it.
   tall) are explicit so they stay distinct from the bun.
 - Everything inside the body (face, core, highlights, arm joints, morph blobs) is placed through
   the `BodyFrame` affine fit, so it squashes, leans and stretches with the ring.
-- **Arms are pseudopods**, not limbs: a small cone of the same jelly that grows out of the
-  silhouette, broad at the base and tapering in a straight line to a rounded tip no bigger than
-  the hand (`ArmRig`: base half-width 0.22 R for a short nub, 0.12 R once the reach passes 1.2 R,
-  tip 0.08 R). Poses keep the elbow close to the shoulder-to-hand line, because a cone that hooks
-  reads as a tusk. The hand is only an anchor for props and for the thumb or pointing nub. Over
-  the body the lobe gets an ink line along its sides from a third of the way out, never at the
-  base, and one small specular pill two thirds of the way to the tip. Render any pose with
+- **Arms are nubs**, not limbs: a small triangle of the same jelly, as in the stills where a
+  pseudopod pokes a quarter of a radius out of the body. `ArmRig`: a gesture nub is 0.32 long
+  (authoring units), base half-width 0.15 R with a concave flare into the body surface, sharp
+  0.03 R tip, no hand; only a held prop pulls the hand further, and the pseudopod thins into a
+  0.11 R tentacle ending in a 0.05 R grip. Arms add nothing to the metaball goo: the field's
+  falloff (sigma 0.18 R) rounds anything to about 0.15 R and even a tiny blob at the shoulder
+  raises a bump a third of a radius out, which is the fat look the anime never has. The renderer
+  draws the lobe as a sharp polygon over the silhouette, inked as heavily as the body outline
+  where it is in the air and, over the body, only from a third of the way out so nothing is drawn
+  around the shoulder; a thin inner-tone band along its underside and one small specular pill
+  give it form. The thumb and pointing finger are small capsules off the tip. Render any pose with
   `render-filmstrip --script "0.1:gesture:<pose>"` (`cheer`, `wave`, `thumbsUp`, `hug:heart`,
   `holdFront:doc`, `point:1,-0.4`, …).
 - The body carries emotion: melt → low lobed puddle; puff → cheeks out, top flat; strain → crease

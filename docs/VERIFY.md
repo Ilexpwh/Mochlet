@@ -439,7 +439,7 @@ a-*.png` (compact, home, ask, puff, melt, shock, cry, cheer, press, round face, 
 error) matched the catalog and filmstrips; during the cheer landing squash the raised arms reach
 ≈ 200 pt, a hair past the 190 pt content leading, for one beat.
 
-## Character 3.1: long eye strokes and cone arms
+## Character 3.1: long eye strokes and nub arms
 
 Review renders (release `slimekit-tools`, gitignored under `Packages/SlimeKit/out/a8`):
 
@@ -453,13 +453,14 @@ done
 
 1. Catalog: each resting eye is one long stroke (0.62 R) with a 0.33 R gap between the two; the
    outer ends stop just inside the blush. At R 16 the mini shows two strokes, not dots.
-2. Pose sheet (frame 16 of each strip): every arm is a cone, broad at the body and tapering to a
-   rounded tip; no pose hooks into a tusk; the cheer cones point up and out, not straight up like
-   ears; the thumb and pointing nubs are visible; the ink line along a lobe starts a third of the
-   way out and never at the base.
+2. Pose sheet (frame 16 of each strip): every gesture arm is a small sharp triangle poking out of
+   the body with a concave flare at its base and no bump of goo around it; the cheer nubs point up
+   and out, not straight up like ears; the thumb and pointing capsules are visible; a held prop
+   (file, mug, phone, heart) hangs from a thin tentacle; the ink line along a lobe over the body
+   starts a third of the way out and never at the base.
 3. `swift test` in `Packages/SlimeKit`: 142 tests, `ArmTests.everyPoseStaysWithinReach` holds every
    hand within 1.6 R.
-4. `bench` (release, R 56): cheer with arms 0.50 ms, chewing with arms 0.83 ms per frame (A5: 0.72
-   and 1.03), idle 0.15 ms.
+4. `bench` (release, R 56): cheer with arms 0.43 ms, chewing with arms 0.69 ms per frame (A5: 0.72
+   and 1.03; the arms no longer add blobs to the contour), idle 0.14 ms.
 5. App (debug): `shot?name=hero` on the home view is the README hero; `fsm?input=collapse` then a
    shot shows the long eyes in the compact strip.

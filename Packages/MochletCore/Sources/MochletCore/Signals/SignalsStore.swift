@@ -21,7 +21,7 @@ public final class SignalsStore: @unchecked Sendable {
         CREATE INDEX IF NOT EXISTS items_status ON items(status);
         CREATE INDEX IF NOT EXISTS items_event ON items(event_id);
         CREATE TABLE IF NOT EXISTS scores(item_id TEXT PRIMARY KEY, score1 REAL, score2 REAL, category TEXT, tags TEXT, main_entity TEXT, reasons TEXT, rubric_hash TEXT, scored_at REAL);
-        CREATE TABLE IF NOT EXISTS writings(item_id TEXT PRIMARY KEY, title_zh TEXT, title_en TEXT, summary_zh TEXT, summary_en TEXT, reason TEXT);
+        CREATE TABLE IF NOT EXISTS writings(item_id TEXT PRIMARY KEY, title_en TEXT, summary_en TEXT, reason TEXT);
         CREATE TABLE IF NOT EXISTS item_embeddings(item_id TEXT PRIMARY KEY, dim INTEGER, vector BLOB);
         CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY, title TEXT, first_seen REAL, last_seen REAL, hotness REAL DEFAULT 0, rising INTEGER DEFAULT 0, is_new INTEGER DEFAULT 1, sources INTEGER DEFAULT 1, top_item TEXT);
         CREATE TABLE IF NOT EXISTS event_links(a TEXT, b TEXT, relation TEXT, confidence REAL, PRIMARY KEY(a, b));
@@ -143,13 +143,14 @@ public final class SignalsStore: @unchecked Sendable {
     }
 
     public func saveWriting(_ itemID: String, _ w: SignalWriting) throws {
-        _ = try db.run("INSERT OR REPLACE INTO writings(item_id, title_zh, title_en, summary_zh, summary_en, reason) VALUES(?,?,?,?,?,?)",
-                       [.text(itemID), .text(w.titleZH), .text(w.titleEN), .text(w.summaryZH), .text(w.summaryEN), .text(w.reason)])
+        // Column names kept from the bilingual era so existing databases need no migration.
+        _ = try db.run("INSERT OR REPLACE INTO writings(item_id, title_en, summary_en, reason) VALUES(?,?,?,?)",
+                       [.text(itemID), .text(w.title), .text(w.summary), .text(w.reason)])
     }
 
     public func writing(_ itemID: String) throws -> SignalWriting? {
         guard let r = try db.query("SELECT * FROM writings WHERE item_id = ?", [.text(itemID)]).first else { return nil }
-        return SignalWriting(titleZH: r["title_zh"]?.string ?? "", titleEN: r["title_en"]?.string ?? "", summaryZH: r["summary_zh"]?.string ?? "", summaryEN: r["summary_en"]?.string ?? "", reason: r["reason"]?.string ?? "")
+        return SignalWriting(title: r["title_en"]?.string ?? "", summary: r["summary_en"]?.string ?? "", reason: r["reason"]?.string ?? "")
     }
 
     public func saveEmbedding(_ itemID: String, _ v: [Float]) throws {

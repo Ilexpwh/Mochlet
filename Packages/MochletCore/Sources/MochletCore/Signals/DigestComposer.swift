@@ -11,10 +11,8 @@ public enum DigestComposer {
         public var sourceName: String
         public var tier: SourceTier
         public var url: String
-        public var titleZH: String
-        public var titleEN: String
-        public var summaryZH: String
-        public var summaryEN: String
+        public var title: String
+        public var summary: String
         public var reason: String
         public var score: Double
         public var hotness: Double
@@ -22,19 +20,16 @@ public enum DigestComposer {
         public var isNew: Bool
         public var eventSources: Int
         public var publishedAt: Date?
-        public init(id: String, eventID: String, sourceID: String, sourceName: String, tier: SourceTier, url: String, titleZH: String, titleEN: String,
-                    summaryZH: String, summaryEN: String, reason: String, score: Double, hotness: Double, rising: Bool = false, isNew: Bool = false,
-                    eventSources: Int = 1, publishedAt: Date? = nil) {
+        public init(id: String, eventID: String, sourceID: String, sourceName: String, tier: SourceTier, url: String, title: String, summary: String,
+                    reason: String, score: Double, hotness: Double, rising: Bool = false, isNew: Bool = false, eventSources: Int = 1, publishedAt: Date? = nil) {
             self.id = id
             self.eventID = eventID
             self.sourceID = sourceID
             self.sourceName = sourceName
             self.tier = tier
             self.url = url
-            self.titleZH = titleZH
-            self.titleEN = titleEN
-            self.summaryZH = summaryZH
-            self.summaryEN = summaryEN
+            self.title = title
+            self.summary = summary
             self.reason = reason
             self.score = score
             self.hotness = hotness
@@ -86,62 +81,55 @@ public enum DigestComposer {
         return Selection(hot: hot, selected: rest, briefs: briefs)
     }
 
-    /// The page: 热点/Hot · 精选/Selected · 简讯/Briefs with footnote links, bilingual by `languages`.
-    public static func markdown(date: Date, selection: Selection, overview: String?, languages: [String], calendar: Calendar = .current) -> String {
-        let zh = languages.contains("zh"), en = languages.contains("en") || !zh
+    /// The page: Hot · Selected · Briefs with footnote links.
+    public static func markdown(date: Date, selection: Selection, overview: String?, calendar: Calendar = .current) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: zh ? "zh_CN" : "en_US")
-        f.dateFormat = zh ? "yyyy年M月d日 EEEE" : "EEEE, d MMMM yyyy"
+        f.locale = Locale(identifier: "en_US")
+        f.dateFormat = "EEEE, d MMMM yyyy"
         f.calendar = calendar
-        var out = "# " + (zh ? "AI 信号 · " : "AI signals · ") + f.string(from: date) + "\n\n"
+        var out = "# AI signals · " + f.string(from: date) + "\n\n"
         if let overview, !overview.isEmpty { out += overview.trimmed + "\n\n" }
         var notes: [String] = []
         func entry(_ c: Candidate, brief: Bool) -> String {
             notes.append("[^e\(notes.count + 1)]: \(c.sourceName) · <\(c.url)>")
             let n = notes.count
-            let flags = (c.rising ? (zh ? " ↑" : " ↑") : "") + (c.eventSources >= 2 ? " ×\(c.eventSources)" : "")
-            if brief {
-                let t = zh && !c.titleZH.isEmpty ? c.titleZH : c.titleEN
-                let t2 = zh && en && !c.titleZH.isEmpty && !c.titleEN.isEmpty ? " — \(c.titleEN)" : ""
-                return "- \(t)\(t2)\(flags) [^e\(n)]"
-            }
-            var s = "### " + (zh && !c.titleZH.isEmpty ? c.titleZH : c.titleEN) + flags + " [^e\(n)]\n\n"
-            if zh && en && !c.titleEN.isEmpty && !c.titleZH.isEmpty { s += "_\(c.titleEN)_\n\n" }
-            if zh && !c.summaryZH.isEmpty { s += c.summaryZH + "\n\n" }
-            if en && !c.summaryEN.isEmpty { s += c.summaryEN + "\n\n" }
-            if !c.reason.isEmpty { s += "<sub>\(zh ? "入选理由" : "Why") · \(c.reason) · \(c.sourceName) · \(Int(c.score))</sub>\n\n" }
+            let flags = (c.rising ? " ↑" : "") + (c.eventSources >= 2 ? " ×\(c.eventSources)" : "")
+            if brief { return "- \(c.title)\(flags) [^e\(n)]" }
+            var s = "### " + c.title + flags + " [^e\(n)]\n\n"
+            if !c.summary.isEmpty { s += c.summary + "\n\n" }
+            if !c.reason.isEmpty { s += "<sub>Why · \(c.reason) · \(c.sourceName) · \(Int(c.score))</sub>\n\n" }
             return s
         }
         if !selection.hot.isEmpty {
-            out += "## " + (zh ? "热点" : "Hot") + (zh && en ? " / Hot" : "") + "\n\n"
+            out += "## Hot\n\n"
             for c in selection.hot { out += entry(c, brief: false) }
         }
         if !selection.selected.isEmpty {
-            out += "## " + (zh ? "精选" : "Selected") + (zh && en ? " / Selected" : "") + "\n\n"
+            out += "## Selected\n\n"
             for c in selection.selected { out += entry(c, brief: false) }
         }
         if !selection.briefs.isEmpty {
-            out += "## " + (zh ? "简讯" : "Briefs") + (zh && en ? " / Briefs" : "") + "\n\n"
+            out += "## Briefs\n\n"
             for c in selection.briefs { out += entry(c, brief: true) + "\n" }
             out += "\n"
         }
-        if selection.all.isEmpty { out += (zh ? "今天没有值得一提的信号。" : "Nothing worth a line today.") + "\n\n" }
+        if selection.all.isEmpty { out += "Nothing worth a line today.\n\n" }
         if !notes.isEmpty { out += notes.joined(separator: "\n") + "\n" }
         return out
     }
 
     /// The knowledge page for the digest (type digest), sources = the representative URLs.
-    public static func page(date: Date, selection: Selection, overview: String?, languages: [String], rubricHash: String, itemsSeen: Int, window: (Date, Date), by: String, now: Date = Date()) -> OKFDocument {
+    public static func page(date: Date, selection: Selection, overview: String?, rubricHash: String, itemsSeen: Int, window: (Date, Date), by: String, now: Date = Date()) -> OKFDocument {
         let day = DateFormatter()
         day.calendar = .current
         day.timeZone = .current
         day.dateFormat = "yyyy-MM-dd"
-        let title = (languages.contains("zh") ? "AI 信号 " : "AI signals ") + day.string(from: date)
-        var fm = OKFFrontmatter(type: "digest", title: title, description: OneLine.collapse(overview ?? selection.all.prefix(3).map { $0.titleEN.isEmpty ? $0.titleZH : $0.titleEN }.joined(separator: " · "), limit: 200))
+        let title = "AI signals " + day.string(from: date)
+        var fm = OKFFrontmatter(type: "digest", title: title, description: OneLine.collapse(overview ?? selection.all.prefix(3).map(\.title).joined(separator: " · "), limit: 200))
         fm.tags = ["signals", "digest"]
         fm.status = "stable"
         fm.generated = OKFStamp(by: by, at: now)
-        fm.sources = selection.all.prefix(40).enumerated().map { i, c in OKFSource(id: "e\(i + 1)", resource: c.url, title: c.titleEN.isEmpty ? c.titleZH : c.titleEN) }
+        fm.sources = selection.all.prefix(40).enumerated().map { i, c in OKFSource(id: "e\(i + 1)", resource: c.url, title: c.title) }
         fm.mochlet = .mapping([
             YAMLPair("kind", .string("digest")),
             YAMLPair("window", .mapping([YAMLPair("from", .string(OKFDate.format(window.0))), YAMLPair("to", .string(OKFDate.format(window.1)))])),
@@ -150,6 +138,6 @@ public enum DigestComposer {
             YAMLPair("hot", .int(selection.hot.count)),
             YAMLPair("rubric_hash", .string(String(rubricHash.prefix(12)))),
         ])
-        return OKFDocument(frontmatter: fm, body: markdown(date: date, selection: selection, overview: overview, languages: languages))
+        return OKFDocument(frontmatter: fm, body: markdown(date: date, selection: selection, overview: overview))
     }
 }

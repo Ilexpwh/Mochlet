@@ -1,6 +1,6 @@
-# Apple Vision Pro 与空间计算
+# Apple Vision Pro and spatial computing
 
-Apple 在 2024 年 2 月发售了 Vision Pro 头显。它运行 visionOS，依靠眼动追踪、手势和语音输入，没有手柄。
+Apple started selling the Vision Pro headset in February 2024. It runs visionOS and is driven by eye tracking, hand gestures and voice, with no controllers.
 
 ## Key facts
 
@@ -16,4 +16,4 @@ The device shows what a computer without a screen on a desk could feel like: win
 ## Open questions
 
 - Will developers port iPad apps or build native visionOS apps?
-- 国内发售后，内容生态会不会跟上？
+- Will the content ecosystem keep up once it ships in more countries?

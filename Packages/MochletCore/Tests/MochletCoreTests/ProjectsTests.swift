@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct ProjectsFileTests {
     @Test func roundTripKeepsFieldsAndIsStable() throws {
-        let p = Project(slug: "mochlet", name: "Mochlet", aliases: ["slime", "史莱姆"], description: "notch slime", paths: ["/Users/me/slime-ai"],
+        let p = Project(slug: "mochlet", name: "Mochlet", aliases: ["slime", "blob"], description: "notch slime", paths: ["/Users/me/slime-ai"],
                         repo: "git@github.com:Ilexpwh/Mochlet.git", defaultAgent: "claude", tags: ["swift"], createdAt: Date(timeIntervalSince1970: 1_700_000_000),
                         lastSessions: ["claude": "abc"])
         let file = ProjectsFile(projects: [p])
@@ -30,10 +30,10 @@ import Testing
 }
 
 @Suite struct SlugTests {
-    @Test func asciiAndCJK() {
+    @Test func asciiAndTransliteration() {
         #expect(Slug.make("Hello, World!") == "hello-world")
         #expect(Slug.make("  Mochlet v2 — notch  ") == "mochlet-v2-notch")
-        #expect(Slug.make("史莱姆 项目") == "shi-lai-mu-xiang-mu")
+        #expect(Slug.make("Привет мир") == "privet-mir")
         #expect(Slug.make("Crème Brûlée") == "creme-brulee")
         #expect(Slug.make("!!!").hasPrefix("untitled-"))
         #expect(Slug.make(String(repeating: "a", count: 100)).count == 60)
@@ -64,14 +64,14 @@ import Testing
 
 @Suite struct ProjectMatcherTests {
     let projects = [
-        Project(slug: "mochlet", name: "Mochlet", aliases: ["slime", "史莱姆"], paths: ["/a"]),
+        Project(slug: "mochlet", name: "Mochlet", aliases: ["slime", "blob"], paths: ["/a"]),
         Project(slug: "notes-app", name: "Notes App", paths: ["/b"]),
         Project(slug: "nex", name: "Nex", paths: ["/c"]),
     ]
 
     @Test func exactPrefixAndFuzzy() {
         #expect(ProjectMatcher.match("mochlet", in: projects)?.slug == "mochlet")
-        #expect(ProjectMatcher.match("史莱姆", in: projects)?.slug == "mochlet")
+        #expect(ProjectMatcher.match("blob", in: projects)?.slug == "mochlet")
         #expect(ProjectMatcher.match("Notes", in: projects)?.slug == "notes-app")
         #expect(ProjectMatcher.match("mochlit", in: projects)?.slug == "mochlet")
         #expect(ProjectMatcher.match("n", in: projects) == nil)
@@ -93,15 +93,6 @@ import Testing
         #expect(ProjectIntentParser.parse("list projects") == .listProjects)
         #expect(ProjectIntentParser.parse("what is the weather") == nil)
         #expect(ProjectIntentParser.parse("explain how work on this file: foo") == nil)
-    }
-
-    @Test func chinese() {
-        #expect(ProjectIntentParser.parse("把 ~/slime-ai 设为项目，叫 史莱姆") == .makeProject(path: NSHomeDirectory() + "/slime-ai", name: "史莱姆"))
-        #expect(ProjectIntentParser.parse("克隆 https://github.com/a/b 为 bee") == .clone(url: "https://github.com/a/b", name: "bee"))
-        #expect(ProjectIntentParser.parse("在 Mochlet 上工作：修复测试，用 codex") == .workOn(project: "Mochlet", task: "修复测试", agent: "codex"))
-        #expect(ProjectIntentParser.parse("继续 Mochlet") == .resume(project: "Mochlet", agent: nil))
-        #expect(ProjectIntentParser.parse("打开 Mochlet 用 iterm") == .open(project: "Mochlet", terminal: "iterm"))
-        #expect(ProjectIntentParser.parse("项目列表") == .listProjects)
     }
 }
 

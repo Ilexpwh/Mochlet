@@ -52,7 +52,7 @@ public enum AnswerComposer {
             context += header + "\n" + h.text + "\n\n"
             used += t
         }
-        let lang = CJK.contains(question) ? "Answer in the language of the question (Chinese when the question is Chinese); keep technical terms as written in the sources." : "Answer in the language of the question."
+        let lang = "Answer in the language of the question; keep technical terms as written in the sources."
         let system = """
         You answer questions from the user's personal knowledge base. Use only the numbered passages below; when they do not contain the answer, say what is missing instead of guessing.
         Cite every claim with the passage number in square brackets, like [2] or [1][3]. Be concise: a short answer first, then the supporting details. \(lang)
@@ -82,18 +82,16 @@ public enum AnswerComposer {
     }
 }
 
-/// Turns the bilingual question into the lexical queries `search` runs (the model-based rewrite
-/// in the app adds to these).
+/// Turns the question into the lexical queries `search` runs (the model-based rewrite in the app
+/// adds to these).
 public enum QueryPlanner {
     public static func lexicalVariants(_ question: String) -> [String] {
         var out = [question]
-        let stripped = question.replacingOccurrences(of: #"[?？。！!,，、:：]"#, with: " ", options: .regularExpression)
+        let stripped = question.replacingOccurrences(of: #"[?!,:]"#, with: " ", options: .regularExpression)
         if stripped != question { out.append(stripped) }
         // Question words add noise to BM25.
-        let noise = ["what", "which", "who", "when", "where", "why", "how", "does", "do", "is", "are", "the", "a", "an", "of", "in", "on", "for", "to", "about", "tell", "me",
-                     "什么", "哪个", "哪些", "谁", "什么时候", "为什么", "怎么", "如何", "是", "的", "了", "吗", "呢", "请", "介绍", "一下", "关于"]
-        var words = stripped.split(separator: " ").map(String.init).filter { !noise.contains($0.lowercased()) }
-        for n in noise where n.count >= 2 && CJK.contains(n) { words = words.map { $0.replacingOccurrences(of: n, with: " ") } }
+        let noise = ["what", "which", "who", "when", "where", "why", "how", "does", "do", "is", "are", "the", "a", "an", "of", "in", "on", "for", "to", "about", "tell", "me"]
+        let words = stripped.split(separator: " ").map(String.init).filter { !noise.contains($0.lowercased()) }
         let keywords = words.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         if !keywords.isEmpty, keywords != stripped { out.append(keywords) }
         return Array(NSOrderedSet(array: out)) as? [String] ?? out

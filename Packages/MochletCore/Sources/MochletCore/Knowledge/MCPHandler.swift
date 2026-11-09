@@ -40,7 +40,7 @@ public enum MCPTools {
 
     public static let catalogue: [MCPTool] = [
         MCPTool(name: "find", description: "Fast lexical + vector lookup over the knowledge base (no LLM). Returns the best passages with page paths and line ranges.",
-                inputSchema: schema(["query": str("Words or a phrase, Chinese or English."), "k": int("How many passages (default 8)."), "type": str("Only pages of this type (report, entity, concept, synthesis, meeting, note, digest)."), "project": str("Prefer pages filed to this project slug.")], required: ["query"])),
+                inputSchema: schema(["query": str("Words or a phrase."), "k": int("How many passages (default 8)."), "type": str("Only pages of this type (report, entity, concept, synthesis, meeting, note, digest)."), "project": str("Prefer pages filed to this project slug.")], required: ["query"])),
         MCPTool(name: "search", description: "Answer a question from the knowledge base with [n] citations (uses the configured model).",
                 inputSchema: schema(["question": str("The question, in any language."), "k": int("Passages to consider (default 8).")], required: ["question"])),
         MCPTool(name: "read", description: "Read a page or a mirrored reference by its path relative to the knowledge base root.",

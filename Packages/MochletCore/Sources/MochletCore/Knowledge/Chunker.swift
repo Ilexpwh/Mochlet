@@ -342,7 +342,7 @@ public enum CJKSegmenter {
     }
 
     /// Query-side segmentation of a CJK run: dictionary words of two or more characters, and the
-    /// characters no word covers grouped into runs ("头显" when the tokenizer only knows 头 and 显).
+    /// characters no word covers grouped into runs (a two-character product name the tokenizer only knows as two single characters).
     /// Single leftover characters are dropped unless the whole run is one character.
     public static func querySegments(_ run: String) -> [String] {
         let chars = Array(run)

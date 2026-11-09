@@ -124,7 +124,7 @@ public enum EchoRemoval {
         }
     }
 
-    /// Latin words lowercased, CJK as character bigrams (so "我们明天" and "明天开会" share "明天").
+    /// Latin words lowercased, CJK as character bigrams (so two overlapping CJK phrases share the bigrams of their common part).
     public static func tokens(_ s: String) -> [String] {
         var out: [String] = []
         var latin = ""

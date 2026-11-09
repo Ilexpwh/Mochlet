@@ -11,5 +11,5 @@ generated:
 # Spatial computing
 
 Computing where windows and objects live in the room instead of on a flat screen. Apple's name for the
-category its headset belongs to; see [[Apple Vision Pro 与空间计算]] once that report is filed, and [[Missing Page]]
+category its headset belongs to; see [[Apple Vision Pro and spatial computing]] once that report is filed, and [[Missing Page]]
 for a link lint should flag.

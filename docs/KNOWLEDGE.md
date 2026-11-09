@@ -18,7 +18,7 @@ wiki pages the app maintains over them, and a schema file that tells every agent
   projects/     <project-slug>/{index.md, <slug>.md, references/}   reports filed to a project
   notes/YYYY/MM/DD.md          type: note, one `## HH:MM` entry per spoken or typed note
   meetings/<date>-<slug>.md     type: meeting: summary + full transcript, resource → ~/Mochlet/Meetings/…/transcript.md
-  signals/YYYY-MM-DD.md         type: digest: the day's AI signals (热点/Hot · 精选/Selected · 简讯/Briefs), sources = the items' URLs
+  signals/YYYY-MM-DD.md         type: digest: the day's AI signals (Hot · Selected · Briefs), sources = the items' URLs
   memories/                     later milestones write here
 ```
 
@@ -131,7 +131,7 @@ context), Move (to another project or the inbox) and Re-chew; a failed job offer
 
 ## Notes
 
-"记一下…", "note to self…" (voice, or typed into the ask bubble) appends to `notes/YYYY/MM/DD.md`
+"Note to self…", "remember that…" (voice, or typed into the ask bubble) appends to `notes/YYYY/MM/DD.md`
 (`NoteWriter`): the page is created with `type: note`, title `Notes YYYY-MM-DD` and
 `mochlet: {kind: notes, last_source: voice}`; the body is `# Notes YYYY-MM-DD` followed by `## HH:MM`
 headings, and a second note in the same minute joins the previous entry. The page is reindexed on its own
@@ -154,14 +154,12 @@ indexed, linted, integrable; the audio stays outside the bundle and follows the 
 
 The daily digest (`SignalsController`, written at the time set under Settings → Signals, or on demand) is
 filed as `signals/YYYY-MM-DD.md` with `type: digest`, `tags: [signals, digest]`, `sources[]` = one entry
-per selected item (`id: eN`, the item's URL, its English title) and `mochlet: {kind: digest, window
-{from, to}, items_seen, items, hot, rubric_hash}`. The body opens with the brain's overview (in the
-rubric's first language), then 热点/Hot (events carried by several sources, hotness ≥ 2), 精选/Selected
-(the best item per event, ranked by hotness then score, at most two per source) and 简讯/Briefs (one
-line each). Every entry is bilingual when `rubric.md` lists both `zh` and `en`: the Chinese title as the
-heading with `↑` for rising and `×n` for the number of sources, the English title in italics, both
-summaries, and a `<sub>` line with the reason, the source and the score; `[^eN]` footnotes point at the
-source URLs. Events already shown in the last seven digests come back only with a new party or four
+per selected item (`id: eN`, the item's URL, its title) and `mochlet: {kind: digest, window
+{from, to}, items_seen, items, hot, rubric_hash}`. The body opens with the brain's overview, then Hot
+(events carried by several sources, hotness ≥ 2), Selected (the best item per event, ranked by hotness
+then score, at most two per source) and Briefs (one line each). Each entry has the title as the heading
+with `↑` for rising and `×n` for the number of sources, the summary, and a `<sub>` line with the reason,
+the source and the score; `[^eN]` footnotes point at the source URLs. Events already shown in the last seven digests come back only with a new party or four
 sources. The `signals_latest` MCP tool returns the newest page; `log.md` gets a `digest |` line. The
 items themselves (scores, writings, embeddings, events, hotness history) live outside the bundle in
 `~/Library/Application Support/Mochlet/signals.sqlite`, which is a cache: delete it and the sources are

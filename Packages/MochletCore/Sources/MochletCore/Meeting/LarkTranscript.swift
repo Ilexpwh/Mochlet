@@ -5,7 +5,7 @@ import Foundation
 ///     2026-11-04 11:03:33 CST|35min 58s
 ///
 ///     Keywords:
-///     流量、语音、成本
+///     traffic, voice, cost
 ///
 ///     Yifei Gao 00:00:20.680
 ///     text…
@@ -17,7 +17,7 @@ public enum LarkTranscript {
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         let zone = Self.zoneName(timeZone, at: startedAt)
         var out = "\(f.string(from: startedAt)) \(zone)|\(MeetingTime.duration(duration))\n\n"
-        out += "Keywords:\n" + (keywords.isEmpty ? "—" : keywords.joined(separator: "、")) + "\n\n"
+        out += "Keywords:\n" + (keywords.isEmpty ? "—" : keywords.joined(separator: ", ")) + "\n\n"
         let names = Dictionary(uniqueKeysWithValues: speakers.map { ($0.id, $0.name) })
         for l in lines {
             out += "\(names[l.speaker] ?? l.speaker) \(MeetingTime.stamp(l.start))\n\(l.text)\n\n"
@@ -70,8 +70,8 @@ public enum LarkTranscript {
         for (i, raw) in text.components(separatedBy: "\n").enumerated() {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if i == 0 { header = line; continue }
-            if expectKeywords { keywords = line == "—" ? [] : line.split(whereSeparator: { "、,，".contains($0) }).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }; expectKeywords = false; continue }
-            if line == "Keywords:" || line == "关键词：" || line == "关键词:" { expectKeywords = true; continue }
+            if expectKeywords { keywords = line == "—" ? [] : line.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }; expectKeywords = false; continue }
+            if line == "Keywords:" { expectKeywords = true; continue }
             if let m = stamp.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)), let nr = Range(m.range(at: 1), in: line), let sr = Range(m.range(at: 2), in: line),
                let s = MeetingTime.parseStamp(String(line[sr])) {
                 flush()

@@ -195,19 +195,16 @@ public struct SignalScore: Sendable, Equatable, Codable {
 }
 
 public struct SignalWriting: Sendable, Equatable, Codable {
-    public var titleZH: String
-    public var titleEN: String
-    public var summaryZH: String
-    public var summaryEN: String
+    public var title: String
+    public var summary: String
     public var reason: String
-    public init(titleZH: String, titleEN: String, summaryZH: String, summaryEN: String, reason: String) {
-        self.titleZH = titleZH
-        self.titleEN = titleEN
-        self.summaryZH = summaryZH
-        self.summaryEN = summaryEN
+    public init(title: String, summary: String, reason: String) {
+        self.title = title
+        self.summary = summary
         self.reason = reason
     }
-    enum CodingKeys: String, CodingKey { case titleZH = "title_zh", titleEN = "title_en", summaryZH = "summary_zh", summaryEN = "summary_en", reason }
+    // The keys stay `title_en` / `summary_en` so files written by earlier versions still decode.
+    enum CodingKeys: String, CodingKey { case title = "title_en", summary = "summary_en", reason }
 }
 
 public enum EventRelation: String, Sendable, Codable {

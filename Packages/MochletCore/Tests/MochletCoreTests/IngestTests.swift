@@ -44,7 +44,7 @@ import Testing
 }
 
 @Test func entitiesDecode() {
-    #expect(HTMLToMarkdown.decodeEntities("a &lt; b &amp; &#39;c&#39; &#x4e2d;&nbsp;x") == "a < b & 'c' 中\u{00A0}x")
+    #expect(HTMLToMarkdown.decodeEntities("a &lt; b &amp; &#39;c&#39; &#xe9;&nbsp;x") == "a < b & 'c' é\u{00A0}x")
 }
 
 // MARK: - URL routing
@@ -86,8 +86,7 @@ import Testing
     #expect(!g.allows(path: "/data/file.json"))
     #expect(g.allows(path: "/data/file.json?x"))
     #expect(RobotsRules.parse("").allows(path: "/anything"))
-    #expect(LanguageGuess.code("English text with one 中文 phrase in it, nothing more than that here.") == "en")
-    #expect(LanguageGuess.code("知识库支持中英文检索，这是一句中文。") == "zh")
+    #expect(LanguageGuess.code("English text with an accented café in it, nothing more than that here.") == "en")
 }
 
 // MARK: - Structured output

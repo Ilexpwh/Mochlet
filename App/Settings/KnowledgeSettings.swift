@@ -42,13 +42,13 @@ struct KnowledgeSettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Search") {
-                Toggle("Use on-device embeddings for search (Apple NLContextualEmbedding, Chinese and English)", isOn: Binding(get: { s.knowledgeEmbeddings }, set: { kb.setEmbeddings($0) }))
+                Toggle("Use on-device embeddings for search (Apple NLContextualEmbedding)", isOn: Binding(get: { s.knowledgeEmbeddings }, set: { kb.setEmbeddings($0) }))
                 HStack {
                     Text(embeddingStatus(kb)).font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Button("Download language assets") { kb.requestEmbeddingAssets() }.disabled(!s.knowledgeEmbeddings)
                 }
-                Text("Keyword search (BM25 over Chinese bigrams and English words) always works; vectors add meaning-based matches and are computed in the background from the index.")
+                Text("Keyword search (BM25 over words) always works; vectors add meaning-based matches and are computed in the background from the index.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Coding agents (MCP)") {
@@ -80,10 +80,9 @@ struct KnowledgeSettingsView: View {
 
     private func embeddingStatus(_ kb: KnowledgeController) -> String {
         let en = AppleContextualEmbedding.assetsAvailable(for: "The quick brown fox")
-        let zh = AppleContextualEmbedding.assetsAvailable(for: "知识库")
         var parts = ["\(kb.counts.embedded) vectors"]
         if kb.pendingEmbeddings > 0 { parts.append("\(kb.pendingEmbeddings) pending") }
-        parts.append("assets: English \(en ? "✓" : "–"), Chinese \(zh ? "✓" : "–")")
+        parts.append("language assets: \(en ? "installed" : "missing")")
         if let n = kb.embeddingNote { parts.append(n) }
         return parts.joined(separator: " · ")
     }

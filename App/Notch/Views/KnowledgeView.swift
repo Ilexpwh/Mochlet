@@ -125,7 +125,7 @@ private struct KnowledgeIdleView: View {
                     EmptyState(symbol: "books.vertical", line: "Nothing filed yet.",
                                hint: "Drop a file, a link or some text on me and I chew it into \(IslandStyle.tilde(kb.root.path)).")
                 } else {
-                    Text("Ask in Chinese or English; answers cite the pages they come from. Coding agents reach the same pages through MCP (Settings → Knowledge).")
+                    Text("Ask a question; answers cite the pages they come from. Coding agents reach the same pages through MCP (Settings → Knowledge).")
                         .font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
                 }
             }

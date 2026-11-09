@@ -48,8 +48,7 @@ actor SignalsEngine {
 
     static let stopWords: Set<String> = ["the", "a", "an", "of", "to", "for", "with", "and", "in", "on", "at", "is", "its", "it", "as", "by", "from", "how", "can", "both",
                                          "that", "this", "new", "now", "s", "vs", "into", "up", "out", "over", "than", "more", "what", "why", "your", "you", "we", "our",
-                                         "introducing", "announcing", "launches", "launch", "releases", "release", "released", "unveils", "ships", "brings", "available",
-                                         "的", "了", "和", "与", "在", "是", "为", "及", "等", "或", "发布", "推出", "宣布", "上线", "正式", "全新"]
+                                         "introducing", "announcing", "launches", "launch", "releases", "release", "released", "unveils", "ships", "brings", "available"]
     static let scoreBatch = 12
     static let firstFetchCap = 30
     /// Score batches per run: the rest waits for the next tick, so one run never monopolises the brain.
@@ -256,7 +255,7 @@ actor SignalsEngine {
         let tiers = tiers
         var touched = Set<String>()
 
-        // 4. The bilingual writing.
+        // 4. The writing.
         let pending = (try? store.items(status: .accepted, limit: 200)) ?? []
         if let brain {
             for batch in pending.chunked(Self.writeBatch) {
@@ -270,7 +269,7 @@ actor SignalsEngine {
                     let byID = Dictionary(out.items.map { ($0.id, $0) }, uniquingKeysWith: { x, _ in x })
                     for (i, it) in batch.enumerated() {
                         guard let w = byID["\(i + 1)"] else { continue }
-                        try? store.saveWriting(it.id, SignalWriting(titleZH: w.titleZH, titleEN: w.titleEN, summaryZH: w.summaryZH, summaryEN: w.summaryEN, reason: w.reason))
+                        try? store.saveWriting(it.id, SignalWriting(title: w.title, summary: w.summary, reason: w.reason))
                         try? store.setStatus(it.id, .written)
                         report.written += 1
                     }
@@ -326,7 +325,7 @@ actor SignalsEngine {
             func writing(_ id: String) -> SignalWriting? { writings[id] }
             func tokens(_ it: SignalItem) -> [String] {
                 let w = writing(it.id)
-                let text = (w?.titleEN.isEmpty == false ? w!.titleEN : it.title) + " " + (w?.titleZH ?? "")
+                let text = w?.title.isEmpty == false ? w!.title : it.title
                 return SignalText.tokens(text).filter { !Self.stopWords.contains($0) }
             }
             let entities: [String: String] = Dictionary(window.compactMap { it in (try? store.score(it.id))?.mainEntity.flatMap { e in e.isEmpty ? nil : (it.id, e.lowercased()) } }, uniquingKeysWith: { a, _ in a })
@@ -359,7 +358,7 @@ actor SignalsEngine {
                     if !unchecked.isEmpty {
                         let text = { (x: SignalItem) -> String in
                             let w = writing(x.id)
-                            return String(((w?.titleEN ?? x.title) + "\n" + (w?.summaryEN ?? x.summary)).prefix(500))
+                            return String(((w?.title ?? x.title) + "\n" + (w?.summary ?? x.summary)).prefix(500))
                         }
                         do {
                             let out = try await brain.structured(SignalPrompts.PairBatch.self, system: SignalPrompts.pairSystem,
@@ -404,7 +403,7 @@ actor SignalsEngine {
 
     private func embed(_ it: SignalItem) async -> [Float]? {
         let w = try? store.writing(it.id)
-        let text = ((w?.titleEN).flatMap { $0.isEmpty ? nil : $0 } ?? it.title) + " " + (w?.summaryEN ?? it.summary).prefix(400)
+        let text = ((w?.title).flatMap { $0.isEmpty ? nil : $0 } ?? it.title) + " " + (w?.summary ?? it.summary).prefix(400)
         if embeddingAvailable == nil { embeddingAvailable = AppleContextualEmbedding.assetsAvailable(for: text) }
         guard embeddingAvailable == true else { return nil }
         return (try? await embedding.embed([text]))?.first
@@ -424,7 +423,7 @@ actor SignalsEngine {
             let sa = (try? store.score(a.id))?.combined ?? 0, sb = (try? store.score(b.id))?.combined ?? 0
             return sa < sb
         } ?? members.first
-        let title = top.flatMap { t in (try? store.writing(t.id)).map { $0.titleEN.isEmpty ? $0.titleZH : $0.titleEN } } ?? top?.title ?? id
+        let title = top.flatMap { t in (try? store.writing(t.id)).flatMap { $0.title.isEmpty ? nil : $0.title } } ?? top?.title ?? id
         let e = SignalEvent(id: id, title: title, firstSeen: first, lastSeen: last, hotness: h, rising: Hotness.isRising(now: h, sixHoursAgo: earlier),
                             isNew: Hotness.isNew(firstSeen: first, now: now), sourceCount: Set(mentions.map(\.sourceID)).count, topItemID: top?.id ?? id)
         try? store.saveEvent(e)
@@ -468,7 +467,7 @@ actor SignalsEngine {
             events[eid] = e
             let src = source(it.sourceID)
             return DigestComposer.Candidate(id: it.id, eventID: eid, sourceID: it.sourceID, sourceName: src?.name ?? it.sourceID, tier: src?.tier ?? .t2, url: it.url,
-                                            titleZH: w.titleZH, titleEN: w.titleEN, summaryZH: w.summaryZH, summaryEN: w.summaryEN, reason: w.reason,
+                                            title: w.title, summary: w.summary, reason: w.reason,
                                             score: sc.combined, hotness: e.hotness, rising: e.rising, isNew: e.isNew, eventSources: e.sourceCount, publishedAt: it.publishedAt ?? it.discoveredAt)
         }
     }

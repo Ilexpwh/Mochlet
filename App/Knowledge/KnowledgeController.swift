@@ -187,10 +187,7 @@ final class KnowledgeController {
     func requestEmbeddingAssets() {
         embeddingNote = "downloading language assets…"
         Task { [weak self] in
-            var ok = true
-            for sample in ["The quick brown fox", "知识库里的页面", "日本語のページ", "한국어 페이지"] {
-                ok = await AppleContextualEmbedding.requestAssets(for: sample) && ok
-            }
+            let ok = await AppleContextualEmbedding.requestAssets(for: "The quick brown fox")
             guard let self else { return }
             self.embeddingNote = ok ? "language assets ready" : "some language assets could not be installed"
             self.scheduleEmbeddings()
@@ -568,17 +565,17 @@ final class KnowledgeController {
 }
 
 extension KnowledgeController {
-    /// Ask-bubble text that is clearly meant for the knowledge base ("kb: …", "知识库：…", "what do I know about …").
+    /// Ask-bubble text that is clearly meant for the knowledge base ("kb: …", "what do I know about …").
     static func question(in text: String) -> String? {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = t.lowercased()
-        for prefix in ["kb:", "kb ", "knowledge:", "ask kb ", "ask the kb ", "search kb ", "知识库：", "知识库:", "知识库 ", "问知识库", "查知识库"] {
+        for prefix in ["kb:", "kb ", "knowledge:", "ask kb ", "ask the kb ", "search kb "] {
             if lower.hasPrefix(prefix) {
                 let q = String(t.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
                 return q.isEmpty ? nil : q
             }
         }
-        for phrase in ["what do i know about ", "what have i read about ", "did i save anything about ", "我知道的", "我读过的"] where lower.contains(phrase) {
+        for phrase in ["what do i know about ", "what have i read about ", "did i save anything about "] where lower.contains(phrase) {
             return t
         }
         return nil

@@ -1,6 +1,6 @@
 #!/bin/bash
 # M6/M7 smoke test without the app: build mochlet-cli, create a throwaway bundle with the fixture pages,
-# ingest the sample note, check that find cites it, that a Chinese query works, and that lint
+# ingest the sample note, check that find cites it, that a question-shaped query works, and that lint
 # reports the planted orphan and the broken link.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -18,8 +18,8 @@ echo "$out"
 case "$out" in *"filed inbox/"*) ;; *) echo "FAIL: ingest did not file a report"; exit 1;; esac
 en=$("$CLI" find "Vision Pro price" -k 3)
 case "$en" in *"inbox/"*".md:"*) echo "ok: English query cites $(echo "$en" | grep -o 'inbox/[^]]*' | head -1)";; *) echo "FAIL: English query"; echo "$en"; exit 1;; esac
-zh=$("$CLI" find "头显 价格" -k 3)
-case "$zh" in *"inbox/"*) echo "ok: Chinese query hits";; *) echo "FAIL: Chinese query"; echo "$zh"; exit 1;; esac
+q=$("$CLI" find "how much does the headset cost" -k 3)
+case "$q" in *"inbox/"*) echo "ok: question query hits";; *) echo "FAIL: question query"; echo "$q"; exit 1;; esac
 dup=$("$CLI" ingest Tests/Fixtures/knowledge/vision-pro.md)
 case "$dup" in *"already chewed"*) echo "ok: dedupe";; *) echo "FAIL: dedupe"; echo "$dup"; exit 1;; esac
 ex=$("$CLI" extract Tests/Fixtures/ingest/sample.pptx)

@@ -6,7 +6,7 @@ public enum MeetingPrompts {
     public static let summarySystem = """
     You write the notes of a meeting from its transcript. The transcript lines are "[HH:MM:SS] Speaker: words"; \
     speakers are "Me" (the person whose Mac recorded) and "Person 2", "Person 3"… until named. \
-    Fill the schema. Keep the language of the meeting (Chinese stays Chinese, mixed stays mixed); keep names, \
+    Fill the schema. Keep the language of the meeting (do not translate; mixed stays mixed); keep names, \
     numbers, product names and dates as said. Never invent a name: suggest a real name for a speaker only when \
     the transcript makes it certain (they say their own name, or are addressed by it), with the evidence. \
     Decisions are things agreed, not things discussed; action items name the owner when the transcript does. \

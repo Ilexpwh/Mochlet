@@ -1,5 +1,5 @@
 {"version": 1, "sources": [
-  {"id": "rss-anthropic-news", "name": "Anthropic (test import)", "kind": "rss", "config": {"feedUrl": "https://www.anthropic.com/rss.xml"}, "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": ["官方"]},
-  {"id": "mp-test", "name": "测试公众号", "kind": "mp_account", "config": {"biz": "x"}, "tier": "T2", "participation_mode": "isolated", "interval_minutes": 60, "tags": []},
-  {"id": "rss-google-deepmind", "name": "Google DeepMind", "kind": "rss", "config": {"feedUrl": "https://deepmind.google/blog/rss.xml"}, "tier": "T1", "participation_mode": "editorial", "interval_minutes": 90, "tags": ["官方", "imported"]}
+  {"id": "rss-anthropic-news", "name": "Anthropic (test import)", "kind": "rss", "config": {"feedUrl": "https://www.anthropic.com/rss.xml"}, "tier": "T1", "participation_mode": "editorial", "interval_minutes": 120, "tags": ["official"]},
+  {"id": "mp-test", "name": "Test WeChat account", "kind": "mp_account", "config": {"biz": "x"}, "tier": "T2", "participation_mode": "isolated", "interval_minutes": 60, "tags": []},
+  {"id": "rss-google-deepmind", "name": "Google DeepMind", "kind": "rss", "config": {"feedUrl": "https://deepmind.google/blog/rss.xml"}, "tier": "T1", "participation_mode": "editorial", "interval_minutes": 90, "tags": ["official", "imported"]}
 ]}

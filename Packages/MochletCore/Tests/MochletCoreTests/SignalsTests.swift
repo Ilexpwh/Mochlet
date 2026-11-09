@@ -55,8 +55,8 @@ private let rdf = """
     let c = SignalItem(sourceID: "s3", externalID: "y", url: "https://other.example/x", title: "Regulators fine a chip maker", summary: "A different story entirely")
     #expect(SimHash.hamming(a.simhash, c.simhash) > 10)
     #expect(SignalText.normalizedTitle("  Model-3: Released! ") == "model 3 released")
-    #expect(SignalText.tokens("大模型发布 GPT-5") == ["大模", "模型", "型发", "发布", "gpt", "5"].filter { $0.count >= 2 })
-    #expect(SignalText.language("OpenAI 发布了新模型，支持多模态") == "zh" && SignalText.language("OpenAI ships a model") == "en")
+    #expect(SignalText.tokens("Big model release: GPT-5") == ["big", "model", "release", "gpt"])
+    #expect(SignalText.language("OpenAI ships a model") == "en")
     let store = try SignalsStore.inMemory()
     #expect(try store.insert(a) == true)
     #expect(try store.insert(b) == false)
@@ -69,16 +69,17 @@ private let rdf = """
 @Test func rubricParsesAndPrefilterGates() {
     let r = Rubric.parse(Rubric.defaultText)
     #expect(r.threshold(.t1) == 60 && r.threshold(.t2) == 76 && r.weight(.t1_5) == 0.8)
-    #expect(r.languages == ["zh", "en"] && r.categoryFloors["opinion"] == 80)
-    #expect(r.industryTerms.contains("MCP") && r.industryTerms.contains("大模型"))
+    #expect(r.categoryFloors["opinion"] == 80)
+    #expect(r.industryTerms.contains("MCP") && r.industryTerms.contains("embodied AI"))
     #expect(r.deny.contains("sponsored") && !r.style.isEmpty && r.promptText.contains("What matters"))
     #expect(Prefilter.check(title: "Free webinar on prompts", summary: "", tier: .t1, rubric: r) == .denied("webinar"))
     #expect(Prefilter.check(title: "Quarterly earnings of a retailer", summary: "Sales grew", tier: .t2, rubric: r) == .offTopic)
     #expect(Prefilter.check(title: "Quarterly earnings of a retailer", summary: "Sales grew", tier: .t1, rubric: r) == .pass)
     #expect(Prefilter.check(title: "New LLM beats benchmarks", summary: "", tier: .t2, rubric: r) == .pass)
     #expect(Prefilter.check(title: "Paint drying", summary: "she said the painting was ready", tier: .t2, rubric: r) == .offTopic)
+    // `languages:` is a key older rubric files carry; it is tolerated and ignored.
     let custom = Rubric.parse("---\nthresholds: {T2: 50}\nlanguages: [en]\n---\n\n## Prefilter deny\n\n- crypto\n")
-    #expect(custom.threshold(.t2) == 50 && custom.threshold(.t1) == 60 && custom.languages == ["en"] && custom.deny == ["crypto"])
+    #expect(custom.threshold(.t2) == 50 && custom.threshold(.t1) == 60 && custom.deny == ["crypto"])
     #expect(custom.hash != r.hash)
 }
 
@@ -162,8 +163,8 @@ private let rdf = """
 @Test func digestSelectionAndMarkdown() {
     let now = Date(timeIntervalSince1970: 1_800_000_000)
     func c(_ i: Int, event: String, source: String, score: Double, hot: Double, sources: Int = 1) -> DigestComposer.Candidate {
-        DigestComposer.Candidate(id: "i\(i)", eventID: event, sourceID: source, sourceName: source.uppercased(), tier: .t1, url: "https://x.example/\(i)", titleZH: "标题\(i)", titleEN: "Title \(i)",
-                                 summaryZH: "摘要\(i)", summaryEN: "Summary \(i)", reason: "because", score: score, hotness: hot, rising: hot > 2, isNew: true, eventSources: sources, publishedAt: now)
+        DigestComposer.Candidate(id: "i\(i)", eventID: event, sourceID: source, sourceName: source.uppercased(), tier: .t1, url: "https://x.example/\(i)", title: "Title \(i)",
+                                 summary: "Summary \(i)", reason: "because", score: score, hotness: hot, rising: hot > 2, isNew: true, eventSources: sources, publishedAt: now)
     }
     var cands: [DigestComposer.Candidate] = []
     cands.append(c(1, event: "e1", source: "a", score: 90, hot: 3.1, sources: 3))
@@ -177,22 +178,22 @@ private let rdf = """
     #expect(sel.selected.map(\.id) == ["i4", "i5"])   // i3 is the third from source a → a brief
     #expect(sel.briefs.map(\.id) == ["i3"])
     #expect(!sel.all.contains { $0.id == "i2" || $0.id == "i6" })
-    let md = DigestComposer.markdown(date: now, selection: sel, overview: "An overview.", languages: ["zh", "en"])
-    #expect(md.hasPrefix("# AI 信号 · ") && md.contains("## 热点 / Hot") && md.contains("### 标题1 ↑ ×3 [^e1]") && md.contains("_Title 1_") && md.contains("[^e1]: A · <https://x.example/1>"))
-    #expect(md.contains("## 简讯 / Briefs") && md.contains("An overview."))
-    let page = DigestComposer.page(date: now, selection: sel, overview: nil, languages: ["en"], rubricHash: "abcdef123456789", itemsSeen: 40, window: (now.addingTimeInterval(-86400), now), by: "mochlet/2.0", now: now)
+    let md = DigestComposer.markdown(date: now, selection: sel, overview: "An overview.")
+    #expect(md.hasPrefix("# AI signals · ") && md.contains("## Hot\n\n### Title 1 ↑ ×3 [^e1]\n\nSummary 1\n\n<sub>Why · because · A · 90</sub>") && md.contains("[^e1]: A · <https://x.example/1>"))
+    #expect(md.contains("## Selected\n\n### Title 4") && md.contains("## Briefs\n\n- Title 3 [^e4]") && md.contains("An overview."))
+    let page = DigestComposer.page(date: now, selection: sel, overview: nil, rubricHash: "abcdef123456789", itemsSeen: 40, window: (now.addingTimeInterval(-86400), now), by: "mochlet/2.0", now: now)
     #expect(page.frontmatter.type == "digest" && page.frontmatter.title?.hasPrefix("AI signals ") == true && page.frontmatter.sources.count == sel.all.count)
     #expect(page.frontmatter.mochlet?["hot"] == .int(1) && page.frontmatter.mochlet?["rubric_hash"] == .string("abcdef123456"))
-    #expect(page.body.contains("## Hot") && !page.body.contains("热点"))
-    let empty = DigestComposer.markdown(date: now, selection: DigestComposer.Selection(hot: [], selected: [], briefs: []), overview: nil, languages: ["en"])
+    #expect(page.body.contains("## Hot") && page.frontmatter.description == "Title 1 · Title 4 · Title 5")
+    let empty = DigestComposer.markdown(date: now, selection: DigestComposer.Selection(hot: [], selected: [], briefs: []), overview: nil)
     #expect(empty.contains("Nothing worth a line today."))
 }
 
 @Test func aihotImportAndDefaults() throws {
     let json = """
     {"version": 1, "sources": [
-      {"id": "rss-openai-news", "name": "OpenAI News", "kind": "rss", "config": {"feedUrl": "https://openai.com/news/rss.xml", "_aihot": {"initialBackfillLimit": 8}}, "tier": "T1", "owner_entity_id": "openai", "participation_mode": "editorial", "interval_minutes": 120, "tags": ["官方"], "site_fulltext": false},
-      {"id": "mp-foo", "name": "公众号", "kind": "mp_account", "config": {"biz": "x"}, "tier": "T2", "participation_mode": "isolated", "interval_minutes": 60, "tags": []},
+      {"id": "rss-openai-news", "name": "OpenAI News", "kind": "rss", "config": {"feedUrl": "https://openai.com/news/rss.xml", "_aihot": {"initialBackfillLimit": 8}}, "tier": "T1", "owner_entity_id": "openai", "participation_mode": "editorial", "interval_minutes": 120, "tags": ["official"], "site_fulltext": false},
+      {"id": "mp-foo", "name": "A WeChat account", "kind": "mp_account", "config": {"biz": "x"}, "tier": "T2", "participation_mode": "isolated", "interval_minutes": 60, "tags": []},
       {"id": "x-ai", "name": "X AI", "kind": "x_search", "config": {"query": "AI lang:zh", "searchType": "Latest"}, "tier": "T2", "participation_mode": "hot_signal", "interval_minutes": 30, "tags": []},
       {"id": "future", "name": "Unknown", "kind": "telepathy", "config": {}, "tier": "T2"}
     ]}
@@ -208,7 +209,7 @@ private let rdf = """
     let (merged, report) = AIHOTImport.merge(incoming, into: mine)
     #expect(report.added.sorted() == ["future", "mp-foo", "x-ai"] && report.updated == ["rss-openai-news"] && report.disabled.sorted() == ["future", "mp-foo"])
     let openai = merged.first { $0.id == "rss-openai-news" }
-    #expect(openai?.enabled == false && openai?.intervalMinutes == 120 && openai?.tags == ["官方"])   // the user's switch is kept, AIHOT's settings taken
+    #expect(openai?.enabled == false && openai?.intervalMinutes == 120 && openai?.tags == ["official"])   // the user's switch is kept, AIHOT's settings taken
     #expect(AIHOTImport.merge(incoming, into: merged).report.skipped.count == 4)
     let data = try JSONEncoder().encode(SourcesFile(sources: merged))
     let round = try JSONDecoder().decode(SourcesFile.self, from: data)
@@ -231,8 +232,8 @@ private let rdf = """
     try store.insert(b)
     try store.saveScore(a.id, SignalScore(score1: 80, score2: 70, category: "release", tags: ["x", "y"], mainEntity: "Lab", reasons: "r", rubricHash: "h"))
     #expect(try store.score(a.id)?.combined == 75 && (try store.score(a.id)?.tags) == ["x", "y"])
-    try store.saveWriting(a.id, SignalWriting(titleZH: "甲", titleEN: "A", summaryZH: "乙", summaryEN: "B", reason: "c"))
-    #expect(try store.writing(a.id)?.titleEN == "A")
+    try store.saveWriting(a.id, SignalWriting(title: "A", summary: "B", reason: "c"))
+    #expect(try store.writing(a.id) == SignalWriting(title: "A", summary: "B", reason: "c"))
     try store.saveEmbedding(a.id, [0.1, 0.2, 0.3])
     #expect(try store.embeddings(itemIDs: [a.id, b.id])[a.id] == [0.1, 0.2, 0.3])
     try store.setEvent(a.id, "ev1")

@@ -89,13 +89,13 @@ open "mochlet://debug/attach?$T"                                               #
 1. First launch creates `~/Mochlet/Knowledge/` with `SCHEMA.md`, `CLAUDE.md`, `AGENTS.md`, `index.md`, `log.md` and the
    type folders; Settings → Knowledge shows the page count and "Listening on 127.0.0.1:<port>".
 2. Drop `Tests/Fixtures/knowledge/vision-pro.md` on the slime: it chews, the Knowledge card opens with
-   "Filed: Apple Vision Pro 与空间计算", `inbox/apple-vision-pro-….md` exists with the source mirrored under
+   "Filed: Apple Vision Pro and spatial computing", `inbox/apple-vision-pro-….md` exists with the source mirrored under
    `inbox/references/`, `log.md` has an `ingest |` line and the root `index.md` lists the report.
 3. Drop the same file again: "Already chewed". Drop a PDF: it is mirrored with a stub report (full reading is M7).
    Drop a link: a draft report with the URL as `resource`.
 4. Ask on the card (or `kb: what does the Vision Pro cost?` in the ask bubble): the answer streams through the chat
    backend with `[1]` citations; the chips open the report at the cited line (Cursor/VS Code when running);
-   `头显多少钱` works the same way in Chinese.
+   a full question such as `how much does the headset cost` works the same way.
 5. "File this answer": `syntheses/<question-slug>.md` appears with the citations as `sources[]`, the cited report gains a
    `## Mentioned in` backlink, `log.md` gets a `query |` line, the slime looks proud.
 6. Lint: the toast gives the count; `meta/lint-<date>.md` lists orphans / broken links / reports never integrated;
@@ -161,18 +161,18 @@ open "mochlet://debug/state?$T"; python3 -c "import json,os;print(json.load(open
 ## Voice (M8)
 
 1. Settings → Voice & Meetings shows the language, whether its speech model is installed, the microphone
-   permission and the decision stack ("Claude Code", "on-device", "Jev"). Pick 中文（简体）: the model
+   permission and the decision stack ("Claude Code", "on-device", "Jev"). Pick a language whose model is not installed yet: the model
    downloads with a progress bar and the card note "Downloading … speech"; a toast says when it is ready.
 2. Hold the slime: it leans in with a small `o` mouth and mic bars, the bubble shows "Listening…" with
    five level bars, finals in white and the still-changing words in grey, "release to send · esc cancels"
    and the locale. Release: a nod when it heard something, a shrug when it did not.
-3. Say "记一下，明天给老王打电话": "Noted." toast, happy hop, `Knowledge/notes/<today>.md` has a `## HH:MM`
+3. Say "note to self, call the dentist tomorrow": "Noted." toast, happy hop, `Knowledge/notes/<today>.md` has a `## HH:MM`
    entry, `log.md` a `note |` line; a second note in the same minute joins the entry.
 4. Say "start working on the parser" with two projects registered: the `?` bubble asks "Which project?"
    with a chip per project and Cancel; say "mochlet" (or tap) → a terminal opens with the task; wait
    20 s instead → the question expires quietly.
 5. Say "what did I save about GraphRAG": the Knowledge card answers with citations. Say "read" followed by
-   a URL, or "把这个链接存起来" with a link on the clipboard: the ingest card chews it.
+   a URL, or "save this link" with a link on the clipboard: the ingest card chews it.
 6. Open the chat, hold and say anything: the words land in the chat box (dictation). Press `esc` while
    listening: the turn is dropped, nothing is sent.
 7. Deny the microphone in System Settings: holding shows "Microphone access is off…" and the Voice tab
@@ -183,7 +183,7 @@ Scripted version (no microphone needed):
 
 ```sh
 T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
-open "mochlet://debug/voice?text=记一下，明天给老王打电话&$T"; sleep 1; cat ~/Library/Logs/Mochlet/debug/result.txt
+open "mochlet://debug/voice?text=note%20to%20self%2C%20call%20the%20dentist%20tomorrow&$T"; sleep 1; cat ~/Library/Logs/Mochlet/debug/result.txt
 open "mochlet://debug/voice?text=start%20working%20on%20the%20parser&$T"; sleep 12   # decision via the brain when no on-device model
 open "mochlet://debug/shot?name=voice-question&$T"; open "mochlet://debug/voice?pick=cancel&$T"
 open "mochlet://debug/voice?file=$HOME/Mochlet/Knowledge/projects/mochlet/references/<sha12>-speech.aiff&$T"   # any wav/aiff/m4a
@@ -243,8 +243,8 @@ open "mochlet://debug/meeting?rename=p2:Daniel&$T"; open "mochlet://debug/meetin
    A story at hotness ≥ 3 that is less than six hours old makes the slime excited with a toast
    ("Everyone is on it: …"), once an hour, not in quiet hours.
 3. Digest: Settings → Signals → Compose digest (or wait for the daily time). `Knowledge/signals/
-   YYYY-MM-DD.md` appears with the overview, 热点/Hot · 精选/Selected · 简讯/Briefs and `[^eN]`
-   footnotes; `log.md` has `digest | AI 信号 … → signals/….md`; the card's Digest button opens it;
+   YYYY-MM-DD.md` appears with the overview, Hot · Selected · Briefs and `[^eN]`
+   footnotes; `log.md` has `digest | AI signals … → signals/….md`; the card's Digest button opens it;
    "Ask" asks the knowledge base about it; `signals_latest` over MCP returns it.
 4. Sources: type a site URL in Settings → Signals → Detect: a feed URL says "A feed: … n entries"
    (Add as RSS source); a page lists the feeds it links and, when it has a repeated list of links,
@@ -438,3 +438,28 @@ live; measure it with no agent running before a release. App shots in `~/Library
 a-*.png` (compact, home, ask, puff, melt, shock, cry, cheer, press, round face, obsidian, lemon,
 error) matched the catalog and filmstrips; during the cheer landing squash the raised arms reach
 ≈ 200 pt, a hair past the 190 pt content leading, for one beat.
+
+## Character 3.1: long eye strokes and cone arms
+
+Review renders (release `slimekit-tools`, gitignored under `Packages/SlimeKit/out/a8`):
+
+```sh
+cd Packages/SlimeKit && T=.build/release/slimekit-tools
+$T render-catalog --out out/a8/catalog.png --palettes rimuru,obsidian,lemon --looks rimuru,plain,cat --radius 56 --face anime
+for pose in cheer wave thumbsUp scratchHead facepalm cover rubEyes "point:1,-0.4" sip "holdFront:doc" "holdHigh:bell" "holdSide:phone:-1" "hug:heart" "hug:self"; do
+  $T render-filmstrip --script "0.1:gesture:$pose" --fps 12 --frames 18 --radius 80 --out "out/a8/poses/${pose//[:,]/_}" --face anime
+done
+```
+
+1. Catalog: each resting eye is one long stroke (0.62 R) with a 0.33 R gap between the two; the
+   outer ends stop just inside the blush. At R 16 the mini shows two strokes, not dots.
+2. Pose sheet (frame 16 of each strip): every arm is a cone, broad at the body and tapering to a
+   rounded tip; no pose hooks into a tusk; the cheer cones point up and out, not straight up like
+   ears; the thumb and pointing nubs are visible; the ink line along a lobe starts a third of the
+   way out and never at the base.
+3. `swift test` in `Packages/SlimeKit`: 142 tests, `ArmTests.everyPoseStaysWithinReach` holds every
+   hand within 1.6 R.
+4. `bench` (release, R 56): cheer with arms 0.50 ms, chewing with arms 0.83 ms per frame (A5: 0.72
+   and 1.03), idle 0.15 ms.
+5. App (debug): `shot?name=hero` on the home view is the README hero; `fsm?input=collapse` then a
+   shot shows the long eyes in the compact strip.

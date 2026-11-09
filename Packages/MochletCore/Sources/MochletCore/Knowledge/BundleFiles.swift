@@ -287,7 +287,7 @@ public enum BundleBootstrap {
 
     ## Naming and linking
 
-    * File names are ASCII slugs of the title (`chinese-titles-become-pinyin.md`), ≤ 60 chars.
+    * File names are ASCII slugs of the title (non-ASCII letters are transliterated), ≤ 60 chars.
     * Link pages with `[[Page title]]` or `[[file-name]]` (Obsidian rules: any page in the vault
       by file name or title; `[[Page|alias]]`, `[[Page#Heading]]`; `![[file]]` embeds a reference).
       Every link should have a backlink: when you mention an entity page, add the mentioning page

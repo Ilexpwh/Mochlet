@@ -170,7 +170,7 @@ public enum ChatProviderKind: String, CaseIterable, Codable, Sendable, Identifia
         case .geminiCLI, .google: return "✦"
         case .openrouter: return "⇄"
         case .deepseek: return "◇"
-        case .qwen: return "千"
+        case .qwen: return "Q"
         case .moonshot: return "☾"
         case .ollama: return "🦙"
         case .lmstudio: return "▣"

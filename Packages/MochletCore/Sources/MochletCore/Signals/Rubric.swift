@@ -1,13 +1,12 @@
 import Foundation
 
-/// `~/Mochlet/signals/rubric.md`: what counts as a signal. Frontmatter carries thresholds, weights,
-/// languages and category floors; the sections carry the industry terms, importance criteria, what to
+/// `~/Mochlet/signals/rubric.md`: what counts as a signal. Frontmatter carries thresholds, weights
+/// and category floors; the sections carry the industry terms, importance criteria, what to
 /// downrank, what never gets through and the writing style. The hash of the whole file is stored on
 /// every score so a changed rubric does not silently mix with old scores.
 public struct Rubric: Sendable, Equatable {
     public var thresholds: [SourceTier: Double]
     public var weights: [SourceTier: Double]
-    public var languages: [String]
     public var categoryFloors: [String: Double]
     public var industryTerms: [String]
     public var importance: String
@@ -23,7 +22,6 @@ public struct Rubric: Sendable, Equatable {
 ---
 thresholds: {T1: 60, T1_5: 65, T2: 76}
 weights: {T1: 1.0, T1_5: 0.8, T2: 0.6}
-languages: [zh, en]
 category_floors: {release: 55, research: 60, funding: 65, policy: 65, opinion: 80}
 ---
 
@@ -34,7 +32,7 @@ category_floors: {release: 55, research: 60, funding: 65, policy: 65, opinion: 8
 AI, LLM, GPT, Claude, Gemini, Llama, Mistral, DeepSeek, Qwen, Kimi, agent, agentic, MCP, RAG, fine-tuning,
 inference, GPU, TPU, NPU, CUDA, transformer, diffusion, multimodal, embedding, vector database, open weights,
 benchmark, alignment, safety, RLHF, speech, vision, robotics, foundation model, copilot, coding agent,
-大模型, 智能体, 推理, 开源, 算力, 多模态, 自动驾驶, 具身智能
+reasoning, open source, compute, autonomous driving, embodied AI
 
 ## Importance criteria
 
@@ -61,11 +59,12 @@ benchmark, alignment, safety, RLHF, speech, vision, robotics, foundation model, 
 ## Writing style
 
 Answer-first. One sentence of what happened, one of why it matters, one of what is uncertain. Numbers and
-names as written in the source. Chinese and English each natural, not a translation of the other.
+names as written in the source. Plain English, no hype.
 """
 
     public static func parse(_ text: String) -> Rubric {
-        var r = Rubric(thresholds: [:], weights: [:], languages: ["zh", "en"], categoryFloors: [:], industryTerms: [], importance: "", downrank: "", deny: [], style: "", hash: text.sha256Hex, text: text)
+        // Older rubric files carry a `languages:` key; it is ignored, the digest is English.
+        var r = Rubric(thresholds: [:], weights: [:], categoryFloors: [:], industryTerms: [], importance: "", downrank: "", deny: [], style: "", hash: text.sha256Hex, text: text)
         var body = text
         if text.hasPrefix("---\n"), let end = text.range(of: "\n---\n", range: text.index(text.startIndex, offsetBy: 4)..<text.endIndex) {
             let fm = String(text[text.index(text.startIndex, offsetBy: 4)..<end.lowerBound])
@@ -75,7 +74,6 @@ names as written in the source. Chinese and English each natural, not a translat
                     if let v = node["thresholds"]?[t.rawValue]?.string.flatMap(Double.init) { r.thresholds[t] = v }
                     if let v = node["weights"]?[t.rawValue]?.string.flatMap(Double.init) { r.weights[t] = v }
                 }
-                if let l = node["languages"]?.stringArray, !l.isEmpty { r.languages = l }
                 if let floors = node["category_floors"]?.pairs {
                     for p in floors { if let v = p.value.string.flatMap(Double.init) { r.categoryFloors[p.key] = v } }
                 }

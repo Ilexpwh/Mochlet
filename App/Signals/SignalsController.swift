@@ -109,7 +109,6 @@ final class SignalsController {
 
     var enabled: Bool { app.settings.signalsEnabled }
     var brainLabel: String? { LLMClient.brain(app)?.label }
-    var languages: [String] { rubric.languages }
     var pushEndpoint: String? { app.knowledge.mcpPort.map { "http://127.0.0.1:\($0)/api/ingest/items" } }
     var externalSourceID: String { sources.first { $0.kind == .external && $0.enabled }?.id ?? "external" }
 
@@ -279,16 +278,15 @@ final class SignalsController {
         let sel = DigestComposer.select(cands, recentlyShown: shown)
         var overview: String?
         if !sel.all.isEmpty, let brain = LLMClient.brain(app), await engine.usedToday(now: now) < app.settings.signalsDailyBudget {
-            let zh = rubric.languages.first == "zh"
-            let list = sel.all.prefix(12).map { c in "- " + (zh ? "\(c.titleZH) — \(c.summaryZH)" : "\(c.titleEN) — \(c.summaryEN)") }.joined(separator: "\n")
-            let user = "Language: \(zh ? "Chinese (简体中文)" : "English")\n\nToday's items:\n\(list)\n\nWrite the overview."
+            let list = sel.all.prefix(12).map { c in "- \(c.title) — \(c.summary)" }.joined(separator: "\n")
+            let user = "Today's items:\n\(list)\n\nWrite the overview."
             if let o = try? await brain.structured(SignalPrompts.Overview.self, system: SignalPrompts.overviewSystem, user: user, schema: SignalPrompts.overviewSchema()) {
                 overview = o.overview
                 await engine.bump("overview", now: now)
             }
         }
         let seen = await engine.countSince(window.0)
-        let doc = DigestComposer.page(date: now, selection: sel, overview: overview, languages: rubric.languages, rubricHash: rubric.hash, itemsSeen: seen,
+        let doc = DigestComposer.page(date: now, selection: sel, overview: overview, rubricHash: rubric.hash, itemsSeen: seen,
                                       window: window, by: BundleLayout.generator, now: now)
         do {
             let rel = try await app.knowledge.engine.fileDigest(doc, day: day)

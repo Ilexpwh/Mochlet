@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the user asked the slime to do with projects, typed or spoken (English and Chinese).
+/// What the user asked the slime to do with projects, typed or spoken.
 public enum ProjectIntent: Equatable, Sendable {
     case makeProject(path: String, name: String?)
     case clone(url: String, name: String?)
@@ -21,30 +21,17 @@ public enum ProjectIntentParser {
 
     private static let rules: [Rule] = [
         Rule(pattern: #"^(?:list|show)\s+(?:my\s+)?projects\??$"#) { _ in .listProjects },
-        Rule(pattern: #"^(?:项目列表|列出项目|我的项目)$"#) { _ in .listProjects },
         Rule(pattern: #"^(?:make|register|turn)\s+(.+?)\s+(?:into\s+)?(?:a\s+|as\s+a\s+)?project(?:\s+(?:called|named)\s+(.+?))?\.?$"#) { g in
             .makeProject(path: cleanPath(g[1] ?? ""), name: cleanName(g[2])) },
         Rule(pattern: #"^add\s+project\s+(.+?)(?:\s+(?:called|named|as)\s+(.+?))?\.?$"#) { g in
             .makeProject(path: cleanPath(g[1] ?? ""), name: cleanName(g[2])) },
-        Rule(pattern: #"^(?:把|将)\s*(.+?)\s*(?:设为|设置为|加为|添加为|作为)\s*项目(?:\s*[,，]?\s*(?:叫|名为|命名为)\s*(.+?))?[。.]?$"#) { g in
-            .makeProject(path: cleanPath(g[1] ?? ""), name: cleanName(g[2])) },
-        Rule(pattern: #"^(?:添加|新建)项目\s*(.+?)(?:\s*(?:叫|名为)\s*(.+?))?[。.]?$"#) { g in
-            .makeProject(path: cleanPath(g[1] ?? ""), name: cleanName(g[2])) },
         Rule(pattern: #"^(?:git\s+)?clone\s+(\S+)(?:\s+(?:as|called|named|into)\s+(.+?))?\.?$"#) { g in
             .clone(url: g[1] ?? "", name: cleanName(g[2])) },
-        Rule(pattern: #"^克隆\s*(\S+)(?:\s*(?:为|叫|到)\s*(.+?))?[。.]?$"#) { g in
-            .clone(url: g[1] ?? "", name: cleanName(g[2])) },
-        Rule(pattern: #"^(?:work\s+on|continue\s+on|let'?s\s+work\s+on|start\s+on)\s*([^:：]+?)\s*[:：]\s*(.+?)(?:\s+(?:with|using|in)\s+(claude|codex|gemini))?\.?$"#) { g in
-            .workOn(project: trim(g[1]), task: trim(g[2]), agent: g[3]?.lowercased()) },
-        Rule(pattern: #"^(?:在|处理|开发|继续做)\s*([^:：]+?)\s*(?:上|里|中)?\s*(?:工作|做|开发|处理)?\s*[:：]\s*(.+?)(?:\s*[,，]?\s*用\s*(claude|codex|gemini))?[。.]?$"#) { g in
+        Rule(pattern: #"^(?:work\s+on|continue\s+on|let'?s\s+work\s+on|start\s+on)\s*([^:]+?)\s*:\s*(.+?)(?:\s+(?:with|using|in)\s+(claude|codex|gemini))?\.?$"#) { g in
             .workOn(project: trim(g[1]), task: trim(g[2]), agent: g[3]?.lowercased()) },
         Rule(pattern: #"^(?:resume|continue)\s+(.+?)(?:\s+(?:with|using|in)\s+(claude|codex|gemini))?\.?$"#) { g in
             .resume(project: trim(g[1]), agent: g[2]?.lowercased()) },
-        Rule(pattern: #"^继续\s*(.+?)(?:\s*[,，]?\s*用\s*(claude|codex|gemini))?[。.]?$"#) { g in
-            .resume(project: trim(g[1]), agent: g[2]?.lowercased()) },
         Rule(pattern: #"^open\s+(.+?)(?:\s+in\s+(terminal|iterm2?|ghostty|warp|kitty|wezterm|alacritty|cursor|vs ?code|code))?\.?$"#) { g in
-            .open(project: trim(g[1]), terminal: g[2].map(cleanTerminal)) },
-        Rule(pattern: #"^(?:打开|用终端打开)\s*(.+?)(?:\s*(?:用|在)\s*(terminal|iterm2?|ghostty|warp|kitty|wezterm|alacritty|cursor|vs ?code|code))?[。.]?$"#) { g in
             .open(project: trim(g[1]), terminal: g[2].map(cleanTerminal)) },
     ]
 

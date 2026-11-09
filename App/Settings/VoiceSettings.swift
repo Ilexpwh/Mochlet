@@ -17,11 +17,11 @@ struct VoiceSettingsView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Picker("Language", selection: Binding(get: { app.settings.voiceLocale }, set: { app.settings.voiceLocale = $0; v.refreshAssetState() })) {
                     Text("Automatic (system language)").tag("auto")
-                    Text("中文（简体）").tag("zh-CN")
-                    Text("中文（繁體）").tag("zh-TW")
-                    Text("粵語").tag("yue-CN")
                     Text("English").tag("en-US")
-                    Text("日本語").tag("ja-JP")
+                    Text("Chinese (Simplified)").tag("zh-CN")
+                    Text("Chinese (Traditional)").tag("zh-TW")
+                    Text("Cantonese").tag("yue-CN")
+                    Text("Japanese").tag("ja-JP")
                 }
                 HStack {
                     Text(assetLine(v)).font(.callout).foregroundStyle(.secondary)

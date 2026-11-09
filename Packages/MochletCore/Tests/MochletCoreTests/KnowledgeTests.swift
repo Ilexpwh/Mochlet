@@ -8,7 +8,7 @@ import Testing
         type: report
         title: "Quoted: title"   # comment
         description: A plain description with: colon inside
-        tags: [ai, "two words", 中文]
+        tags: [ai, "two words", café]
         status: draft
         generated:
           by: mochlet/2.0
@@ -35,7 +35,7 @@ import Testing
         #expect(n["type"] == .string("report"))
         #expect(n["title"] == .string("Quoted: title"))
         #expect(n["description"] == .string("A plain description with: colon inside"))
-        #expect(n["tags"]?.stringArray == ["ai", "two words", "中文"])
+        #expect(n["tags"]?.stringArray == ["ai", "two words", "café"])
         #expect(n["generated"]?["by"] == .string("mochlet/2.0"))
         #expect(n["verified"]?.array?.first?["by"] == .string("human:ilex"))
         #expect(n["sources"]?.array?.first?["title"] == .string("It's quoted"))
@@ -202,24 +202,12 @@ import Testing
         let chunks = Chunker().chunk("<!-- page: 3 -->\nSome text\n\n<!-- page: 4 -->\nMore text")
         #expect(chunks.first?.page == 3)
         #expect(TokenEstimator.estimate("hello world") == 3)
-        #expect(TokenEstimator.estimate("机器学习") == 4)
     }
 
-    @Test func segmenterIsSymmetricForMixedText() {
-        let t = CJKSegmenter.tokens("Apple发布了Vision Pro，机器学习模型")
-        #expect(t.contains("apple"))
-        #expect(t.contains("vision"))
-        #expect(t.contains("发布"))
-        #expect(t.contains("机器"))
-        #expect(t.contains("器学"))
-        #expect(t.contains("学习"))
-        let q = QueryPatternBuilder.build("机器学习 vision")!
-        // One phrase per dictionary word (or the whole run when the tokenizer keeps it together), then the Latin prefix.
-        #expect(q.terms.last == "\"vision\"*")
-        #expect(q.terms.count >= 2)
-        #expect(q.terms.dropLast().allSatisfy { ["\"机器 器学 学习\"", "\"机器\"", "\"学习\""].contains($0) })
-        #expect(QueryPatternBuilder.build("学习")?.and == "\"学习\"")
-        #expect(QueryPatternBuilder.build("学")?.and == "\"学\"")
+    @Test func queryPatternsPrefixLongerWords() {
+        let q = QueryPatternBuilder.build("machine learning pro")!
+        // Words of four letters or more match as prefixes; shorter ones must stand whole.
+        #expect(q.terms == ["\"machine\"*", "\"learning\"*", "\"pro\""])
         #expect(QueryPatternBuilder.build("!!") == nil)
     }
 
@@ -241,16 +229,16 @@ import Testing
         IndexedDocument(path: path, type: type, title: title, sha256: "s", mtime: Date(), size: 1, links: links)
     }
 
-    @Test func findsChineseAndEnglishAndFuses() throws {
+    @Test func findsPagesAndFuses() throws {
         let index = try KnowledgeIndex.inMemory()
-        try index.upsert(doc("inbox/a.md", "Apple Vision Pro review"), chunks: Chunker().chunk("Apple发布了Vision Pro头显，售价3499美元。机器学习模型在设备上运行。"))
+        try index.upsert(doc("inbox/a.md", "Apple Vision Pro review"), chunks: Chunker().chunk("Apple released the Vision Pro headset, priced at $3,499. Machine learning models run on the device."))
         try index.upsert(doc("inbox/b.md", "RAG notes", type: "concept"), chunks: Chunker().chunk("Retrieval-augmented generation combines search with a language model. Chunks are embedded and ranked."))
         try index.upsert(doc("inbox/c.md", "Unrelated"), chunks: Chunker().chunk("A recipe for bread: flour, water, salt."))
         #expect(index.documentCount == 3)
-        #expect(try index.find("机器学习").first?.path == "inbox/a.md")
-        #expect(try index.find("头显").first?.path == "inbox/a.md")          // two-character query
+        #expect(try index.find("machine learning").first?.path == "inbox/a.md")
+        #expect(try index.find("headset").first?.path == "inbox/a.md")
         #expect(try index.find("retrieval").first?.path == "inbox/b.md")
-        #expect(try index.find("Vision Pro 售价").first?.path == "inbox/a.md") // mixed
+        #expect(try index.find("Vision Pro price").first?.path == "inbox/a.md") // prefix match on "priced"
         #expect(try index.find("retrieval", filters: FindFilters(types: ["report"])).isEmpty)
         #expect(try index.find("zzzz").isEmpty)
         // A vector list fused with BM25 changes the order when it disagrees.
@@ -334,10 +322,10 @@ import Testing
 
     @Test func composerNumbersCitationsAndReadsThemBack() {
         let hits = (1...3).map { i in KnowledgeHit(chunkID: i, path: "inbox/p\(i).md", title: "P\(i)", type: "report", headingPath: "H", text: "text \(i)", lineStart: 1, lineEnd: 2, page: nil, tsStart: i == 3 ? 125 : nil, resource: nil, score: 1) }
-        let p = AnswerComposer.prompt(question: "什么是X？", hits: hits)
+        let p = AnswerComposer.prompt(question: "What is X?", hits: hits)
         #expect(p.citations.count == 3)
         #expect(p.system.contains("[3] P3 › H (inbox/p3.md, 2:05)"))
-        #expect(p.system.contains("Chinese"))
+        #expect(p.system.contains("Answer in the language of the question"))
         let used = AnswerComposer.usedCitations(in: "X is a thing [2]. Also [2] and [9] and [1].", available: p.citations)
         #expect(used.map(\.n) == [2, 1])
         #expect(QueryPlanner.lexicalVariants("What is the capital of France?").contains("capital France"))
@@ -434,24 +422,14 @@ struct FakeBackend: MCPBackend {
 }
 
 
-@Suite struct CJKQueryTests {
-    @Test func longChineseQuestionsBecomeWordPhrases() throws {
-        let p = try #require(QueryPatternBuilder.build("头显多少钱？用什么芯片？"))
-        #expect(p.terms.count >= 3)
-        #expect(p.terms.contains("\"头显\""))            // not a dictionary word: the uncovered run is kept
-        #expect(p.terms.contains("\"芯片\""))
-        #expect(!p.terms.contains { $0.contains("显多") })   // no bigram across word boundaries
-        let two = try #require(QueryPatternBuilder.build("头显"))
-        #expect(two.terms == ["\"头显\""])
-    }
-
-    @Test func longChineseQuestionStillHitsThePage() throws {
+@Suite struct QuestionQueryTests {
+    @Test func longQuestionStillHitsThePage() throws {
         let index = try KnowledgeIndex.inMemory()
         let doc = IndexedDocument(path: "inbox/vp.md", type: "report", title: "Vision Pro", description: nil, sha256: "a", mtime: Date(), size: 1, frontmatterYAML: "type: report")
-        let chunk = Chunk(ordinal: 0, headingPath: "Vision Pro", text: "Apple 在 2024 年发布了 Vision Pro 头显。它使用 M2 和 R1 芯片。售价 3499 美元。", tokenCount: 30, lineStart: 1, lineEnd: 1)
+        let chunk = Chunk(ordinal: 0, headingPath: "Vision Pro", text: "Apple released the Vision Pro headset in 2024. It uses the M2 and R1 chips. It costs $3,499.", tokenCount: 30, lineStart: 1, lineEnd: 1)
         try index.upsert(doc, chunks: [chunk])
-        #expect(try index.find("头显多少钱？用什么芯片？").first?.path == "inbox/vp.md")
-        #expect(try index.find("这台设备的售价是多少").first?.path == "inbox/vp.md")
+        #expect(try index.find("How much does the headset cost? Which chips does it use?").first?.path == "inbox/vp.md")
+        #expect(QueryPlanner.lexicalVariants("How much does the headset cost?").contains("much headset cost"))
     }
 
     @Test func lintPagesDoNotReportTheirOwnQuotes() {

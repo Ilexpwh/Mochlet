@@ -1,7 +1,7 @@
 import Foundation
 
-/// What the brain is asked, in batches: two independent scores per item, a bilingual write-up per
-/// accepted item, the relation between two items that look alike, and an overview for a digest.
+/// What the brain is asked, in batches: two independent scores per item, a write-up per accepted
+/// item, the relation between two items that look alike, and an overview for a digest.
 public enum SignalPrompts {
     public static let scoreSystem = """
 You score AI-industry news items for a personal daily signal feed. For each item give a 0–100 score of how much
@@ -48,35 +48,28 @@ listicle, promotion. Return exactly one JSON object.
     }
 
     public static let writeSystem = """
-You write a bilingual daily AI brief. For each item write a Chinese title and an English title (each under 60
-characters), then a Chinese summary and an English summary of two or three sentences each, answer-first: what
-happened, why it matters, what is uncertain. Keep names, numbers and model names exactly as in the source.
-Each language should read naturally on its own, not as a translation. Add one line on why it was selected.
-Return exactly one JSON object.
+You write a daily AI brief in English. For each item write a title (under 60 characters), then a summary of
+two or three sentences, answer-first: what happened, why it matters, what is uncertain. Keep names, numbers
+and model names exactly as in the source. Add one line on why it was selected. Return exactly one JSON object.
 """
 
     public static func writeSchema() -> JSONValue {
         Schemas.object([
             "items": Schemas.array(Schemas.object([
                 "id": Schemas.string("the item id as given"),
-                "title_zh": Schemas.string("Chinese title"),
-                "title_en": Schemas.string("English title"),
-                "summary_zh": Schemas.string("Chinese summary, 2–3 sentences"),
-                "summary_en": Schemas.string("English summary, 2–3 sentences"),
+                "title": Schemas.string("title, under 60 characters"),
+                "summary": Schemas.string("summary, 2–3 sentences"),
                 "reason": Schemas.string("why it was selected, one line"),
-            ], required: ["id", "title_zh", "title_en", "summary_zh", "summary_en", "reason"]), "one per item"),
+            ], required: ["id", "title", "summary", "reason"]), "one per item"),
         ], required: ["items"])
     }
 
     public struct WriteBatch: Decodable, Sendable {
         public struct Row: Decodable, Sendable {
             public var id: String
-            public var titleZH: String
-            public var titleEN: String
-            public var summaryZH: String
-            public var summaryEN: String
+            public var title: String
+            public var summary: String
             public var reason: String
-            enum CodingKeys: String, CodingKey { case id, titleZH = "title_zh", titleEN = "title_en", summaryZH = "summary_zh", summaryEN = "summary_en", reason }
         }
         public var items: [Row]
     }
@@ -119,8 +112,8 @@ Return exactly one JSON object.
     }
 
     public static let overviewSystem = """
-You open a daily AI brief with a short overview: three or four sentences in the language asked for, naming the
-two or three things that mattered most today and how they connect, with no hype and no bullet points.
+You open a daily AI brief with a short overview: three or four sentences in English, naming the two or three
+things that mattered most today and how they connect, with no hype and no bullet points.
 Return exactly one JSON object.
 """
 

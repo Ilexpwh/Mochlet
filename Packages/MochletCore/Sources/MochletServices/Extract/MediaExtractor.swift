@@ -136,7 +136,7 @@ public enum FileTranscriber {
                 if start == nil { start = s; end = e } else { end = max(end, e) }
             }
             current += piece
-            if let last = piece.last(where: { !$0.isWhitespace }), ".?!。？！".contains(last), start != nil, end - (start ?? end) >= 0.8 { flush() }
+            if let last = piece.last(where: { !$0.isWhitespace }), ".?!".contains(last), start != nil, end - (start ?? end) >= 0.8 { flush() }
         }
         flush()
         if out.isEmpty {

@@ -4,43 +4,40 @@ import Testing
 
 private let projects = [
     Project(slug: "mochlet", name: "Mochlet", aliases: ["slime"], description: "notch slime", paths: ["/tmp/mochlet"]),
-    Project(slug: "lantern", name: "Lantern", aliases: ["灯笼"], description: "", paths: ["/tmp/lantern"]),
+    Project(slug: "lantern", name: "Lantern", aliases: ["lamp"], description: "", paths: ["/tmp/lantern"]),
 ]
 private let ctx = IntentRouter.Context(clipboardURL: URL(string: "https://example.com/clip"), chatFocused: false, projects: projects)
 
 @Test func prepassRoutesLinksNotesAndCommands() {
     #expect(IntentRouter.prepass("", context: ctx)?.intent == .cancel)
-    #expect(IntentRouter.prepass("取消", context: ctx)?.intent == .cancel)
     #expect(IntentRouter.prepass("never mind", context: ctx)?.intent == .cancel)
+    #expect(IntentRouter.prepass("Cancel.", context: ctx)?.intent == .cancel)
     let link = IntentRouter.prepass("read https://arxiv.org/abs/2404.16130 for me", context: ctx)
     #expect(link?.intent == .ingestURL && link?.url?.host == "arxiv.org")
-    let clip = IntentRouter.prepass("把这个链接存起来", context: ctx)
+    let clip = IntentRouter.prepass("save this link", context: ctx)
     #expect(clip?.intent == .ingestURL && clip?.url?.absoluteString == "https://example.com/clip")
     #expect(IntentRouter.prepass("save this link", context: IntentRouter.Context(projects: projects)) == nil)
-    let note = IntentRouter.prepass("记一下，明天给老王打电话", context: ctx)
-    #expect(note?.intent == .note && note?.task == "明天给老王打电话")
+    let note = IntentRouter.prepass("remember that, call the dentist tomorrow", context: ctx)
+    #expect(note?.intent == .note && note?.task == "call the dentist tomorrow")
     let note2 = IntentRouter.prepass("Note to self: buy oat milk.", context: ctx)
     #expect(note2?.intent == .note && note2?.task == "buy oat milk")
     #expect(IntentRouter.prepass("open settings", context: ctx)?.intent == .settingsOpen)
-    #expect(IntentRouter.prepass("打开设置", context: ctx)?.intent == .settingsOpen)
-    #expect(IntentRouter.prepass("停止记录", context: ctx)?.intent == .meetingStop)
+    #expect(IntentRouter.prepass("stop recording", context: ctx)?.intent == .meetingStop)
     #expect(IntentRouter.prepass("start taking meeting notes", context: ctx)?.intent == .meetingStart)
     #expect(IntentRouter.prepass("what's hot in AI today?", context: ctx)?.intent == .signalsShow)
     let kb = IntentRouter.prepass("what did I save about Vision Pro", context: ctx)
     #expect(kb?.intent == .kbQuery)
-    #expect(IntentRouter.prepass("kb: 头显 价格", context: ctx)?.text == "头显 价格")
+    #expect(IntentRouter.prepass("kb: headset", context: ctx)?.text == "headset")
     #expect(IntentRouter.prepass("hello there", context: ctx) == nil)
     #expect(IntentRouter.prepass("hello there", context: IntentRouter.Context(chatFocused: true, projects: projects))?.intent == .dictate)
 }
 
-@Test func prepassProjectCommandsInBothLanguages() {
+@Test func prepassProjectCommands() {
     let en = IntentRouter.prepass("work on mochlet: fix the build", context: ctx)
     #expect(en?.intent == .projectStart && en?.project?.slug == "mochlet" && en?.task == "fix the build")
-    let zh = IntentRouter.prepass("在 Lantern 项目里加一个设置页", context: ctx)
-    #expect(zh?.intent == .projectStart && zh?.project?.slug == "lantern" && zh?.task == "加一个设置页")
-    let alias = IntentRouter.prepass("让灯笼帮我跑一下测试", context: ctx)
-    #expect(alias?.intent == .projectStart && alias?.project?.slug == "lantern")
-    let unknown = IntentRouter.prepass("在家里吃饭", context: ctx)
+    let alias = IntentRouter.prepass("work on lamp: add a login page", context: ctx)
+    #expect(alias?.intent == .projectStart && alias?.project?.slug == "lantern" && alias?.task == "add a login page")
+    let unknown = IntentRouter.prepass("let's eat at home", context: ctx)
     #expect(unknown == nil)
     let resume = IntentRouter.prepass("resume mochlet", context: ctx)
     #expect(resume?.intent == .projectStart && resume?.task == "")

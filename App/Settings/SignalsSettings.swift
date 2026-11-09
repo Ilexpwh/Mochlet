@@ -29,7 +29,7 @@ struct SignalsSettingsView: View {
                     Spacer()
                     Stepper("Daily budget: \(st.signalsDailyBudget) brain calls", value: $st.signalsDailyBudget, in: 20...2000, step: 20)
                 }
-                Text("Every minute the sources that are due are fetched (three at a time, 15 min to 3 h apart by how much each yields). New items pass a no-model prefilter, get two independent 0–100 scores from the brain against rubric.md, and the ones above their tier's threshold are written in Chinese and English, grouped into events and ranked by how many independent sources carry them.")
+                Text("Every minute the sources that are due are fetched (three at a time, 15 min to 3 h apart by how much each yields). New items pass a no-model prefilter, get two independent 0–100 scores from the brain against rubric.md, and the ones above their tier's threshold are written up, grouped into events and ranked by how many independent sources carry them.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Sources") {
@@ -64,7 +64,7 @@ struct SignalsSettingsView: View {
                     Button("Reload rubric") { s.reloadRubric() }
                     Button("Show folder") { s.openFolder() }
                 }
-                Text("Tiers: T1 official and primary sources (threshold 60), T1.5 strong reporting (65), T2 the wide net (76; needs an industry term to be scored at all). WeChat accounts need AIHOT's paid relay and import disabled. rubric.md holds the thresholds, the languages of the digest, what matters, what to downrank and the writing style; edit it freely and reload.")
+                Text("Tiers: T1 official and primary sources (threshold 60), T1.5 strong reporting (65), T2 the wide net (76; needs an industry term to be scored at all). WeChat accounts need AIHOT's paid relay and import disabled. rubric.md holds the thresholds, what matters, what to downrank and the writing style; edit it freely and reload.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Digest") {
@@ -80,7 +80,7 @@ struct SignalsSettingsView: View {
                     Button("Open latest") { s.openDigest() }.disabled(s.status.latestDigest == nil)
                 }
                 Toggle("Let the slime react when a story is suddenly everywhere (at most once an hour, not in quiet hours)", isOn: $st.signalsReactions)
-                Text("The digest goes to Knowledge/signals/YYYY-MM-DD.md as a `digest` page (热点/Hot · 精选/Selected · 简讯/Briefs, one line per event, footnotes to the sources) in the languages rubric.md lists, so it is searchable and Claude Code can read it through the `signals_latest` MCP tool.")
+                Text("The digest goes to Knowledge/signals/YYYY-MM-DD.md as a `digest` page (Hot · Selected · Briefs, one line per event, footnotes to the sources), so it is searchable and Claude Code can read it through the `signals_latest` MCP tool.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Push and watch folder") {

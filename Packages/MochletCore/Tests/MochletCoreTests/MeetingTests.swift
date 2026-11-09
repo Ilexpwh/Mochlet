@@ -6,9 +6,8 @@ private func phrase(_ s: Double, _ e: Double, _ t: String) -> TimedPhrase { Time
 
 @Test func echoTokensAndSharedWordsRemoval() {
     #expect(EchoRemoval.tokens("Hello, World 42") == ["hello", "world", "42"])
-    #expect(EchoRemoval.tokens("我们明天开会") == ["我们", "们明", "明天", "天开", "开会"])
-    let mine = [phrase(0, 1, "let's ship on friday"), phrase(2, 3, "I agree"), phrase(10, 11, "我们明天开会吧")]
-    let others = [phrase(0.2, 1.1, "let's ship on friday then"), phrase(10.1, 11, "我们明天开会")]
+    let mine = [phrase(0, 1, "let's ship on friday"), phrase(2, 3, "I agree"), phrase(10, 11, "see you tomorrow then")]
+    let others = [phrase(0.2, 1.1, "let's ship on friday then"), phrase(10.1, 11, "see you tomorrow")]
     let kept = EchoRemoval.removingShared(mine: mine, others: others)
     #expect(kept.map(\.text) == ["I agree"])
 }
@@ -42,7 +41,6 @@ private func phrase(_ s: Double, _ e: Double, _ t: String) -> TimedPhrase { Time
     #expect(merged.map(\.id) == ["me", "p2"] && mergedLines.filter { $0.speaker == "p2" }.count == 2)
     #expect(TranscriptBuilder.rename(lines, speakers: speakers, id: "p2", to: "Alice")[1].name == "Alice")
     #expect(TranscriptBuilder.windows(lines, seconds: 20).count == 2)
-    #expect(TranscriptBuilder.lines(from: [("me", phrase(0, 1, "我们")), ("me", phrase(1.2, 2, "明天开会"))])[0].text == "我们明天开会")
 }
 
 @Test func fragmentsGoToTheNearestSolidVoice() {
@@ -57,12 +55,12 @@ private func phrase(_ s: Double, _ e: Double, _ t: String) -> TimedPhrase { Time
     var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
     let start = cal.date(from: c)!
     let speakers = [MeetingSpeaker(id: "me", name: "Ilex Poon", isMe: true), MeetingSpeaker(id: "p2", name: "Person 2")]
-    let lines = [MeetingLine(speaker: "p2", start: 20.68, end: 33, text: "AWS 这块你扫了一下费用，对吧？"), MeetingLine(speaker: "me", start: 33.18, end: 56.14, text: "其他的就是\n两个账号。")]
-    let text = LarkTranscript.format(startedAt: start, duration: 2158, keywords: ["流量", "语音"], lines: lines, speakers: speakers, timeZone: cal.timeZone)
-    #expect(text.hasPrefix("2026-11-04 11:03:33 CST|35min 58s\n\nKeywords:\n流量、语音\n\nPerson 2 00:00:20.680\nAWS 这块"))
+    let lines = [MeetingLine(speaker: "p2", start: 20.68, end: 33, text: "AWS, you went over the costs, right?"), MeetingLine(speaker: "me", start: 33.18, end: 56.14, text: "The rest is just\nthe two accounts.")]
+    let text = LarkTranscript.format(startedAt: start, duration: 2158, keywords: ["traffic", "voice"], lines: lines, speakers: speakers, timeZone: cal.timeZone)
+    #expect(text.hasPrefix("2026-11-04 11:03:33 CST|35min 58s\n\nKeywords:\ntraffic, voice\n\nPerson 2 00:00:20.680\nAWS, you"))
     let parsed = LarkTranscript.parse(text)
-    #expect(parsed.keywords == ["流量", "语音"] && parsed.names == ["Person 2", "Ilex Poon"])
-    #expect(parsed.lines.count == 2 && parsed.lines[1].text == "其他的就是\n两个账号。" && abs(parsed.lines[1].start - 33.18) < 0.001 && abs(parsed.lines[0].end - 33.18) < 0.001)
+    #expect(parsed.keywords == ["traffic", "voice"] && parsed.names == ["Person 2", "Ilex Poon"])
+    #expect(parsed.lines.count == 2 && parsed.lines[1].text == "The rest is just\nthe two accounts." && abs(parsed.lines[1].start - 33.18) < 0.001 && abs(parsed.lines[0].end - 33.18) < 0.001)
     #expect(MeetingTime.duration(3912) == "1h 05min 12s" && MeetingTime.duration(42) == "42s" && MeetingTime.stamp(3661.5) == "01:01:01.500")
 }
 
@@ -132,14 +130,14 @@ private func phrase(_ s: Double, _ e: Double, _ t: String) -> TimedPhrase { Time
                                  decisions: [.init(text: "Shut the idle machines", context: "low use", ts: 300)],
                                  actionItems: [.init(text: "List the idle machines", owner: "Me", due: "Friday", ts: 320)],
                                  openQuestions: ["Shared memory limits?"], topics: [.init(title: "Bill", start: 0, end: 600, summary: "The total and the two accounts.")],
-                                 participants: [.init(speakerID: "p2", suggestedName: "Yifei Gao", evidence: "called by name")], language: "zh-Hans")
+                                 participants: [.init(speakerID: "p2", suggestedName: "Yifei Gao", evidence: "called by name")], language: "en")
     let md = MeetingWriter.summaryMarkdown(summary, meta: meta)
     #expect(md.hasPrefix("# AWS cost review") && md.contains("- [ ] `00:05:20` List the idle machines — **Me** (Friday)") && md.contains("### `00:00:00` Bill") && md.contains("- 00:02:00 budget"))
-    let lines = [MeetingLine(speaker: "p2", start: 20.68, end: 33, text: "AWS 这块"), MeetingLine(speaker: "me", start: 33.18, end: 56, text: "其他的")]
+    let lines = [MeetingLine(speaker: "p2", start: 20.68, end: 33, text: "AWS, this part"), MeetingLine(speaker: "me", start: 33.18, end: 56, text: "The rest")]
     let page = MeetingWriter.knowledgePage(meta: meta, summary: summary, lines: lines, transcriptURL: URL(fileURLWithPath: "/tmp/m/transcript.md"), folderURL: URL(fileURLWithPath: "/tmp/m"))
     #expect(page.frontmatter.type == "meeting" && page.frontmatter.title == "AWS cost review" && page.frontmatter.tags == ["AWS", "cost"])
     #expect(page.frontmatter.resource == "file:///tmp/m/transcript.md" && page.frontmatter.sources.first?.id == "transcript")
-    #expect(page.body.contains("## Decisions") && page.body.contains("**Person 2** `00:00:20`  \nAWS 这块"))
+    #expect(page.body.contains("## Decisions") && page.body.contains("**Person 2** `00:00:20`  \nAWS, this part"))
     let round = try OKFDocument.parse(page.serialize())
     #expect(round.frontmatter.title == "AWS cost review")
     #expect(MeetingWriter.slug(title: "Weekly sync: roadmap!", startedAt: meta.startedAt).hasSuffix("-weekly-sync-roadmap"))

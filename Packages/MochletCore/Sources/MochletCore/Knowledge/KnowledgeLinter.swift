@@ -126,7 +126,7 @@ public enum KnowledgeLinter {
             if line.hasPrefix("#") { inEntities = false; continue }
             guard inEntities, line.hasPrefix("- ") || line.hasPrefix("* ") else { continue }
             var name = String(line.dropFirst(2))
-            let cuts = [" — ", " - ", ": ", " (", "，", "：", "（"].compactMap { name.range(of: $0)?.lowerBound }
+            let cuts = [" — ", " - ", ": ", " ("].compactMap { name.range(of: $0)?.lowerBound }
             if let first = cuts.min() { name = String(name[..<first]) }
             name = name.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "[[", with: "").replacingOccurrences(of: "]]", with: "")
             if let pipe = name.firstIndex(of: "|") { name = String(name[..<pipe]) }

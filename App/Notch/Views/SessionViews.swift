@@ -307,16 +307,33 @@ struct ApprovalView: View {
 
     /// Runs of eight or more blanks inside a line are shown as a counted marker so padding
     /// cannot push the rest of a command off the right edge of the box.
+    /// The command as the user must read it. Every blank counts toward one run, whatever it is
+    /// made of (spaces, tabs, any Unicode space); a run of eight or more becomes a visible
+    /// marker, so padding cannot push the tail of a command out of the box. A character that
+    /// would not show at all (a format or control code, a bidi override, a zero-width space) is
+    /// spelled out as its code point. Newlines are kept; emoji sequences keep their joiners.
     static func displayDetail(_ text: String) -> String {
-        guard text.contains("        ") || text.contains("\t\t") else { return text }
         var out = ""
         var run = 0
         func flush() {
-            if run >= 8 { out += " ⟨\(run) blanks⟩ " } else { out += String(repeating: " ", count: run) }
+            if run >= 8 { out += " \u{27E8}\(run) blanks\u{27E9} " } else if run > 0 { out += String(repeating: " ", count: run) }
             run = 0
         }
         for ch in text {
-            if ch == " " || ch == "\t" { run += ch == "\t" ? 4 : 1 } else { flush(); out.append(ch) }
+            if ch.isNewline { flush(); out.append("\n"); continue }
+            if ch == "\t" { run += 4; continue }
+            if ch.isWhitespace { run += 1; continue }
+            let invisible = ch.unicodeScalars.allSatisfy { s in
+                let g = s.properties.generalCategory
+                return g == .format || g == .control || g == .lineSeparator || g == .paragraphSeparator
+                    || s.properties.isDefaultIgnorableCodePoint
+            }
+            flush()
+            if invisible {
+                out += ch.unicodeScalars.map { String(format: "\u{27E8}U+%04X\u{27E9}", $0.value) }.joined()
+            } else {
+                out.append(ch)
+            }
         }
         flush()
         return out

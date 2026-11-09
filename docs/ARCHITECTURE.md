@@ -34,11 +34,19 @@ hold everything that does not need a window; the app shell is deliberately thin.
   derived hue, `SlimeOutfit`, glyph style, arms), polar rest profiles so a cat is a loaf and a
   ghost a drop, `ArmRig`/`Props` (pseudopod arms published as goo blobs plus hand anchors, props
   on a spring), the chewing v2 timeline, grown glyphs, body morphs, 24 emotes, and two sound packs
-  (`SoundPack.puni` squish + formant squeaks, `.classic` chimes; 44 sounds). `SlimeKitUI` renders
-  a `SlimeFrame` with CoreGraphics in layers (back traits, goo contour of ring + arms + stalks via
-  metaballs with a contour cache, surface, face, wrap, headwear on a lagging spring, front traits,
-  props, glyphs, particles), picks a detail level from pixels per R (full ≥ 36, medium ≥ 24, tiny
-  below), and hosts the Emote Lab, filmstrip and catalog tools. `SlimeKitAudio` plays the
+  (`SoundPack.puni` squish + formant squeaks, `.classic` chimes; 44 sounds). Character 3 (the
+  anime pass, `docs/CHARACTER.md`) made the rest shape a wide flat-based bun (`RestProfile`
+  defaults, skirt bumps), the jelly lightly damped with a near-critically damped volume mode
+  (`SoftBodyParams.anchorStiffness/damping/bulkDamping`), added `Impulse.poke`, anticipation and
+  landing squash in the engine, `FaceStyle` (`anime` stroke tables in `FaceTable`, `round` as the
+  earlier ball eyes), `SlimeTheme.material(tint:)` (shell, inner, window, ink line, rim light, glow
+  for any palette), sweat accessories, creases and a lagging core. `SlimeKitUI` renders a
+  `SlimeFrame` with CoreGraphics in layers (back traits, goo contour of ring + arms + stalks via
+  metaballs with a contour cache, two-layer cel body fill: shell, cloud-topped core with windows,
+  rim band, hard highlights, ink outline; brush-stroke face via `BrushStroke`, wrap, headwear on a
+  lagging spring, front traits, props, glyphs, accessories, particles), picks a detail level from
+  pixels per R (full ≥ 36, medium ≥ 24, tiny below), and hosts the Emote Lab, filmstrip and catalog
+  tools. `SlimeKitAudio` plays the
   generated WAVs of the chosen pack (user overrides first). Everything is seeded and
   time-injected so filmstrips and tests are reproducible.
 - **MochletCore** (`Packages/MochletCore`): two libraries. `MochletCore` is pure logic with no

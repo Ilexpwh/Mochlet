@@ -11,6 +11,12 @@ enum WhatsNew {
     }
 
     static let notes: [Note] = [
+        Note(version: "2.1.1", title: "Character 3: drawn like the anime", lines: [
+            "A wide, flat-based bun of translucent jelly: pale shell, a darker cloud-topped core with windows, one hard highlight, a thin ink line.",
+            "An anime face: stroke eyes with lash ticks, flat blush ovals, a mouth only when the mood calls for it. Round eyes stay in Settings → Character → Face.",
+            "Anime timing: a crouch before every hop, a stretch in the air, a squash on landing and two or three jelly wobbles after; pokes dent where you touch, three quick ones draw a sweat drop.",
+            "Creases when it strains, the face slides down when it melts, the core lags the body by a beat. All sizes, all looks and colours.",
+        ]),
         Note(version: "2.1.0", title: "Character 2: looks, outfits, hands and puni", lines: [
             "Fifteen looks (cat, fox, dragon, ghost, flame, crystal…) and twelve colours or your own hue, in Settings → Character.",
             "Dress it up: king, scholar, wizard, Santa, summer, onsen, night, idol; glasses, a phone or a mug appear for the occasion.",

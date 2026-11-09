@@ -42,7 +42,12 @@ digests) and filed with a gulp; it waves hello, gives a thumbs up to an approval
 signal, facepalms an error, holds a mic while you talk and sips a mug when left alone. Speech
 marks (`?`, `!`, `♪`) grow out of the body as slime, and twelve extra moods (melt, puff, shock,
 cry, hum, cheer, hug, nod, shake, thumbs up, stretch, poked) answer what happens around it: a
-click pokes it, a denied approval puffs it, a rate limit or a hot Mac melts it. Sounds come in two
+click pokes it, a denied approval puffs it, a rate limit or a hot Mac melts it. Since 2.1.1 it is
+drawn to the standard of the anime it is modelled on: a wide flat-based bun of translucent jelly
+(pale shell, darker cloud-topped core, one hard highlight, a thin ink line), stroke eyes with lash
+ticks and flat blush, and anime timing (a crouch before a hop, a stretch in the air, a squash and
+two or three wobbles on landing; a poke dents where you touch). Settings → Character → Face keeps
+the round-eyed face as an option; `docs/CHARACTER.md` is the style guide. Sounds come in two
 packs, the squishy "puni" foley with tiny voice squeaks (kyu, pyu, mu) and the classic 2.0
 chimes; the voice can be switched off on its own.
 

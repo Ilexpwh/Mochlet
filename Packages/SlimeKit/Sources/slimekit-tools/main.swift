@@ -270,8 +270,9 @@ func renderIcon(_ args: Args) throws {
     for (pt, scale) in sizes {
         let px = pt * scale
         let size = CGSize(width: px, height: px)
-        let R = CGFloat(px) * 0.30
-        let origin = CGPoint(x: size.width * 0.5, y: size.height * 0.80)
+        // The bun is 1.72 R tall and 2.34 R wide: this centres it in the tile.
+        let R = CGFloat(px) * 0.31
+        let origin = CGPoint(x: size.width * 0.5, y: size.height * 0.78)
         let view = ZStack {
             RoundedRectangle(cornerRadius: CGFloat(px) * 0.22, style: .continuous)
                 .fill(LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.20), Color(red: 0.03, green: 0.04, blue: 0.08)], startPoint: .top, endPoint: .bottom))

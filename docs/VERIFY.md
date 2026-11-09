@@ -373,3 +373,60 @@ Idle on this Mac (release build, flame look, island collapsed, Settings closed):
 averaged 4.97 % of a core with a live coding-agent session attached (the main slime and its mini stay in the
 working animation at 30 redraws/s; `ps` showed 0.2 % between bursts). The no-session idle figure from M11
 (≈ 0.25 % compact) could not be re-measured in that session; re-run with no agent running before a release.
+
+## Character 3 (A0–A7): drawn like the anime
+
+Style guide and measured numbers: `docs/CHARACTER.md`.
+
+1. Shape: at rest (compact strip, expanded island, desktop) the body is a wide bun with a flat base
+   and a soft skirt, ≈ 1.37 : 1 wide to tall, not a ball. Every look (cat loaf, ghost drop, puddle,
+   spiky, tall) is still distinct.
+2. Material: pale shell, a darker cloud-topped core in the lower ~70 % with two or three lighter
+   windows, one hard pill highlight upper-left with trailing dots, a thin light rim band at the base,
+   one thin dark ink outline (light on obsidian and other dark palettes), a soft floor ellipse. No
+   horizontal "water level" band. Lemon, mint and honey still read as two tones.
+3. Face: stroke eyes (a bold dash with lash ticks) 0.94 R apart, flat blush ovals, no mouth at rest.
+   Emotes keep their language: ᵔ ᵔ + ω happy, > < squeeze, double rings for shock, spirals for dizzy,
+   tear ribbons for cry, flat line + ∧ for annoyed and puff, ✦ for excited. Settings → Character →
+   Face: "Round eyes" restores the earlier ball eyes everywhere (thumbnails, preview, minis).
+4. Motion: `greet` drops in, squashes on landing and wobbles two or three times (≈ 0.45 s period);
+   `happy` and `cheer` crouch for ≈ 0.12 s before the hop, stretch thin in the air, squash wide on
+   landing; `shock` jumps at once; `melt` spreads in 0.35 s with the face sliding down and comes
+   back with one small boing; `puff` inflates both cheeks with creases and lets go with a wobble.
+   A press dents the body where the finger is and squints the eyes; the third quick press draws a
+   sweat drop. Left alone it breathes, shifts its weight, glances and jiggles every 8–15 s.
+5. Sizes: the compact strip (R ≈ 15) shows two tones, the pill highlight, a 1 px ink line and
+   legible eye strokes; compact minis (R ≈ 7) read as a two-tone blob with a face hint; the
+   expanded island (R 56) shows every detail; the app icon is the new character.
+6. Performance: `swift run -c release slimekit-tools bench` stays within idle ≤ 0.25 ms, grown `?`
+   ≤ 0.55, cheer with arms ≤ 0.9, chewing with arms ≤ 1.3 per frame at R 56; `idleRedrawsRarely`
+   (SlimeKit tests) holds; `scripts/measure-idle.sh 120` with the island collapsed and no agent
+   session stays under 1 % of a core.
+
+Scripted version:
+
+```sh
+cd Packages/SlimeKit && swift build -c release --product slimekit-tools && T=.build/release/slimekit-tools
+$T render-catalog --out ../../out/catalog-56.png --radius 56 --palettes rimuru,ruby,obsidian,lemon,mint,honey
+$T render-catalog --out ../../out/catalog-15.png --radius 15 --palettes rimuru,ruby,obsidian,lemon,mint,honey
+$T render-catalog --out ../../out/catalog-round.png --face round
+$T render-filmstrip --script "0.05:greet" --fps 60 --frames 72 --radius 56 --out ../../out/greet
+$T render-filmstrip --script "0.1:emote:happy" --fps 60 --frames 60 --radius 56 --out ../../out/happy
+$T render-filmstrip --script "0.1:press,0.4:release,0.7:press,0.95:release,1.2:press,1.45:release" --fps 30 --frames 72 --out ../../out/poke
+$T render-filmstrip --script "0.1:emote:melt" --fps 30 --frames 72 --out ../../out/melt
+$T bench
+cd ../.. && T="token=$(cat ~/Library/Logs/Mochlet/debug/token)"
+open "mochlet://debug/shot?name=a-compact&$T"; open "mochlet://debug/view?name=home&$T"; open "mochlet://debug/shot?name=a-home&$T"
+for e in puff melt shock cry cheer; do open "mochlet://debug/emote?name=$e&$T"; sleep 0.5; open "mochlet://debug/shot?name=a-$e&$T"; sleep 1.5; done
+open "mochlet://debug/press?x=60&y=30&$T"; sleep 0.1; open "mochlet://debug/shot?name=a-press&$T"; open "mochlet://debug/release?$T"
+open "mochlet://debug/look?face=round&$T"; open "mochlet://debug/shot?name=a-round&$T"; open "mochlet://debug/look?face=anime&$T"
+for p in obsidian lemon rimuru; do open "mochlet://debug/look?palette=$p&$T"; open "mochlet://debug/shot?name=a-$p&$T"; done
+open "mochlet://debug/agent?state=error&$T"; sleep 2.6; open "mochlet://debug/shot?name=a-error&$T"
+```
+
+Seen on this Mac (2026-11-09, release tools, R 56, 60 Hz): idle 0.16 ms per frame (was 0.23), hover
+0.19, grown `?` 0.28 (0.36), melt 0.34, cheer with arms 0.72 (0.82), chewing with arms 1.03 (1.19),
+tempest idle 0.55, cat 0.43, king outfit 0.37; the engine costs 0.19 ms per simulated second of an
+idle stage. Greeting trace: airborne 0.05–0.42 s, landing 0.80 tall / 1.09 wide, rebound 1.17,
+crossings every 0.47 s; happy hop: anticipation 0.94 / 1.07 for 0.12 s, stretch 1.25, landing
+0.76 / 1.18, rebound 1.21. SlimeKit 142 tests green.

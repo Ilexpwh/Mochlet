@@ -250,8 +250,10 @@ struct ApprovalView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Chip(text: r.isPlan ? "Plan" : r.tool).padding(.top, 4)
                     // The whole command or plan, scrollable: nothing is hidden behind an ellipsis.
-                    ScrollView([.vertical, .horizontal], showsIndicators: false) {
-                        Text(r.detail)
+                    // Indicators stay on and long blank runs are marked, so a command cannot park
+                    // its tail out of sight before Allow.
+                    ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                        Text(Self.displayDetail(r.detail))
                             .font(r.isPlan ? IslandStyle.body : IslandStyle.mono)
                             .foregroundStyle(IslandStyle.ink)
                             .lineSpacing(r.isPlan ? 2 : 1)
@@ -301,6 +303,23 @@ struct ApprovalView: View {
         if r.detailLineCount > 1 { parts.append("\(r.detailLineCount) lines") }
         if app.approvals.count > 1 { parts.append("1/\(app.approvals.count)") }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Runs of eight or more blanks inside a line are shown as a counted marker so padding
+    /// cannot push the rest of a command off the right edge of the box.
+    static func displayDetail(_ text: String) -> String {
+        guard text.contains("        ") || text.contains("\t\t") else { return text }
+        var out = ""
+        var run = 0
+        func flush() {
+            if run >= 8 { out += " ⟨\(run) blanks⟩ " } else { out += String(repeating: " ", count: run) }
+            run = 0
+        }
+        for ch in text {
+            if ch == " " || ch == "\t" { run += ch == "\t" ? 4 : 1 } else { flush(); out.append(ch) }
+        }
+        flush()
+        return out
     }
 
     /// One line stays one line; long commands and plans get a scroll box up to 150 pt.

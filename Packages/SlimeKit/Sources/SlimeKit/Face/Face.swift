@@ -64,35 +64,46 @@ public struct EyeRig: Sendable, Codable, Equatable {
 
     public init() {}
 
-    public static let main = EyeRig()
+    /// The round face: tall bead eyes 0.38 R wide and 0.85 R apart, so they read as one pair
+    /// rather than two dots in the middle of the face.
+    public static let main: EyeRig = {
+        var r = EyeRig()
+        r.separation = 0.50
+        r.basePitch = 0.16
+        r.eyeRadius = 0.19
+        r.eyeAspect = 1.35
+        r.blushYaw = 0.78
+        r.blushPitch = -0.10
+        return r
+    }()
 
     public static var mini: EyeRig {
-        var r = EyeRig()
-        r.eyeRadius = 0.19
+        var r = main
+        r.eyeRadius = 0.21
         r.eyeAspect = 1.25
-        r.separation = 0.40
         return r
     }
 
-    /// The stroke face, authored for the bun: eye strokes 0.42 R long and 0.93 R apart at
-    /// (±0.47, −1.04), the mouth 0.35 R under them, blush ovals at (±0.78, −0.97).
+    /// The stroke face, measured off the sticker sheets and the Bandai figures: two thin strokes
+    /// about 0.46 R long and 1.15 R apart, high on the dome at (±0.57, −1.07) (eyes at the upper
+    /// third of the body, half way out to the silhouette), the mouth 0.35 R under them and the
+    /// blush ovals outside and a little below the eyes at (±0.84, −0.91).
     public static var anime: EyeRig {
         var r = EyeRig()
-        r.separation = 0.57
-        r.basePitch = 0.14
-        r.eyeRadius = 0.21
-        r.eyeAspect = 0.6
-        r.mouthPitch = -0.32
-        r.blushYaw = 1.10
-        r.blushPitch = 0.06
+        r.separation = 0.71
+        r.basePitch = 0.17
+        r.eyeRadius = 0.30
+        r.eyeAspect = 0.5
+        r.mouthPitch = -0.30
+        r.blushYaw = 1.27
+        r.blushPitch = -0.01
         return r
     }
 
-    /// The stroke face on a mini: a little wider apart and longer so it reads at 7 px.
+    /// The stroke face on a mini: the same proportions, a little longer so it reads at 7 px.
     public static var animeMini: EyeRig {
         var r = anime
-        r.separation = 0.60
-        r.eyeRadius = 0.24
+        r.eyeRadius = 0.34
         return r
     }
 

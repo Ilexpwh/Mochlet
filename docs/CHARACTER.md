@@ -45,7 +45,7 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 
 | Feeling | Eyes | Mouth | Extras |
 | --- | --- | --- | --- |
-| content (idle, greeting, question, waiting) | bold dash 0.34 R long with a slight upward bow, two short lash ticks at the inner end (ー= =ー, from the Bandai figures); eyes 0.94 R apart | none | blush 0.70 |
+| content (idle, greeting, question, waiting) | one thin stroke per eye, 0.46 R long, a shallow arch whose outer end sits a touch lower (the resting face of the sticker sheets and the Bandai figures); eyes 1.15 R apart at the upper third, strokes inked like the outline (0.034 R, min 1.5 px) | none | blush ovals outside and below the eyes, 0.70 |
 | happy / finished / cheer | ᵔ ᵔ arcs | ω / open wide | sparkles |
 | thinking / working | relaxed line with a tick | none | |
 | sleeping | — — | none | zzz |

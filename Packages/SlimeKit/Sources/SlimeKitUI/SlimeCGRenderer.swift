@@ -392,7 +392,8 @@ public struct SlimeCGRenderer {
 
     /// Half the brush width of an anime eye stroke at its middle, in pixels: 0.09 R wide, and
     /// never under 2 px so the face still reads on a compact mini.
-    var strokeHalfWidth: CGFloat { max(0.95, 0.045 * R) }
+    /// Face strokes are inked about as heavy as the outline (0.035 R), never finer than 1.5 px.
+    var strokeHalfWidth: CGFloat { max(0.75, 0.017 * R) }
 
     /// The face is inked darker than the outline, as on the figures: the outline is a soft
     /// edge, the strokes carry the expression.
@@ -475,10 +476,11 @@ public struct SlimeCGRenderer {
             cg.translateBy(x: shift, y: 0)
             fill(Self.ellipse(.zero, ww, hh), theme.ink, in: cg)
             if open > 0.45 {
-                let cr = ww * (shape == .wide ? 0.36 : 0.3)
-                fill(Self.ellipse(CGPoint(x: -ww * 0.32, y: -hh * 0.36), cr, cr), .white, 0.95, in: cg)
-                let sr = ww * 0.13
-                fill(Self.ellipse(CGPoint(x: ww * 0.3, y: hh * 0.32), sr, sr), .white, 0.75, in: cg)
+                // One big soft-edged glint high on the bead and a small one low, the kawaii pair.
+                let cr = ww * (shape == .wide ? 0.42 : 0.38)
+                fill(Self.ellipse(CGPoint(x: -ww * 0.30, y: -hh * 0.38), cr, cr * 1.15), .white, 0.95, in: cg)
+                let sr = ww * 0.16
+                fill(Self.ellipse(CGPoint(x: ww * 0.34, y: hh * 0.38), sr, sr), .white, 0.8, in: cg)
             }
             cg.restoreGState()
             switch shape {
@@ -500,11 +502,9 @@ public struct SlimeCGRenderer {
             default: break
             }
         case .content:
-            // The content face from the figure sheets: a bold dash with a hint of an upward bow,
-            // tilted a little inward-down, and two short parallel lash ticks at its inner end.
-            line(quad(CGPoint(x: -inward * w, y: -h * 0.10), CGPoint(x: inward * w * 0.5, y: h * 0.12), control: CGPoint(x: -inward * w * 0.2, y: -h * 0.12)))
-            line([CGPoint(x: inward * w * 0.62, y: -h * 0.48), CGPoint(x: inward * w * 1.02, y: -h * 0.16)], widthScale: 0.6)
-            line([CGPoint(x: inward * w * 0.62, y: h * 0.26), CGPoint(x: inward * w * 1.02, y: h * 0.58)], widthScale: 0.6)
+            // The resting face of the sticker sheets: one thin stroke, a shallow arch whose outer
+            // end sits a touch lower than the inner one, the eye closed in calm.
+            line(quad(CGPoint(x: -inward * w, y: h * 0.40), CGPoint(x: inward * w, y: h * 0.18), control: CGPoint(x: 0, y: -h * 0.50)))
         case .sad:
             // Outward-down arcs with a slight bow.
             line(quad(CGPoint(x: inward * w, y: -h * 0.4), CGPoint(x: -inward * w, y: h * 0.4), control: CGPoint(x: 0, y: -h * 0.3)))

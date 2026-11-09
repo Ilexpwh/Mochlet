@@ -95,6 +95,10 @@ final class NotchStore {
 
     /// Bottom padding of expanded content: leaves the tray free when minis are around.
     var contentBottom: Double { 12 + (miniCount > 0 ? NotchLayout.trayHeight : 0) }
+    /// The tallest a card's content can be before the island hits the view's ceiling.
+    func contentMaxHeight(for view: NotchView) -> Double {
+        NotchLayout.heightRange(view).upperBound - (geometry.height + 4) - contentBottom
+    }
     /// Where the compact ticker starts: after the notch, the main slime's wing and the mini row.
     var tickerLeading: Double { layout.tickerLeading(miniCount: min(miniCount, 6), mainAway: slimeOnDesktop) }
 

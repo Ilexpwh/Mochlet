@@ -11,40 +11,38 @@ struct VoiceView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 MicBars(level: v.level, active: v.state == .listening)
-                Text(title(v))
-                    .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                Spacer(minLength: 0)
+                Text(title(v)).font(IslandStyle.title).foregroundStyle(IslandStyle.ink).lineLimit(1)
+                Spacer(minLength: 8)
                 if !v.localeID.isEmpty {
-                    Text(v.localeID).font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+                    Text(v.localeID).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint)
                 }
+                CardTools(app: app)
             }
+            .frame(minHeight: 26)
             if v.hasSpeech || v.state == .listening {
-                (Text(VoiceController.join(v.finals)) + Text(v.finals.isEmpty || v.caption.isEmpty ? "" : " ") + Text(v.caption).foregroundStyle(.white.opacity(0.5)))
+                (Text(VoiceController.join(v.finals)) + Text(v.finals.isEmpty || v.caption.isEmpty ? "" : " ") + Text(v.caption).foregroundStyle(IslandStyle.ink3))
                     .font(.system(size: 13.5, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(IslandStyle.ink)
+                    .lineSpacing(2)
                     .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let p = v.pending {
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6) {
                     ForEach(app.projects.projects.filter { !$0.archived }.prefix(4), id: \.slug) { pr in
-                        IslandButton(pr.name, symbol: "folder") { v.answerPending(project: pr) }
+                        ChipButton(text: pr.name, symbol: "folder") { v.answerPending(project: pr) }
                     }
-                    IslandButton("Cancel", symbol: "xmark") { v.answerPending(project: nil) }
+                    ChipButton(text: "Cancel", symbol: "xmark") { v.answerPending(project: nil) }
                 }
-                Text(expires(p))
-                    .font(.system(size: 9.5, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
+                Text(expires(p)).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).monospacedDigit()
             } else if let e = v.error, v.state == .failed {
-                Text(e).font(.system(size: 10.5, design: .rounded)).foregroundStyle(.orange.opacity(0.9)).lineLimit(2)
+                Text(e).font(IslandStyle.secondary).foregroundStyle(IslandStyle.error).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             } else {
-                Text(hint(v))
-                    .font(.system(size: 9, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
+                KeyHint(hints(v))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private func title(_ v: VoiceController) -> String {
@@ -58,11 +56,11 @@ struct VoiceView: View {
         }
     }
 
-    private func hint(_ v: VoiceController) -> String {
+    private func hints(_ v: VoiceController) -> [(String, String)] {
         switch v.state {
-        case .listening: return "release to send · esc cancels"
-        case .processing: return v.lastIntent.map { "\($0.intent.rawValue) · \($0.backend)" } ?? "deciding what you meant…"
-        default: return "hold the slime or ⌃⌥V to talk"
+        case .listening: return [("release", "send"), ("esc", "cancel")]
+        case .processing: return [("…", v.lastIntent.map { "\($0.intent.rawValue) · \($0.backend)" } ?? "deciding what you meant")]
+        default: return [("hold", "the slime to talk"), ("⌃⌥V", "push to talk")]
         }
     }
 
@@ -89,6 +87,7 @@ struct MicBars: View {
             }
             .frame(width: 24, height: 18)
         }
+        .accessibilityLabel(active ? "Listening" : "Microphone idle")
     }
 
     private func bar(_ i: Int, at date: Date) -> Double {

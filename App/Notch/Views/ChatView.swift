@@ -1,36 +1,33 @@
 import SwiftUI
 import MochletCore
 
-/// The chat card: provider/model, thread switcher, messages, attachments and the input.
+/// The chat card: provider/model, thread switcher, messages, attachments and the input. The card
+/// grows with the conversation up to the chat ceiling; the mini tray never covers the input.
 struct ChatView: View {
     let app: AppCoordinator
     @FocusState private var focused: Bool
 
     var body: some View {
         let chat = app.chat!
-        VStack(alignment: .leading, spacing: 6) {
+        let store = app.notch
+        let chrome: Double = 26 + 8 + 34 + 8 + (chat.pendingAttachments.isEmpty ? 0 : 30)
+        let transcriptMax = CGFloat(max(60, store.contentMaxHeight(for: .chat) - chrome))
+        VStack(alignment: .leading, spacing: 8) {
             ChatHeader(app: app)
-            ChatTranscript(app: app)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ChatTranscript(app: app, maxHeight: transcriptMax)
             if !chat.pendingAttachments.isEmpty {
                 AttachmentChips(app: app)
             }
             ChatInputBar(app: app, focused: $focused)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .reportsIslandHeight(for: .chat)
         .onAppear {
-            app.notch.measuredHeight = min(380, max(NotchLayout.viewHeight(.chat), chatHeight(chat)))
             focused = true
             app.window.focusInput()
         }
-        .onChange(of: chat.messages.count) { _, _ in app.notch.measuredHeight = min(380, max(NotchLayout.viewHeight(.chat), chatHeight(chat))) }
         .onChange(of: focused) { _, f in app.window.hold("chat-focus", f, scope: .view(.chat)) }
         .onDisappear { app.window.hold("chat-focus", false) }
-    }
-
-    private func chatHeight(_ chat: ChatController) -> Double {
-        let base = NotchLayout.viewHeight(.chat)
-        return chat.messages.isEmpty ? base : 340
     }
 }
 
@@ -59,23 +56,26 @@ private struct ChatHeader: View {
                     Button("Refresh models") { chat.refreshModels(for: chat.providerKind) }
                 }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 5) {
                     Text(chat.providerKind.glyph).font(.system(size: 11, weight: .bold))
                     Text(chat.providerKind.displayName + (chat.model.isEmpty ? "" : " · \(chat.model)"))
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded)).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+                        .font(IslandStyle.secondaryStrong).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold)).opacity(0.7)
                 }
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.1)))
-                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 9)
+                .frame(height: 26)
+                .background(Capsule().fill(IslandStyle.fill))
+                .foregroundStyle(IslandStyle.ink)
+                .contentShape(Capsule())
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            Text(chat.current?.title ?? "New chat")
-                .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-            Spacer(minLength: 0)
+            .help("Provider and model")
+            if let t = chat.current?.title, chat.messages.count > 2 {
+                Text(t).font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3).lineLimit(1)
+            }
+            Spacer(minLength: 8)
             if chat.isStreaming {
-                Button { chat.cancel() } label: { Image(systemName: "stop.fill").font(.system(size: 9)) }
-                    .buttonStyle(.plain).foregroundStyle(.white.opacity(0.7)).help("Stop")
+                IconButton("stop.fill", help: "Stop", size: 24) { chat.cancel() }
             }
             Menu {
                 if chat.threads.isEmpty { Text("No earlier chats") }
@@ -87,28 +87,28 @@ private struct ChatHeader: View {
                     Button("Delete this chat", role: .destructive) { chat.delete(t) }
                 }
             } label: {
-                Image(systemName: "clock.arrow.circlepath").font(.system(size: 10))
+                MenuIconLabel(symbol: "clock.arrow.circlepath")
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(.white.opacity(0.6))
-            Button { chat.newThread() } label: { Image(systemName: "plus").font(.system(size: 10, weight: .semibold)) }
-                .buttonStyle(.plain).foregroundStyle(.white.opacity(0.7)).help("New chat (⌘K)")
-                .keyboardShortcut("k", modifiers: .command)
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Earlier chats")
+            IconButton("plus", help: "New chat (⌘K)", size: 24, shortcut: KeyboardShortcut("k", modifiers: .command)) { chat.newThread() }
+            CardTools(app: app)
         }
     }
 }
 
 private struct ChatTranscript: View {
     let app: AppCoordinator
+    let maxHeight: CGFloat
 
     var body: some View {
         let chat = app.chat!
         ScrollViewReader { proxy in
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 8) {
+            FadeScroll(maxHeight: maxHeight) {
+                LazyVStack(alignment: .leading, spacing: 10) {
                     if chat.messages.isEmpty, !chat.isStreaming {
-                        Text(emptyHint(chat))
-                            .font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.45))
-                            .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+                        EmptyState(symbol: "bubble.left.and.text.bubble.right", line: "Ask anything.", hint: emptyHint(chat))
+                            .padding(.top, 2)
                     }
                     ForEach(chat.messages) { m in
                         MessageRow(message: m, app: app)
@@ -130,49 +130,65 @@ private struct ChatTranscript: View {
         if chat.providerKind.needsKey, !KeychainStore.has(chat.providerKind.keychainAccount) {
             return "\(chat.providerKind.displayName) needs an API key: Settings → Chat."
         }
-        var s = "Ask anything. Drop a file, ⌥-drag me onto a window, or say “work on <project>: …”."
+        var s = "Drop a file, ⌥-drag me onto a window, or say “work on <project>: …”."
         if let p = app.projects.projects.first { s += " Try “work on \(p.name): …”." }
         return s
     }
 }
 
+/// A user message is a bubble on the right; a reply is plain text on the left with a sky rule.
 private struct MessageRow: View {
     let message: ChatMessage
     let app: AppCoordinator
 
     var body: some View {
-        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 3) {
-            if !message.attachments.isEmpty {
-                HStack(spacing: 4) {
-                    ForEach(message.attachments) { a in
-                        Label(a.title, systemImage: symbol(a.kind)).font(.system(size: 9, design: .rounded)).lineLimit(1)
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Color.white.opacity(0.08))).foregroundStyle(.white.opacity(0.6))
+        let isUser = message.role == .user
+        HStack(alignment: .top, spacing: 0) {
+            if isUser { Spacer(minLength: 48) }
+            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
+                if !message.attachments.isEmpty {
+                    HStack(spacing: 4) {
+                        ForEach(message.attachments) { a in
+                            Chip(text: a.title, symbol: symbol(a.kind))
+                        }
+                    }
+                }
+                if !message.activity.isEmpty {
+                    Text(message.activity.suffix(4).joined(separator: "  ·  "))
+                        .font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).lineLimit(2)
+                }
+                if !message.text.isEmpty {
+                    if isUser {
+                        MarkdownText(message.text)
+                            .font(IslandStyle.body)
+                            .foregroundStyle(IslandStyle.ink)
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.12)))
+                    } else {
+                        MarkdownText(message.text)
+                            .font(IslandStyle.body)
+                            .foregroundStyle(IslandStyle.ink)
+                            .lineSpacing(2)
+                            .textSelection(.enabled)
+                            .padding(.leading, 10)
+                            .overlay(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 1).fill(IslandStyle.working.opacity(0.7)).frame(width: 2)
+                            }
+                    }
+                }
+                if let e = message.error {
+                    HStack(spacing: 6) {
+                        Text(e).font(IslandStyle.secondary).foregroundStyle(IslandStyle.error).lineLimit(3).textSelection(.enabled)
+                        if message.id == app.chat.messages.last?.id, e != "Stopped." {
+                            IslandButton("Retry", symbol: "arrow.clockwise", role: .quiet) { app.chat.retryLast() }
+                        }
                     }
                 }
             }
-            if !message.activity.isEmpty {
-                Text(message.activity.suffix(4).joined(separator: "  ·  "))
-                    .font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(2)
-            }
-            if !message.text.isEmpty {
-                MarkdownText(message.text)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(.white.opacity(message.role == .user ? 0.95 : 0.9))
-                    .textSelection(.enabled)
-                    .padding(.horizontal, message.role == .user ? 9 : 0)
-                    .padding(.vertical, message.role == .user ? 5 : 0)
-                    .background(message.role == .user ? RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white.opacity(0.12)) : nil)
-            }
-            if let e = message.error {
-                HStack(spacing: 6) {
-                    Text(e).font(.system(size: 10.5, design: .rounded)).foregroundStyle(Color(red: 1, green: 0.55, blue: 0.6)).lineLimit(3).textSelection(.enabled)
-                    if message.id == app.chat.messages.last?.id, e != "Stopped." {
-                        Button("Retry") { app.chat.retryLast() }.buttonStyle(.plain).font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.8))
-                    }
-                }
-            }
+            if !isUser { Spacer(minLength: 0) }
         }
-        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 
     private func symbol(_ k: ChatAttachment.Kind) -> String {
@@ -192,16 +208,20 @@ private struct StreamingRow: View {
     @State private var blink = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             if !activity.isEmpty {
-                Text(activity.suffix(3).joined(separator: "  ·  ")).font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(2)
+                Text(activity.suffix(3).joined(separator: "  ·  ")).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).lineLimit(2)
             }
-            HStack(alignment: .bottom, spacing: 4) {
+            HStack(alignment: .bottom, spacing: 5) {
                 if !text.isEmpty {
-                    MarkdownText(text).font(.system(size: 12, design: .rounded)).foregroundStyle(.white.opacity(0.9)).textSelection(.enabled)
+                    MarkdownText(text).font(IslandStyle.body).foregroundStyle(IslandStyle.ink).lineSpacing(2).textSelection(.enabled)
                 }
-                Circle().fill(Color.white.opacity(blink ? 0.9 : 0.3)).frame(width: 6, height: 6).padding(.bottom, 4)
+                Circle().fill(IslandStyle.working.opacity(blink ? 0.95 : 0.35)).frame(width: 6, height: 6).padding(.bottom, 4)
                     .onAppear { withAnimation(.easeInOut(duration: 0.6).repeatForever()) { blink.toggle() } }
+            }
+            .padding(.leading, 10)
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 1).fill(IslandStyle.working.opacity(0.7)).frame(width: 2)
             }
         }
     }
@@ -228,20 +248,24 @@ private struct AttachmentChips: View {
     var body: some View {
         let chat = app.chat!
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 ForEach(chat.pendingAttachments) { a in
-                    HStack(spacing: 3) {
-                        Image(systemName: a.kind == .window ? "macwindow" : a.kind == .image ? "photo" : "doc").font(.system(size: 8))
-                        Text(a.title).font(.system(size: 9.5, design: .rounded)).lineLimit(1)
-                        Button { chat.removeAttachment(a.id) } label: { Image(systemName: "xmark").font(.system(size: 7, weight: .bold)) }.buttonStyle(.plain)
+                    HStack(spacing: 4) {
+                        Image(systemName: a.kind == .window ? "macwindow" : a.kind == .image ? "photo" : "doc").font(.system(size: 9, weight: .semibold))
+                        Text(a.title).font(IslandStyle.caption).lineLimit(1)
+                        Button { chat.removeAttachment(a.id) } label: {
+                            Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).frame(width: 14, height: 14).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove \(a.title)")
                     }
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(Color(red: 0.5, green: 0.83, blue: 1.0).opacity(0.18)))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.leading, 8).padding(.trailing, 4).padding(.vertical, 3)
+                    .background(Capsule().fill(IslandStyle.working.opacity(0.18)))
+                    .foregroundStyle(IslandStyle.ink)
                 }
             }
         }
-        .frame(height: 20)
+        .frame(height: 22)
     }
 }
 
@@ -251,25 +275,16 @@ private struct ChatInputBar: View {
 
     var body: some View {
         @Bindable var chat = app.chat!
+        let canSend = !(chat.input.isEmpty && chat.pendingAttachments.isEmpty) && !chat.isStreaming
         HStack(alignment: .bottom, spacing: 6) {
-            TextField(chat.isStreaming ? "Thinking…" : "Message Mochlet…", text: $chat.input, axis: .vertical)
-                .textFieldStyle(.plain)
+            TextField("", text: $chat.input, prompt: fieldPrompt(chat.isStreaming ? "Thinking…" : "Message Mochlet…"), axis: .vertical)
                 .lineLimit(1...4)
-                .font(.system(size: 12.5, design: .rounded))
-                .foregroundStyle(.white)
                 .focused(focused)
                 .onSubmit { chat.send() }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white.opacity(0.08)))
-            Button { chat.send() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold))
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(Color.white.opacity(chat.input.isEmpty && chat.pendingAttachments.isEmpty ? 0.1 : 0.9)))
-                    .foregroundStyle(chat.input.isEmpty && chat.pendingAttachments.isEmpty ? Color.white.opacity(0.5) : .black)
-            }
-            .buttonStyle(.plain)
-            .disabled(chat.isStreaming)
-            .keyboardShortcut(.return, modifiers: .command)
+                .islandField(focused: focused.wrappedValue)
+            IconButton("arrow.up", help: "Send (⏎)", size: 28, filled: canSend, shortcut: KeyboardShortcut(.return, modifiers: .command)) { chat.send() }
+                .disabled(chat.isStreaming)
+                .padding(.bottom, 1)
         }
     }
 }

@@ -9,35 +9,37 @@ struct KnowledgeView: View {
 
     var body: some View {
         let kb = app.knowledge!
-        VStack(alignment: .leading, spacing: 6) {
+        let store = app.notch
+        let chrome: Double = 26 + 8 + 31 + 8 + (kb.answerText.isEmpty || kb.isAnswering ? 0 : 35)
+        let answerMax = CGFloat(max(60, store.contentMaxHeight(for: .knowledge) - chrome))
+        VStack(alignment: .leading, spacing: 8) {
             KnowledgeHeader(app: app)
             HStack(spacing: 6) {
-                TextField("Ask the knowledge base…", text: Binding(get: { kb.query }, set: { kb.query = $0 }))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12.5, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 9).padding(.vertical, 6)
-                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.08)))
+                TextField("", text: Binding(get: { kb.query }, set: { kb.query = $0 }), prompt: fieldPrompt("Ask the knowledge base…"))
                     .focused($focused)
                     .onSubmit { kb.ask(kb.query) }
+                    .islandField(focused: focused)
                 if kb.isAnswering {
-                    IslandButton("Stop", symbol: "stop.fill") { kb.cancelAnswer() }
+                    IslandButton("Stop", symbol: "stop.fill", role: .destructive) { kb.cancelAnswer() }
                 } else {
-                    IslandButton("Ask", symbol: "sparkles") { kb.ask(kb.query) }
+                    IslandButton("Ask", symbol: "sparkles", role: .primary, keycap: "⏎") { kb.ask(kb.query) }
                 }
             }
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 6) {
+            FadeScroll(maxHeight: answerMax) {
+                VStack(alignment: .leading, spacing: 8) {
                     if !kb.answerText.isEmpty {
                         MarkdownText(kb.answerText)
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.92))
+                            .font(IslandStyle.body)
+                            .foregroundStyle(IslandStyle.ink)
+                            .lineSpacing(2)
                             .textSelection(.enabled)
                     } else if kb.isAnswering {
-                        Text("Looking through \(kb.counts.pages) pages…")
-                            .font(.system(size: 11.5, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(.white)
+                            Text("Looking through \(kb.counts.pages) pages…").font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink2)
+                        }
                     } else if let e = kb.lastError {
-                        Text(e).font(.system(size: 11, design: .rounded)).foregroundStyle(.orange.opacity(0.9))
+                        Text(e).font(IslandStyle.secondary).foregroundStyle(IslandStyle.error).fixedSize(horizontal: false, vertical: true)
                     } else {
                         KnowledgeIdleView(app: app)
                     }
@@ -47,37 +49,26 @@ struct KnowledgeView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !kb.answerText.isEmpty, !kb.isAnswering {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     if let f = kb.answerFiled {
-                        Button { kb.openPath(f) } label: {
-                            Label("Filed to \(f)", systemImage: "checkmark.circle").font(.system(size: 10.5, design: .rounded)).lineLimit(1)
-                        }
-                        .buttonStyle(.plain).foregroundStyle(.white.opacity(0.65))
+                        IslandButton("Filed to \(f)", symbol: "checkmark.circle", role: .quiet) { kb.openPath(f) }
                     } else {
-                        IslandButton("File this answer", symbol: "tray.and.arrow.down") { kb.fileAnswer() }
-                        Text("saves a synthesis page with its sources").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45))
+                        IslandButton("File this answer", symbol: "tray.and.arrow.down", role: .primary) { kb.fileAnswer() }
+                        Text("saves a synthesis page with its sources").font(IslandStyle.caption).foregroundStyle(IslandStyle.hint)
                     }
                     Spacer(minLength: 0)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .reportsIslandHeight(for: .knowledge)
         .onAppear {
-            app.notch.measuredHeight = height(kb)
             focused = true
             app.window.focusInput()
         }
-        .onChange(of: kb.answerText.isEmpty) { _, _ in app.notch.measuredHeight = height(kb) }
-        .onChange(of: kb.citations.count) { _, _ in app.notch.measuredHeight = height(kb) }
         .onChange(of: focused) { _, f in app.window.hold("knowledge-focus", f, scope: .view(.knowledge)) }
         .onDisappear { app.window.hold("knowledge-focus", false) }
-    }
-
-    private func height(_ kb: KnowledgeController) -> Double {
-        let base = NotchLayout.viewHeight(.knowledge)
-        return kb.answerText.isEmpty ? base : 360
     }
 }
 
@@ -86,18 +77,12 @@ private struct KnowledgeHeader: View {
 
     var body: some View {
         let kb = app.knowledge!
-        HStack(spacing: 6) {
-            Image(systemName: "books.vertical").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
-            Text(kb.ready ? "\(kb.counts.pages) page\(kb.counts.pages == 1 ? "" : "s") · \(kb.counts.references) source\(kb.counts.references == 1 ? "" : "s")" : "Indexing…")
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-            if let s = kb.status {
-                Text(s).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
-            }
-            Spacer(minLength: 0)
+        let title = kb.ready ? "\(kb.counts.pages) page\(kb.counts.pages == 1 ? "" : "s") · \(kb.counts.references) source\(kb.counts.references == 1 ? "" : "s")" : "Indexing…"
+        CardHeader(symbol: "books.vertical", tint: IslandStyle.ink2, title: title, subtitle: kb.status, app: app) {
             if kb.chewing > 0 {
                 ProgressView().controlSize(.mini).tint(.white)
             }
-            IslandButton(kb.isLinting ? "Linting…" : "Lint", symbol: "stethoscope") { kb.lint() }
+            IslandButton(kb.isLinting ? "Linting…" : "Lint", symbol: "stethoscope", role: .quiet) { kb.lint() }
             Menu {
                 Button("Reindex") { kb.reindex() }
                 Button("Rebuild index") { kb.reindex(force: true) }
@@ -109,9 +94,9 @@ private struct KnowledgeHeader: View {
                 Divider()
                 Button("Knowledge settings…") { app.openSettings(tab: "knowledge") }
             } label: {
-                Image(systemName: "ellipsis.circle").font(.system(size: 13, weight: .semibold)).frame(width: 22, height: 22).contentShape(Rectangle())
+                MenuIconLabel(symbol: "ellipsis")
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 22, height: 22).foregroundStyle(.white.opacity(0.75))
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help("Reindex, open the folder, settings")
         }
     }
@@ -122,34 +107,36 @@ private struct KnowledgeIdleView: View {
 
     var body: some View {
         let kb = app.knowledge!
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             if let f = kb.lastFiled {
-                Button { kb.openPath(f.path) } label: {
-                    Label((f.existing ? "Already chewed: " : "Filed: ") + f.title, systemImage: f.existing ? "checkmark.circle" : "tray.and.arrow.down")
-                        .font(.system(size: 11.5, design: .rounded)).lineLimit(1)
+                IslandButton((f.existing ? "Already chewed: " : "Filed: ") + f.title, symbol: f.existing ? "checkmark.circle" : "tray.and.arrow.down", role: .quiet) {
+                    kb.openPath(f.path)
                 }
-                .buttonStyle(.plain).foregroundStyle(.white.opacity(0.85))
-                if let n = f.note { Text(n).font(.system(size: 10.5, design: .rounded)).foregroundStyle(.white.opacity(0.5)) }
+                if let n = f.note { Text(n).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).fixedSize(horizontal: false, vertical: true) }
             }
             if !kb.lastFindings.isEmpty {
                 Text("Last lint: \(kb.lastFindings.count) finding\(kb.lastFindings.count == 1 ? "" : "s")")
-                    .font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.75))
+                    .font(IslandStyle.secondaryStrong).foregroundStyle(IslandStyle.ink2)
                 ForEach(kb.lastFindings.prefix(4)) { f in
-                    Text("• \(f.kind.rawValue): \(f.detail)").font(.system(size: 10.5, design: .rounded)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                    Text("• \(f.kind.rawValue): \(f.detail)").font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3).lineLimit(1)
                 }
             } else if kb.lastFiled == nil {
-                Text(kb.counts.pages == 0
-                     ? "Nothing filed yet. Drop a file, a link or some text on me and I'll chew it into \(kb.root.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))."
-                     : "Ask in Chinese or English; answers cite the pages they come from. Coding agents reach the same pages through MCP (Settings → Knowledge).")
-                    .font(.system(size: 11.5, design: .rounded)).foregroundStyle(.white.opacity(0.55))
+                if kb.counts.pages == 0 {
+                    EmptyState(symbol: "books.vertical", line: "Nothing filed yet.",
+                               hint: "Drop a file, a link or some text on me and I chew it into \(IslandStyle.tilde(kb.root.path)).")
+                } else {
+                    Text("Ask in Chinese or English; answers cite the pages they come from. Coding agents reach the same pages through MCP (Settings → Knowledge).")
+                        .font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let n = kb.embeddingNote {
-                Text(n).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+                Text(n).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 }
 
+/// Citation chips that wrap onto a second row instead of scrolling sideways.
 private struct CitationRow: View {
     let app: AppCoordinator
     let citations: [Citation]
@@ -158,29 +145,18 @@ private struct CitationRow: View {
     private func chipTitle(_ c: Citation) -> String {
         var h = c.heading
         if h == c.title { h = "" } else if h.hasPrefix(c.title + " > ") { h = String(h.dropFirst(c.title.count + 3)) }
-        return c.title + (h.isEmpty ? "" : " › \(h)")
+        var s = c.title + (h.isEmpty ? "" : " › \(h)")
+        if let p = c.page { s += " · p.\(p)" }
+        if let t = c.timestamp { s += " · \(AnswerComposer.timestampText(t))" }
+        return s
     }
 
     var body: some View {
         let kb = app.knowledge!
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 5) {
-                ForEach(citations) { c in
-                    Button { kb.open(c) } label: {
-                        HStack(spacing: 4) {
-                            Text("\(c.n)").font(.system(size: 9.5, weight: .bold, design: .rounded))
-                                .padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(Color.white.opacity(0.18)))
-                            Text(chipTitle(c)).font(.system(size: 10.5, design: .rounded)).lineLimit(1)
-                            if let p = c.page { Text("p.\(p)").font(.system(size: 9.5, design: .rounded)).opacity(0.7) }
-                            if let t = c.timestamp { Text(AnswerComposer.timestampText(t)).font(.system(size: 9.5, design: .monospaced)).opacity(0.7) }
-                        }
-                        .padding(.horizontal, 7).padding(.vertical, 4)
-                        .background(Capsule().fill(Color.white.opacity(0.09)))
-                        .foregroundStyle(.white.opacity(0.85))
-                    }
-                    .buttonStyle(.plain)
+        FlowLayout(spacing: 5, maxItemWidth: 260) {
+            ForEach(citations) { c in
+                ChipButton(text: "\(c.n)  \(chipTitle(c))", symbol: "doc.text") { kb.open(c) }
                     .help("\(c.path):\(c.lineStart)")
-                }
             }
         }
     }

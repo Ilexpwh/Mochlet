@@ -13,48 +13,48 @@ struct ProjectsView: View {
 
     var body: some View {
         let projects = app.projects!
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Text(projects.projects.isEmpty ? "No projects yet" : "\(projects.projects.count) project\(projects.projects.count == 1 ? "" : "s")")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-                Spacer(minLength: 0)
-                IslandButton("Add folder…", symbol: "folder.badge.plus") { addFolder() }
-                IslandButton("Clone…", symbol: "arrow.down.circle") { showClone.toggle() }
+        let store = app.notch
+        let listMax = CGFloat(max(80, store.contentMaxHeight(for: .projects) - 26 - 8 - (showClone ? 39 : 0) - (projects.pendingOffer == nil ? 0 : 48)))
+        VStack(alignment: .leading, spacing: 8) {
+            CardHeader(symbol: "folder", title: projects.projects.isEmpty ? "No projects yet" : "\(projects.projects.count) project\(projects.projects.count == 1 ? "" : "s")", app: app) {
+                IconButton("folder.badge.plus", help: "Add a folder…", size: 24) { addFolder() }
+                IconButton("arrow.down.circle", help: "Clone a repository…", size: 24, tint: showClone ? IslandStyle.ink : nil) { showClone.toggle() }
             }
             if let url = projects.pendingOffer {
                 OfferRow(name: url.lastPathComponent, path: url.path, app: app)
             }
             if showClone {
                 HStack(spacing: 6) {
-                    TextField("git@github.com:you/repo.git", text: $cloneURL)
-                        .textFieldStyle(.plain).font(.system(size: 11.5, design: .monospaced)).foregroundStyle(.white)
-                        .padding(.horizontal, 8).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.08)))
+                    TextField("", text: $cloneURL, prompt: fieldPrompt("git@github.com:you/repo.git"))
                         .onSubmit { startClone() }
-                    IslandButton("Clone", symbol: "arrow.down") { startClone() }
+                        .islandField(size: 12, mono: true)
+                    IslandButton("Clone", symbol: "arrow.down", role: .primary, keycap: "⏎") { startClone() }
                 }
             }
             if let status = projects.cloneStatus {
-                HStack(spacing: 6) {
-                    ProgressView(value: projects.cloneProgress ?? 0).tint(Color(red: 0.5, green: 0.83, blue: 1.0)).frame(width: 120)
-                    Text(status).font(.system(size: 10.5, design: .rounded)).foregroundStyle(.white.opacity(0.7))
+                HStack(spacing: 8) {
+                    ProgressBar(value: projects.cloneProgress ?? 0, tint: IslandStyle.working).frame(width: 120)
+                    Text(status).font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink2).lineLimit(1)
                 }
             }
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(projects.projects) { p in
-                        ProjectRow(project: p, app: app, taskFor: $taskFor, task: $task, agent: $agent)
+            if projects.projects.isEmpty, projects.pendingOffer == nil {
+                EmptyState(symbol: "folder.badge.plus", line: "No projects yet.", hint: "Drop a folder on me, say “make ~/path a project”, or clone a repo.")
+            } else {
+                FadeScroll(maxHeight: listMax) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(projects.projects) { p in
+                            ProjectRow(project: p, app: app, taskFor: $taskFor, task: $task, agent: $agent)
+                        }
                     }
-                    if projects.projects.isEmpty, projects.pendingOffer == nil {
-                        Text("Drop a folder on me, say “make ~/path a project”, or clone a repo.")
-                            .font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             if let n = projects.note ?? projects.loadError {
-                Text(n).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                Text(n).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).lineLimit(1)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .reportsIslandHeight(for: .projects)
         .onAppear {
             agent = app.settings.defaultAgent
             if app.notch.projectsFocus == "new", let p = projects.projects.first { taskFor = p.slug }
@@ -93,18 +93,18 @@ private struct OfferRow: View {
     let app: AppCoordinator
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "folder.fill").foregroundStyle(Color(red: 0.5, green: 0.83, blue: 1.0))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Make “\(name)” a project?").font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-                Text(path.replacingOccurrences(of: NSHomeDirectory(), with: "~")).font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+        RowBox {
+            HStack(spacing: 8) {
+                Image(systemName: "folder.fill").foregroundStyle(IslandStyle.working)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Make “\(name)” a project?").font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink)
+                    PathText(path: path)
+                }
+                Spacer(minLength: 8)
+                IslandButton("Yes", symbol: "checkmark", role: .primary, keycap: "⏎") { app.projects.acceptOffer() }
+                IslandButton("No", symbol: "xmark", role: .quiet) { app.projects.declineOffer() }
             }
-            Spacer(minLength: 0)
-            IslandButton("Yes", symbol: "checkmark") { app.projects.acceptOffer() }
-            IslandButton("No", symbol: "xmark") { app.projects.declineOffer() }
         }
-        .padding(8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.08)))
     }
 }
 
@@ -115,20 +115,20 @@ private struct ProjectRow: View {
     @Binding var task: String
     @Binding var agent: String
     @FocusState private var taskFocused: Bool
+    @State private var hovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(project.name).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                Text((project.primaryPath ?? "").replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                    .font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(1).truncationMode(.middle)
-                Spacer(minLength: 0)
+        let active = taskFor == project.slug
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(project.name).font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink).lineLimit(1).layoutPriority(1)
+                PathText(path: project.primaryPath ?? "")
+                Spacer(minLength: 8)
                 if let live = app.sessions.live.first(where: { $0.project.isRegistered && $0.project.name == project.name }) {
-                    Text(live.agent.glyph + " " + live.state.rawValue).font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(CardStyle.color(live.state)).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(Color.white.opacity(0.1)))
+                    Chip(text: live.agent.glyph + " " + IslandStyle.label(live.state), tint: IslandStyle.color(live.state))
                 }
-                IslandButton("Work on…", symbol: "play") {
-                    taskFor = taskFor == project.slug ? nil : project.slug
+                IslandButton("Work on…", symbol: "play", role: active ? .secondary : .primary) {
+                    taskFor = active ? nil : project.slug
                     task = ""
                 }
                 if !project.lastSessions.isEmpty {
@@ -143,11 +143,12 @@ private struct ProjectRow: View {
                     Button(project.trusted ? "Untrust (no background runs)" : "Trust for background runs") { app.projects.setTrusted(project.slug, !project.trusted) }
                     Button("Remove from projects", role: .destructive) { app.projects.remove(project.slug) }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 10, weight: .bold)).frame(width: 18, height: 18)
+                    MenuIconLabel(symbol: "ellipsis")
                 }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(.white.opacity(0.7))
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .help("Open in…, trust, remove")
             }
-            if taskFor == project.slug {
+            if active {
                 HStack(spacing: 6) {
                     Picker("", selection: $agent) {
                         Text("Claude").tag("claude")
@@ -155,17 +156,20 @@ private struct ProjectRow: View {
                         Text("Gemini").tag("gemini")
                     }
                     .pickerStyle(.menu).labelsHidden().fixedSize().controlSize(.small)
-                    TextField("What should it do?", text: $task)
-                        .textFieldStyle(.plain).font(.system(size: 11.5, design: .rounded)).foregroundStyle(.white)
+                    TextField("", text: $task, prompt: fieldPrompt("What should it do?"))
                         .focused($taskFocused)
-                        .padding(.horizontal, 8).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.08)))
                         .onSubmit { go() }
-                    IslandButton(app.settings.headlessTasks && project.trusted ? "Run here" : "Open terminal", symbol: app.settings.headlessTasks && project.trusted ? "bolt" : "terminal") { go() }
+                        .islandField(focused: taskFocused, size: 12)
+                    IslandButton(app.settings.headlessTasks && project.trusted ? "Run here" : "Open terminal",
+                                 symbol: app.settings.headlessTasks && project.trusted ? "bolt" : "terminal", role: .primary, keycap: "⏎") { go() }
                 }
                 .onAppear { taskFocused = true; app.window.focusInput() }
             }
         }
-        .padding(.vertical, 3)
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(RoundedRectangle(cornerRadius: IslandStyle.rowRadius, style: .continuous).fill(active ? IslandStyle.fillHover : hovering ? IslandStyle.fill : Color.clear))
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: hovering)
     }
 
     private func go() {

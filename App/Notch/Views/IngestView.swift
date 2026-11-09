@@ -8,19 +8,18 @@ struct IngestView: View {
 
     var body: some View {
         let ing = app.ingest!
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             IngestHeader(app: app)
             if let q = ing.question, let job = ing.job(q.jobID) {
                 ProjectPickView(app: app, job: job, question: q.question, deadline: q.deadline)
             } else if let job = ing.current {
                 JobView(app: app, job: job)
             } else {
-                Text("Drop a file, a link or some text on me and I'll chew it into the knowledge base.")
-                    .font(.system(size: 11.5, design: .rounded)).foregroundStyle(.white.opacity(0.55))
+                EmptyState(symbol: "arrow.down.doc", line: "Drop something on me.", hint: "A file, a link or some text: I chew it into the knowledge base.")
             }
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .reportsIslandHeight(for: .ingest)
     }
 }
 
@@ -29,15 +28,12 @@ private struct IngestHeader: View {
 
     var body: some View {
         let ing = app.ingest!
-        HStack(spacing: 6) {
-            Image(systemName: ing.active.isEmpty ? "tray.full" : "fork.knife").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white.opacity(0.8))
-            Text(ing.active.isEmpty ? (ing.current?.stage == .failed ? "Couldn't chew that" : "Chewed") : "Chewing…")
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-            if ing.active.count > 1 {
-                Text("\(ing.active.count - 1) more in the queue").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-            }
-            Spacer(minLength: 0)
-            IslandButton("Knowledge", symbol: "books.vertical") { app.openKnowledge() }
+        let failed = ing.current?.stage == .failed
+        let title = ing.active.isEmpty ? (failed ? "Couldn't chew that" : (ing.current == nil ? "Chew" : "Chewed")) : "Chewing…"
+        CardHeader(symbol: ing.active.isEmpty ? "tray.full" : "fork.knife",
+                   tint: ing.active.isEmpty ? (failed ? IslandStyle.error : IslandStyle.done) : IslandStyle.working,
+                   title: title, subtitle: ing.active.count > 1 ? "\(ing.active.count - 1) more in the queue" : nil, app: app) {
+            IslandButton("Knowledge", symbol: "books.vertical", role: .quiet) { app.openKnowledge() }
         }
     }
 }
@@ -47,11 +43,11 @@ private struct JobView: View {
     let job: IngestController.Job
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 11)).foregroundStyle(.white.opacity(0.7))
-                Text(job.title ?? job.label).font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                Spacer(minLength: 0)
+                Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(IslandStyle.ink2)
+                Text(job.title ?? job.label).font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink).lineLimit(1)
+                Spacer(minLength: 8)
                 if let p = job.project, let name = app.projects.file.project(slug: p)?.name {
                     Chip(text: name, symbol: "folder")
                 } else if job.stage == .done {
@@ -59,29 +55,28 @@ private struct JobView: View {
                 }
             }
             if job.isActive {
-                ProgressView(value: job.stage.progressStart + job.progress * 0.1)
-                    .progressViewStyle(.linear).tint(.white.opacity(0.85)).frame(height: 4)
-                Text(stageLine).font(.system(size: 10.5, design: .rounded)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
+                ProgressBar(value: job.stage.progressStart + job.progress * 0.1, tint: IslandStyle.working)
+                Text(stageLine).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).lineLimit(1)
             } else if job.stage == .failed {
-                Text(job.error ?? "failed").font(.system(size: 11, design: .rounded)).foregroundStyle(.orange.opacity(0.95)).lineLimit(2)
-                if let f = job.filed { Text("Kept as \(f.path)").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(1) }
+                Text(job.error ?? "failed").font(IslandStyle.body).foregroundStyle(IslandStyle.error).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                if let f = job.filed { Text("Kept as \(f.path)").font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).lineLimit(1).truncationMode(.middle) }
                 HStack(spacing: 6) {
-                    IslandButton("Try again", symbol: "arrow.clockwise") { app.ingest.retry(job.id) }
+                    IslandButton("Try again", symbol: "arrow.clockwise", role: .primary) { app.ingest.retry(job.id) }
                     if let f = job.filed { IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path); app.window.send(.acknowledged()) } }
-                    IslandButton("Log", symbol: "list.bullet.rectangle") { app.knowledge.openPath("log.md"); app.window.send(.acknowledged()) }
+                    IslandButton("Log", symbol: "list.bullet.rectangle", role: .quiet) { app.knowledge.openPath("log.md"); app.window.send(.acknowledged()) }
                 }
             } else {
                 if let s = job.summary, !s.isEmpty {
-                    Text(s).font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
+                    Text(s).font(IslandStyle.body).foregroundStyle(IslandStyle.ink2).lineSpacing(2).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
                 if let i = job.integration {
-                    Text("Wiki: \(i)").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                    Text("Wiki: \(i)").font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).lineLimit(1)
                 } else if let w = job.warnings.first {
-                    Text(w).font(.system(size: 10, design: .rounded)).foregroundStyle(.orange.opacity(0.8)).lineLimit(1)
+                    Text(w).font(IslandStyle.caption).foregroundStyle(IslandStyle.attention.opacity(0.9)).lineLimit(1)
                 }
                 HStack(spacing: 6) {
                     if let f = job.filed {
-                        IslandButton("Open", symbol: "doc.text") { app.knowledge.openPath(f.path); app.window.send(.acknowledged()) }
+                        IslandButton("Open", symbol: "doc.text", role: .primary, keycap: "⏎") { app.knowledge.openPath(f.path); app.window.send(.acknowledged()) }
                         IslandButton("Ask", symbol: "sparkles") { app.openKnowledge(question: "What does \"\(OneLine.collapse(f.title, limit: 60))\" say?") }
                         if !app.projects.projects.isEmpty {
                             Menu {
@@ -90,13 +85,11 @@ private struct JobView: View {
                                     Button(p.name) { Task { await app.ingest.move(job.id, toProject: p.slug) } }
                                 }
                             } label: {
-                                Label("Move", systemImage: "folder.badge.gearshape").font(.system(size: 10.5, weight: .medium, design: .rounded))
-                                    .padding(.horizontal, 8).padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.white.opacity(0.1)))
+                                MenuLabel(title: "Move", symbol: "folder.badge.gearshape")
                             }
-                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(.white.opacity(0.9))
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                         }
-                        if f.existing { IslandButton("Re-chew", symbol: "arrow.clockwise") { app.ingest.retry(job.id) } }
+                        if f.existing { IslandButton("Re-chew", symbol: "arrow.clockwise", role: .quiet) { app.ingest.retry(job.id) } }
                     }
                 }
             }
@@ -127,12 +120,13 @@ private struct ProjectPickView: View {
     let deadline: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Which project is “\(OneLine.collapse(job.title ?? job.label, limit: 50))” for?")
-                .font(.system(size: 12, weight: .medium, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-            HStack(spacing: 6) {
-                ForEach(Array(question.options.prefix(4).enumerated()), id: \.offset) { _, o in
-                    IslandButton(o.name + (o.confidence > 0 ? " \(Int((o.confidence * 100).rounded()))%" : ""), symbol: o.slug == nil ? "tray" : "folder") {
+                .font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            FlowLayout(spacing: 6) {
+                ForEach(Array(question.options.prefix(6).enumerated()), id: \.offset) { i, o in
+                    ChipButton(text: o.name + (o.confidence > 0 ? " \(Int((o.confidence * 100).rounded()))%" : ""),
+                               symbol: o.slug == nil ? "tray" : "folder", selected: i == 0 && o.slug == question.suggested) {
                         app.ingest.choose(o.slug)
                     }
                 }
@@ -140,19 +134,9 @@ private struct ProjectPickView: View {
             TimelineView(.periodic(from: .now, by: 1)) { ctx in
                 let left = max(0, Int(deadline.timeIntervalSince(ctx.date).rounded()))
                 let name = question.suggested.flatMap { s in app.projects.file.project(slug: s)?.name } ?? "Inbox"
-                Text("\(name) in \(left) s unless you pick one").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45))
+                Text("\(name) in \(left) s unless you pick one").font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).monospacedDigit()
             }
         }
-    }
-}
-
-private struct Chip: View {
-    let text: String
-    let symbol: String
-    var body: some View {
-        Label(text, systemImage: symbol).font(.system(size: 10, weight: .medium, design: .rounded)).lineLimit(1)
-            .padding(.horizontal, 7).padding(.vertical, 3)
-            .background(Capsule().fill(Color.white.opacity(0.12))).foregroundStyle(.white.opacity(0.85))
     }
 }
 

@@ -21,12 +21,13 @@ public struct NotchLayout: Sendable, Equatable {
     public static let expandedCorner: Double = 22
     public static let earRadius: Double = 14
     /// Where expanded content starts, leaving the hero slime its room on the left.
-    public static let expandedContentLeading: Double = 206
+    public static let expandedContentLeading: Double = 190
     public static let expandedContentLeadingAway: Double = 28
-    /// Main slime radius while the island is expanded.
+    /// Main slime radius while the island is expanded, and where its contact point sits.
     public static let expandedSlimeRadius: Double = 56
-    /// Bottom strip of the expanded island where the mini slimes line up.
-    public static let trayHeight: Double = 30
+    public static let expandedSlimeX: Double = 96
+    /// Bottom strip of the expanded island where the mini slimes line up (badges included).
+    public static let trayHeight: Double = 40
     /// Mini radius in the tray, in points, and the pitch between minis.
     public static let trayMiniRadius: Double = 14.5
     public static let trayPitch: Double = 36
@@ -50,23 +51,34 @@ public struct NotchLayout: Sendable, Equatable {
     /// The notch slot: the physical notch's width while the island sits over it, nothing otherwise.
     public var slotWidth: Double { detached ? 0 : geometry.width }
 
-    /// Height of each expanded view. `question` and `chat` can be taller (host passes a measured height).
+    /// Width of the expanded island per view: reading views (chat, diff, knowledge, signals,
+    /// meeting, session detail, projects) get the wide island.
+    public static func expandedWidth(_ view: NotchView) -> Double {
+        switch view {
+        case .chat, .diff, .knowledge, .signals, .meetingLive, .sessionDetail, .projects: return 720
+        default: return Self.expandedWidth
+        }
+    }
+
+    /// The smallest height of each expanded view; every card reports its content height and the
+    /// island grows from here within `heightRange`.
     public static func viewHeight(_ view: NotchView) -> Double {
         switch view {
-        case .greeting: return 150
-        case .home: return 160
-        case .ask: return 156
-        case .menu: return 196
-        case .approval: return 160
-        case .question: return 180
-        case .chat: return 260
-        case .diff: return 320
-        case .sessionDetail: return 220
-        case .meetingLive: return 220
-        case .ingest: return 150
-        case .projects, .knowledge, .signals: return 240
-        case .toast: return 120
-        case .whatsNew: return 236
+        case .greeting: return 120
+        case .home: return 128
+        case .ask: return 130
+        case .menu: return 150
+        case .approval: return 140
+        case .question: return 150
+        case .chat: return 176
+        case .diff: return 200
+        case .sessionDetail: return 160
+        case .meetingLive: return 150
+        case .ingest: return 130
+        case .projects: return 170
+        case .knowledge, .signals: return 160
+        case .toast: return 92
+        case .whatsNew: return 170
         }
     }
 
@@ -100,7 +112,7 @@ public struct NotchLayout: Sendable, Equatable {
         case .expanded:
             let range = Self.heightRange(view)
             let natural = Self.viewHeight(view) + (miniCount > 0 ? Self.trayHeight : 0)
-            return (Self.expandedWidth, measuredHeight.map { min(range.upperBound, max(range.lowerBound, $0)) } ?? natural)
+            return (Self.expandedWidth(view), measuredHeight.map { min(range.upperBound, max(range.lowerBound, $0)) } ?? natural)
         }
     }
 
@@ -158,10 +170,11 @@ public struct NotchLayout: Sendable, Equatable {
     public static func heightRange(_ view: NotchView) -> ClosedRange<Double> {
         let base = viewHeight(view)
         switch view {
+        case .home: return base...220
         case .approval, .question: return base...360
-        case .chat: return base...380
-        case .knowledge: return base...360
-        case .diff: return base...420
+        case .chat, .knowledge, .diff: return base...420
+        case .meetingLive, .signals, .projects: return base...400
+        case .toast: return base...160
         default: return base...360
         }
     }
@@ -174,7 +187,7 @@ public struct NotchLayout: Sendable, Equatable {
             return (0.45, 2.1, 1.15, 4)
         case .expanded:
             let r = Self.expandedSlimeRadius
-            return (Self.trayMiniRadius / r, (Self.expandedContentLeading + 16 - 104) / r, Self.trayPitch / r, 12)
+            return (Self.trayMiniRadius / r, (Self.expandedContentLeading + 16 - Self.expandedSlimeX) / r, Self.trayPitch / r, 12)
         }
     }
 
@@ -195,7 +208,7 @@ public struct NotchLayout: Sendable, Equatable {
         case .hidden, .compact:
             return (Self.compactWing / 2, geometry.height - 2)
         case .expanded:
-            return (104, islandSize.height - 12)
+            return (Self.expandedSlimeX, islandSize.height - 12)
         }
     }
 

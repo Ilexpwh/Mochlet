@@ -1,136 +1,121 @@
 import SwiftUI
 import MochletCore
 
-/// Shared small pieces for the agent cards.
-enum CardStyle {
-    static func color(_ s: SessionState) -> Color {
-        switch s {
-        case .idle, .ended: return .white.opacity(0.45)
-        case .thinking: return Color(red: 0.70, green: 0.61, blue: 1.0)
-        case .working: return Color(red: 0.50, green: 0.83, blue: 1.0)
-        case .approval, .question: return Color(red: 1.0, green: 0.76, blue: 0.30)
-        case .finished: return Color(red: 0.45, green: 0.90, blue: 0.60)
-        case .error, .ratelimit: return Color(red: 0.94, green: 0.31, blue: 0.42)
-        }
-    }
-
-    static func label(_ s: SessionState) -> String {
-        switch s {
-        case .idle: return "idle"
-        case .thinking: return "thinking"
-        case .working: return "working"
-        case .approval: return "needs approval"
-        case .question: return "has a question"
-        case .finished: return "done"
-        case .error: return "error"
-        case .ratelimit: return "rate limited"
-        case .ended: return "ended"
-        }
-    }
-
-    static func elapsed(_ d: Date, now: Date = Date()) -> String {
-        let s = Int(now.timeIntervalSince(d))
-        if s < 60 { return "\(s)s" }
-        if s < 3600 { return "\(s / 60)m" }
-        return "\(s / 3600)h \((s % 3600) / 60)m"
-    }
-}
-
 struct StateChip: View {
     let state: SessionState
     var body: some View {
-        Text(CardStyle.label(state))
-            .font(.system(size: 9, weight: .semibold, design: .rounded))
+        Text(IslandStyle.label(state))
+            .font(IslandStyle.captionStrong)
             .foregroundStyle(.black.opacity(0.85))
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Capsule().fill(CardStyle.color(state)))
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Capsule().fill(IslandStyle.color(state)))
+            .fixedSize()
     }
 }
 
-struct CardTitle: View {
-    let card: SessionCard
+/// Rows of live sessions on the home view: four, or all of them in a scroll.
+struct SessionListView: View {
+    let app: AppCoordinator
+    @Binding var showAll: Bool
+
     var body: some View {
-        HStack(spacing: 6) {
-            Text(card.agent.glyph).font(.system(size: 12, weight: .bold)).foregroundStyle(CardStyle.color(card.state))
-            Text(card.label).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-            Text(card.agent.displayName).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45))
-            StateChip(state: card.state)
-            Spacer(minLength: 0)
+        let all = Array(app.sessions.live.reversed())
+        VStack(alignment: .leading, spacing: 4) {
+            if showAll, all.count > 4 {
+                FadeScroll(maxHeight: 150) { rows(all) }
+            } else {
+                rows(Array(all.prefix(4)))
+            }
+            if all.count > 4 {
+                ChipButton(text: showAll ? "Show fewer" : "+\(all.count - 4) more", symbol: showAll ? "chevron.up" : "chevron.down") {
+                    showAll.toggle()
+                }
+            }
+        }
+    }
+
+    private func rows(_ cards: [SessionCard]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(cards) { c in SessionRow(card: c, app: app) }
         }
     }
 }
 
-/// Rows of live sessions on the home view.
-struct SessionListView: View {
+struct SessionRow: View {
+    let card: SessionCard
     let app: AppCoordinator
 
     var body: some View {
-        let cards = Array(app.sessions.live.reversed().prefix(4))
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(cards) { c in
-                Button {
-                    app.openSession(c.id)
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle().fill(CardStyle.color(c.state)).frame(width: 6, height: 6)
-                        Text(c.agent.glyph).font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.7))
-                        Text(c.label).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                        Text(SessionStore.ticker(c).replacingOccurrences(of: c.label + " · ", with: ""))
-                            .font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text(CardStyle.elapsed(c.lastActivity)).font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.35))
-                    }
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.white.opacity(0.07)))
-                }
-                .buttonStyle(.plain)
-            }
-            if app.sessions.live.count > 4 {
-                Text("+\(app.sessions.live.count - 4) more").font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+        let c = card
+        ListRow(action: { app.openSession(c.id) }) {
+            HStack(spacing: 7) {
+                Circle().fill(IslandStyle.color(c.state)).frame(width: 6, height: 6)
+                Text(c.agent.glyph).font(.system(size: 10.5, weight: .bold)).foregroundStyle(IslandStyle.ink2)
+                Text(c.label).font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink).lineLimit(1).layoutPriority(1)
+                Text(SessionStore.ticker(c).replacingOccurrences(of: c.label + " · ", with: ""))
+                    .font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3).lineLimit(1)
+                Spacer(minLength: 6)
+                Text(IslandStyle.elapsed(c.lastActivity)).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).monospacedDigit()
             }
         }
+        .accessibilityLabel("\(c.label), \(IslandStyle.label(c.state))")
     }
 }
 
 /// One session: ticker, diffs, final line and the ways to reach it.
 struct SessionDetailView: View {
     let app: AppCoordinator
+    /// The view this card stands in for (approval and question fall back to it).
+    var `as`: NotchView = .sessionDetail
 
     var body: some View {
         if let c = app.sessions.focused {
-            VStack(alignment: .leading, spacing: 6) {
-                CardTitle(card: c)
-                if let note = app.notch.cardNote {
-                    Text(note).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+            VStack(alignment: .leading, spacing: 8) {
+                CardHeader(glyph: c.agent.glyph, tint: IslandStyle.color(c.state), title: c.label, subtitle: c.agent.displayName,
+                           meta: IslandStyle.elapsed(c.lastActivity), app: app) {
+                    StateChip(state: c.state)
                 }
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(c.steps.suffix(8).reversed()) { step in
-                            StepRow(step: step, card: c, app: app)
+                if let note = app.notch.cardNote { NoteLine(note) }
+                if let f = c.finalLine, !f.isEmpty, c.state == .finished || c.state == .error {
+                    Text(f).islandBody().lineLimit(3)
+                }
+                if c.steps.isEmpty {
+                    Text(c.state == .idle ? "Waiting for the next prompt." : "Working…")
+                        .font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink3)
+                } else {
+                    FadeScroll(maxHeight: 120) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(c.steps.suffix(10).reversed()) { step in
+                                StepRow(step: step, card: c, app: app)
+                            }
                         }
-                        if c.steps.isEmpty {
-                            Text(c.state == .idle ? "Waiting for the next prompt." : "…").font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .frame(maxHeight: 92)
                 HStack(spacing: 6) {
-                    IslandButton("Terminal", symbol: "terminal") { app.terminal.jump(to: c); app.window.send(.acknowledged()) }
+                    IslandButton("Terminal", symbol: "terminal", role: c.state == .finished || c.state == .error ? .primary : .secondary, keycap: "⏎") {
+                        app.terminal.jump(to: c)
+                        app.window.send(.acknowledged())
+                    }
                     if !c.cwd.isEmpty {
-                        IslandButton("Folder", symbol: "folder") { NSWorkspace.shared.open(URL(fileURLWithPath: c.cwd)); app.window.send(.acknowledged()) }
+                        IslandButton("Folder", symbol: "folder") {
+                            NSWorkspace.shared.open(URL(fileURLWithPath: c.cwd))
+                            app.window.send(.acknowledged())
+                        }
                     }
                     if !c.diffs.isEmpty {
                         IslandButton("Diff · \(c.diffs.count)", symbol: "plus.forwardslash.minus") { app.openDiff(c.diffs.last!.id) }
                     }
-                    Spacer(minLength: 0)
-                    Text(c.cwd.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~"))
-                        .font(.system(size: 9, design: .monospaced)).foregroundStyle(.white.opacity(0.35)).lineLimit(1).truncationMode(.head)
+                    Spacer(minLength: 8)
+                    PathText(path: c.cwd)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .reportsIslandHeight(for: `as`)
         } else {
-            Text("No session selected.").font(.system(size: 12, design: .rounded)).foregroundStyle(.white.opacity(0.6))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            EmptyState(symbol: "terminal", line: "No session selected.", hint: "Sessions appear here as your agents run.")
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .reportsIslandHeight(for: `as`)
         }
     }
 }
@@ -143,184 +128,189 @@ struct StepRow: View {
     var body: some View {
         switch step.kind {
         case .diff(let id, let name, let added, let removed):
-            Button { app.openDiff(id) } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "doc.text").font(.system(size: 9))
-                    Text(name).font(.system(size: 11, weight: .medium, design: .rounded)).lineLimit(1)
-                    Text("+\(added)").foregroundStyle(Color(red: 0.45, green: 0.90, blue: 0.60))
-                    Text("−\(removed)").foregroundStyle(Color(red: 0.94, green: 0.45, blue: 0.50))
-                }
-                .font(.system(size: 10, design: .monospaced))
-                .padding(.horizontal, 7).padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.1)))
-                .foregroundStyle(.white.opacity(0.9))
-            }
-            .buttonStyle(.plain)
+            ChipButton(text: "\(name)  +\(added) −\(removed)", symbol: "doc.text") { app.openDiff(id) }
         case .subagent:
-            Text(step.text).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.45))
+            Text(step.text).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).lineLimit(1)
         case .text:
-            Text(step.text).font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.8)).lineLimit(2)
+            Text(step.text).font(IslandStyle.secondary).foregroundStyle(IslandStyle.ink2).lineLimit(2).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-/// A file diff: hunks with context, added and removed lines.
+/// A file diff: hunks with context, added and removed lines, a line-number gutter.
 struct DiffView: View {
     let app: AppCoordinator
 
     var body: some View {
+        let store = app.notch
         let card = app.sessions.focused
-        let diff = card?.diffs.first { $0.id == app.notch.focusedDiffID } ?? card?.diffs.last
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Button { app.openSession(card?.id) } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 10, weight: .bold)).foregroundStyle(.white.opacity(0.7))
-                }
-                .buttonStyle(.plain)
+        let diff = card?.diffs.first { $0.id == store.focusedDiffID } ?? card?.diffs.last
+        let contentWidth = CGFloat(store.islandSize.width - store.contentLeading - 18)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                IconButton("chevron.left", help: "Back to the session", size: 24) { app.openSession(card?.id) }
                 if let d = diff {
-                    Text(d.name).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white)
-                    Text(d.summary).font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.6))
-                    if d.isNewFile { Text("new file").font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.45)) }
-                    Spacer(minLength: 0)
-                    if let c = card, c.diffs.count > 1 {
-                        HStack(spacing: 4) {
-                            ForEach(c.diffs.suffix(6)) { other in
-                                Button { app.notch.focusedDiffID = other.id } label: {
-                                    Text(other.name).font(.system(size: 9, design: .rounded)).lineLimit(1)
-                                        .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(Capsule().fill(Color.white.opacity(other.id == d.id ? 0.22 : 0.08)))
-                                        .foregroundStyle(.white.opacity(0.85))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                    Text(d.name).font(IslandStyle.title).foregroundStyle(IslandStyle.ink).lineLimit(1).layoutPriority(1)
+                    Text(d.summary).font(IslandStyle.mono).foregroundStyle(IslandStyle.ink3).lineLimit(1)
+                    if d.isNewFile { Chip(text: "new file") }
+                } else {
+                    Text("Diff").font(IslandStyle.title).foregroundStyle(IslandStyle.ink)
+                }
+                Spacer(minLength: 8)
+                CardTools(app: app)
+            }
+            if let c = card, c.diffs.count > 1, let d = diff {
+                FlowLayout(spacing: 5) {
+                    ForEach(c.diffs.suffix(8)) { other in
+                        ChipButton(text: other.name, selected: other.id == d.id) { store.focusedDiffID = other.id }
                     }
                 }
             }
             if let d = diff {
                 if d.countsOnly {
-                    Text("Too large to show line by line.").font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.5))
+                    EmptyState(symbol: "doc.text.magnifyingglass", line: "Too large to show line by line.", hint: d.summary)
                 } else {
-                    GeometryReader { g in
-                        ScrollView([.vertical, .horizontal], showsIndicators: true) {
-                            VStack(alignment: .leading, spacing: 0) {
-                                ForEach(Array(d.hunks.enumerated()), id: \.offset) { _, h in
-                                    Text(h.header).font(.system(size: 10, design: .monospaced)).foregroundStyle(Color(red: 0.55, green: 0.75, blue: 1.0)).padding(.vertical, 2)
-                                    ForEach(Array(h.lines.enumerated()), id: \.offset) { _, line in
-                                        DiffLineView(line: line)
-                                    }
+                    FadeScroll(axes: [.vertical, .horizontal], maxHeight: CGFloat(max(80, store.contentMaxHeight(for: .diff) - 80))) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(d.hunks.enumerated()), id: \.offset) { _, h in
+                                Text(h.header).font(IslandStyle.monoSmall).foregroundStyle(IslandStyle.working.opacity(0.85))
+                                    .padding(.vertical, 3).padding(.leading, 8)
+                                ForEach(Array(Self.numbered(h).enumerated()), id: \.offset) { _, l in
+                                    DiffLineView(line: l.line, number: l.number)
                                 }
                             }
-                            .padding(.trailing, 8)
-                            .frame(minWidth: g.size.width, minHeight: g.size.height, alignment: .topLeading)
                         }
+                        .padding(.vertical, 4)
+                        .frame(minWidth: contentWidth, alignment: .topLeading)
                     }
+                    .background(RoundedRectangle(cornerRadius: IslandStyle.fieldRadius, style: .continuous).fill(IslandStyle.fieldFill))
+                    .overlay(RoundedRectangle(cornerRadius: IslandStyle.fieldRadius, style: .continuous).stroke(IslandStyle.hairline, lineWidth: 1))
                 }
             } else {
-                Text("No diff yet.").font(.system(size: 12, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                EmptyState(symbol: "plus.forwardslash.minus", line: "No diff yet.", hint: "Edits show here as the agent makes them.")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .reportsIslandHeight(for: .diff)
+    }
+
+    /// Lines with their new-file number (removed lines have none).
+    static func numbered(_ h: DiffHunk) -> [(line: DiffLine, number: Int?)] {
+        var new = h.newStart
+        return h.lines.map { l in
+            switch l.kind {
+            case .added, .context:
+                defer { new += 1 }
+                return (l, new)
+            case .removed:
+                return (l, nil)
+            }
+        }
     }
 }
 
 struct DiffLineView: View {
     let line: DiffLine
+    var number: Int? = nil
+
     var body: some View {
         let (prefix, color, bg): (String, Color, Color) = {
             switch line.kind {
             case .added: return ("+", Color(red: 0.55, green: 0.95, blue: 0.65), Color(red: 0.2, green: 0.6, blue: 0.3).opacity(0.25))
             case .removed: return ("−", Color(red: 1.0, green: 0.55, blue: 0.6), Color(red: 0.7, green: 0.2, blue: 0.3).opacity(0.25))
-            case .context: return (" ", .white.opacity(0.6), .clear)
+            case .context: return (" ", IslandStyle.ink2, .clear)
             }
         }()
         HStack(spacing: 0) {
-            Text(prefix).frame(width: 12, alignment: .leading)
+            Text(number.map(String.init) ?? "")
+                .font(IslandStyle.monoSmall).foregroundStyle(IslandStyle.hint).monospacedDigit()
+                .frame(width: 34, alignment: .trailing).padding(.trailing, 8)
+            Text(prefix).frame(width: 10, alignment: .leading)
             Text(line.text.isEmpty ? " " : line.text)
         }
-        .font(.system(size: 10.5, design: .monospaced))
+        .font(IslandStyle.mono)
         .foregroundStyle(color)
-        .padding(.horizontal, 4)
+        .padding(.trailing, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(bg)
     }
 }
 
-/// Permission request card: tool, command, Deny / Allow / Always, plan choices, Reply in terminal.
+/// Permission request card: tool, command, Allow / Always / Deny, plan choices, Reply in terminal.
 struct ApprovalView: View {
     let app: AppCoordinator
 
     var body: some View {
         if let r = app.approvals.head {
             let always = r.canAlways ? r.alwaysSummary : []
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(r.agent.glyph).font(.system(size: 12, weight: .bold)).foregroundStyle(CardStyle.color(.approval))
-                    Text(r.projectName).font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                    Text(r.isPlan ? "wants to start this plan" : "wants to run").font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.6))
-                    Spacer(minLength: 0)
-                    if r.detailLineCount > 1 {
-                        Text("\(r.detailLineCount) lines").font(.system(size: 9.5, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-                    }
-                    if app.approvals.count > 1 {
-                        Text("1/\(app.approvals.count)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-                HStack(alignment: .top, spacing: 6) {
-                    Text(r.isPlan ? "Plan" : r.tool).font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.7))
-                        .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Color.white.opacity(0.12)))
+            let box = RoundedRectangle(cornerRadius: IslandStyle.fieldRadius, style: .continuous)
+            VStack(alignment: .leading, spacing: 8) {
+                CardHeader(glyph: r.agent.glyph, tint: IslandStyle.attention, title: r.projectName,
+                           subtitle: r.isPlan ? "wants to start this plan" : "wants to run", meta: meta(r), app: app)
+                HStack(alignment: .top, spacing: 8) {
+                    Chip(text: r.isPlan ? "Plan" : r.tool).padding(.top, 4)
                     // The whole command or plan, scrollable: nothing is hidden behind an ellipsis.
-                    ScrollView([.vertical, .horizontal], showsIndicators: true) {
+                    ScrollView([.vertical, .horizontal], showsIndicators: false) {
                         Text(r.detail)
-                            .font(.system(size: 11.5, design: r.isPlan ? .rounded : .monospaced))
-                            .foregroundStyle(.white.opacity(0.92))
+                            .font(r.isPlan ? IslandStyle.body : IslandStyle.mono)
+                            .foregroundStyle(IslandStyle.ink)
+                            .lineSpacing(r.isPlan ? 2 : 1)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: !r.isPlan, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .topLeading)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 9).padding(.vertical, 6)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 18, maxHeight: detailHeight(r), alignment: .topLeading)
+                    .frame(maxWidth: .infinity, minHeight: 28, maxHeight: detailHeight(r), alignment: .topLeading)
+                    .background(box.fill(IslandStyle.fieldFill))
+                    .overlay(box.stroke(IslandStyle.hairline, lineWidth: 1))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if !always.isEmpty {
                     Text("Always adds: " + always.joined(separator: " · "))
-                        .font(.system(size: 9.5, design: .rounded)).foregroundStyle(Color(red: 1.0, green: 0.82, blue: 0.5).opacity(0.85))
-                        .lineLimit(2).textSelection(.enabled)
+                        .font(IslandStyle.caption).foregroundStyle(IslandStyle.attention.opacity(0.9))
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
-                Text([r.terminal.terminalName ?? r.agent.displayName, r.cwd.replacingOccurrences(of: FileManager.default.homeDirectoryForCurrentUser.path, with: "~")].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.system(size: 9.5, design: .rounded)).foregroundStyle(.white.opacity(0.4)).lineLimit(1)
-                if let note = app.notch.cardNote {
-                    Text(note).font(.system(size: 10, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+                HStack(spacing: 8) {
+                    Text(r.terminal.terminalName ?? r.agent.displayName).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).lineLimit(1)
+                    if !r.cwd.isEmpty { PathText(path: r.cwd) }
                 }
+                if let note = app.notch.cardNote { NoteLine(note) }
                 HStack(spacing: 6) {
                     if r.isPlan {
-                        IslandButton("Auto mode", symbol: "bolt.fill") { app.approvals.decide(.planAuto) }
+                        IslandButton("Auto mode", symbol: "bolt.fill", role: .primary, keycap: "⏎") { app.approvals.decide(.planAuto) }
                         IslandButton("Manual", symbol: "hand.raised") { app.approvals.decide(.planDefault) }
                         IslandButton("Change plan", symbol: "pencil") { app.approvals.decide(.planChange) }
                     } else {
-                        IslandButton("Allow", symbol: "checkmark") { app.approvals.decide(.allow) }
+                        IslandButton("Allow", symbol: "checkmark", role: .primary, keycap: "⏎") { app.approvals.decide(.allow) }
                         if r.canAlways { IslandButton("Always", symbol: "checkmark.circle") { app.approvals.decide(.always) } }
-                        IslandButton("Deny", symbol: "xmark") { app.approvals.decide(.deny) }
+                        IslandButton("Deny", symbol: "xmark", role: .destructive) { app.approvals.decide(.deny) }
                     }
                     Spacer(minLength: 0)
-                    IslandButton("Reply in terminal", symbol: "terminal") { app.approvals.decide(.ask) }
+                    IslandButton("Reply in terminal", symbol: "terminal", role: .quiet) { app.approvals.decide(.ask) }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .reportsIslandHeight(for: .approval)
         } else {
-            SessionDetailView(app: app)
+            SessionDetailView(app: app, as: .approval)
         }
+    }
+
+    private func meta(_ r: ApprovalRequest) -> String? {
+        var parts: [String] = []
+        if r.detailLineCount > 1 { parts.append("\(r.detailLineCount) lines") }
+        if app.approvals.count > 1 { parts.append("1/\(app.approvals.count)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// One line stays one line; long commands and plans get a scroll box up to 150 pt.
     private func detailHeight(_ r: ApprovalRequest) -> CGFloat {
         let lines = r.isPlan ? 20 : r.detailLineCount
-        return min(150, max(18, CGFloat(lines) * 15 + 4))
+        return min(150, max(28, CGFloat(lines) * 16 + 12))
     }
 }
 
-/// AskUserQuestion card: one question at a time, chips, Other…, Reply in terminal.
+/// AskUserQuestion card: one question at a time, options, something else, Reply in terminal.
 struct QuestionView: View {
     let app: AppCoordinator
     @FocusState private var otherFocused: Bool
@@ -329,73 +319,61 @@ struct QuestionView: View {
         if let p = app.questions.pending {
             let q = p.question.questions[p.index]
             let picks = p.selections[p.index]
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 6) {
-                    Text(p.event.agent.glyph).font(.system(size: 12, weight: .bold)).foregroundStyle(CardStyle.color(.question))
-                    Text(p.event.projectName).font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.white).lineLimit(1)
-                    if !q.header.isEmpty {
-                        Text(q.header).font(.system(size: 9, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.7))
-                            .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(Color.white.opacity(0.12)))
-                    }
-                    Spacer(minLength: 0)
-                    if p.question.questions.count > 1 {
-                        Text("\(p.index + 1)/\(p.question.questions.count)").font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.5))
-                    }
+            let n = p.question.questions.count
+            let last = p.index + 1 >= n
+            VStack(alignment: .leading, spacing: 8) {
+                CardHeader(glyph: p.event.agent.glyph, tint: IslandStyle.attention, title: p.event.projectName, subtitle: "asks",
+                           meta: n > 1 ? "\(p.index + 1)/\(n)" : nil, app: app) {
+                    if !q.header.isEmpty { Chip(text: q.header) }
                 }
-                Text(q.text).font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                FlowLayout(spacing: 5) {
+                Text(q.text).font(IslandStyle.bodyStrong).foregroundStyle(IslandStyle.ink).lineSpacing(2).fixedSize(horizontal: false, vertical: true)
+                FlowLayout(spacing: 6, maxItemWidth: 280) {
                     ForEach(q.options, id: \.label) { o in
-                        Button { app.questions.toggle(o.label) } label: {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(o.label).font(.system(size: 11, weight: .medium, design: .rounded))
-                                if !o.description.isEmpty {
-                                    Text(o.description).font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.55)).lineLimit(2)
-                                }
-                            }
-                            .padding(.horizontal, 9).padding(.vertical, 5)
-                            .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.white.opacity(picks.contains(o.label) ? 0.28 : 0.1)))
-                            .foregroundStyle(.white.opacity(0.92))
-                        }
-                        .buttonStyle(.plain)
+                        OptionChip(label: o.label, description: o.description, selected: picks.contains(o.label)) { app.questions.toggle(o.label) }
                     }
                 }
                 HStack(spacing: 6) {
-                    TextField("Other…", text: Binding(get: { app.questions.pending?.otherText ?? "" }, set: { app.questions.setOther($0) }))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
+                    TextField("", text: Binding(get: { app.questions.pending?.otherText ?? "" }, set: { app.questions.setOther($0) }),
+                              prompt: fieldPrompt("Something else…"))
                         .focused($otherFocused)
                         .onSubmit { app.questions.submitOther() }
-                        .frame(maxWidth: 220)
-                    if q.multiSelect || p.index + 1 < p.question.questions.count || !p.otherText.isEmpty {
-                        IslandButton(p.index + 1 < p.question.questions.count ? "Next" : "Send", symbol: "arrow.right") {
+                        .islandField(focused: otherFocused, size: 12)
+                    if p.index > 0 { IslandButton("Back", symbol: "arrow.left", role: .quiet) { app.questions.back() } }
+                    if q.multiSelect || !last || !p.otherText.isEmpty {
+                        IslandButton(last ? "Send" : "Next", symbol: "arrow.right", role: .primary, keycap: "⏎") {
                             if !p.otherText.isEmpty { app.questions.submitOther() } else { app.questions.advance() }
                         }
                     }
-                    if p.index > 0 { IslandButton("Back", symbol: "arrow.left") { app.questions.back() } }
-                    Spacer(minLength: 0)
-                    IslandButton("Reply in terminal", symbol: "terminal") { app.questions.handBack() }
+                    IslandButton("Reply in terminal", symbol: "terminal", role: .quiet) { app.questions.handBack() }
                 }
+                if let note = app.notch.cardNote { NoteLine(note) }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .reportsIslandHeight(for: .question)
         } else {
-            SessionDetailView(app: app)
+            SessionDetailView(app: app, as: .question)
         }
     }
 }
 
-/// Wraps chips onto several lines.
+/// Wraps chips onto several lines. An item wider than `maxItemWidth` (or the row) is proposed
+/// that width so its text wraps instead of overflowing.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 6
+    var maxItemWidth: CGFloat? = nil
+
+    private func size(of s: LayoutSubview, rowWidth: CGFloat) -> CGSize {
+        let ideal = s.sizeThatFits(.unspecified)
+        let cap = min(maxItemWidth ?? .infinity, rowWidth)
+        if ideal.width > cap, cap > 0 { return s.sizeThatFits(ProposedViewSize(width: cap, height: nil)) }
+        return ideal
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 400
         var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
         for s in subviews {
-            let sz = s.sizeThatFits(.unspecified)
+            let sz = size(of: s, rowWidth: width)
             if x + sz.width > width, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
             x += sz.width + spacing
             rowH = max(rowH, sz.height)
@@ -406,7 +384,7 @@ struct FlowLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var x = bounds.minX, y = bounds.minY, rowH: CGFloat = 0
         for s in subviews {
-            let sz = s.sizeThatFits(.unspecified)
+            let sz = size(of: s, rowWidth: bounds.width)
             if x + sz.width > bounds.maxX, x > bounds.minX { x = bounds.minX; y += rowH + spacing; rowH = 0 }
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(sz))
             x += sz.width + spacing
@@ -453,7 +431,7 @@ struct PlanRows: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 8) {
             if app.settings.showClaudePlan { block("Claude", app.plans.claude, hint: "waiting for Claude Code's statusline") }
             if app.settings.showCodexPlan { block("Codex", app.plans.codex, loading: app.plans.codexLoading, hint: "asking codex…") }
         }
@@ -461,16 +439,16 @@ struct PlanRows: View {
     }
 
     private func block(_ name: String, _ u: PlanUsage?, loading: Bool = false, hint: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(name).font(.system(size: 10, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.8))
-                Text(u.map { PlanStore.ago($0.updatedAt) } ?? (loading ? "asking…" : "")).font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Text(name).font(IslandStyle.captionStrong).foregroundStyle(IslandStyle.ink2)
+                Text(u.map { PlanStore.ago($0.updatedAt) } ?? (loading ? "asking…" : "")).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint)
             }
             if let u {
                 if u.fiveHour != nil || name == "Claude" { row("5 h", u.fiveHour) }
                 row("week", u.week)
             } else {
-                Text(hint).font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+                Text(hint).font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -478,15 +456,15 @@ struct PlanRows: View {
     private func row(_ title: String, _ w: UsageWindow?) -> some View {
         let now = Date()
         let pct = w?.effectivePercent(now: now)
-        return HStack(spacing: 5) {
-            Text(title).font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.5)).frame(width: 28, alignment: .leading)
+        return HStack(spacing: 6) {
+            Text(title).font(IslandStyle.caption).foregroundStyle(IslandStyle.ink3).frame(width: 30, alignment: .leading)
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.08)).frame(width: 50, height: 4)
-                Capsule().fill(Self.color(PlanUsage.level(pct))).frame(width: 50 * CGFloat((pct ?? 0) / 100), height: 4)
+                Capsule().fill(IslandStyle.fill).frame(width: 64, height: 5)
+                Capsule().fill(Self.color(PlanUsage.level(pct))).frame(width: 64 * CGFloat((pct ?? 0) / 100), height: 5)
             }
-            Text(pct.map { "\(Int($0.rounded()))%" } ?? "—").font(.system(size: 9, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.75)).frame(width: 30, alignment: .leading)
+            Text(pct.map { "\(Int($0.rounded()))%" } ?? "—").font(IslandStyle.caption).foregroundStyle(IslandStyle.ink2).monospacedDigit().frame(width: 30, alignment: .leading)
             if let r = PlanUsage.resetLabel(w?.resetsAt, now: now) {
-                Text("↻ \(r)").font(.system(size: 9, design: .rounded)).foregroundStyle(.white.opacity(0.4)).lineLimit(1).fixedSize()
+                Text("↻ \(r)").font(IslandStyle.caption).foregroundStyle(IslandStyle.hint).lineLimit(1).fixedSize()
             }
         }
     }

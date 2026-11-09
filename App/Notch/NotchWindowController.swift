@@ -489,6 +489,14 @@ final class NotchWindowController: NSWindowController {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2, execute: work)
     }
 
+    /// The header's close button: drop the pin, fold (or return to a pending card) and give the
+    /// keyboard back to the app that had it.
+    func closeCard() {
+        app.notch.isPinned = false
+        send(.collapse)
+        if panel.isKeyWindow { panel.resignKey() }
+    }
+
     func focusInput() {
         panel.makeKey()
     }

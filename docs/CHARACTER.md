@@ -88,19 +88,45 @@ Default face style is `anime`; `round` keeps the earlier ball eyes as a setting.
 
 ## Motion (anime timing)
 
-| Beat | Target |
-| --- | --- |
-| landing | squash to ≈ 0.70 height / 1.35 width, then 2–3 damped wobble cycles (period ≈ 0.45 s, decay ≈ 0.6 per cycle) |
-| hop | anticipation squash 0.85 for 0.12 s → air stretch up to 1.2 → land → wobble |
-| poke | local dent ≈ 0.25 R that ripples around the ring and recovers in 0.5 s; eyes squint; sweat on the third quick poke |
-| idle | breath ±2.5 % at 0.29 Hz; weight shift ±4° over 2 s; micro-wobble every 8–15 s |
-| core | lags the shell by ≈ 70 ms and overshoots ≈ 30 % |
-| melt | spread over 0.6 s, face slides down 0.25 R |
-| puff | cheeks in 0.2 s (outBack), hold, release with one wobble |
-| shock | jump + stretch, `!` grows in 0.28 s |
+| Beat | Target | Measured (A5, R 56, 60 fps trace) |
+| --- | --- | --- |
+| landing | squash to ≈ 0.70 height / 1.35 width, then 2–3 damped wobble cycles (period ≈ 0.45 s, decay ≈ 0.6 per cycle) | greeting drop: 0.80 / 1.09 at +0.2 s, rebound 1.17, period 0.47 s; happy hop: 0.76 / 1.18, rebound 1.21; cheer rings 0.75 → 1.22 → 0.84 → 1.10 → 0.91 → 1.04 |
+| hop | anticipation squash 0.85 for 0.12 s → air stretch up to 1.2 → land → wobble | anticipation 0.94 tall / 1.07 wide for 0.12 s, airborne 0.28 s, stretch 1.25 tall / 0.81 wide at take-off |
+| poke | local dent ≈ 0.25 R that ripples around the ring and recovers in 0.5 s; eyes squint; sweat on the third quick poke | dent 0.25 R at the finger, antipode still; recovered to 0.06 R by 0.7 s; squint 0.25 s; sweat at the third press |
+| idle | breath ±2.5 % at 0.29 Hz; weight shift ±4° over 2 s; micro-wobble every 8–15 s | height ±3 %, blink to 0 |
+| core | lags the shell by ≈ 70 ms and overshoots ≈ 30 % | peaks 0.3–0.5 R behind on hops (clamped to 0.4 when drawn) |
+| melt | spread over 0.6 s, face slides down 0.25 R | 0.61 tall / 1.39 wide by +0.35 s, held to +1.8 s, back up with a 1.06 boing |
+| puff | cheeks in 0.2 s (outBack), hold, release with one wobble | 1.05 wide / 1.11 tall (sizeScale 1.06), release wobble ±1 % |
+| shock | jump + stretch, `!` grows in 0.28 s | airborne at once for 0.28 s, stretch 1.22, land 0.82 / 1.13 |
 
 Rule of thumb: eases are asymmetric (fast in, slow settle), nothing moves linearly, and everything
 that stops wobbles once.
+
+Who owns it (A5):
+
+- **Jelly**: `SoftBodyParams` `anchorStiffness 165, damping 2.6` (ω₀ ≈ 14 rad/s, ζ ≈ 0.09, period
+  0.45 s, ≈ 0.55 decay per cycle); `firm` damping 9 / anchors 220 stays calm; `bouncy` 1.8; `runny`
+  P 45 / d 2.2 / g 4; `airy` g 0.6 / d 2.4; minis d 3.0 / P 50. `SoftBody.settle` runs 5 s so the
+  construction transient is gone before the reference ring is taken.
+- **Volume**: `bulkDamping 30` is a pressure term against the rate of area change. The breathing
+  mode (every point in or out together) is near-critically damped (ζ ≈ 0.65) so the body keeps its
+  volume through merges, size changes and pokes, while the shape modes, which keep the area, ring
+  freely. Split droplets carry three quarters of the body's real rest area.
+- **Landing**: `landed(speed:)` adds a scripted flatten complementary to what the ring already does
+  (`want 0.55·clamp(speed/2.5, 0.3, 1)` minus the physics dip), keys 0.07 s outQuad → +30 % rebound
+  0.16 s → −12 % 0.14 s → 1 over 0.20 s outBack. Skipped under reduce motion, morphs, sleeping, split.
+- **Hop**: `hop(_:anticipation:)` squashes to 0.85 over the anticipation (0.12 s; shock uses 0), then
+  `launchHop` jumps and sets `airStretch = 1 + min(0.20, 0.08·v)`; in the air the stretch chases
+  `1 + 0.08·|vy|` with τ 0.08 s, so the body is thin at take-off and round at the apex.
+- **Poke**: `Impulse.poke(angle:depth:)` displaces the ring (weight `max(0, n·dir)^8`, ≈ 23° half
+  width) without a kick; `pressBegan` dents 0.25 R at the finger, squints for 0.25 s and sets the
+  crease strain. `.poked` keeps lean + squeeze + puni, no slap.
+- **Idle**: `scheduleMicroIdle` every U(8, 15) s: micro-wobble 45 %, weight shift 30 % (lean ±0.07
+  over 1.0 s, hold 0.6 s, back), glance 15 %, half-lid 10 %. Breath 0.025 at 0.29 Hz.
+- **Emote passes**: puff morph 0.2 s outBack with mirrored creases, release `.wobble 0.3`; melt
+  face slide + bottom creases, release eases straight back (the ring supplies the boing); shock
+  `hop(1.6, anticipation: 0)`; happy `hop(1.6)`; finished sparkles at +0.40 s; cry drips from under
+  the stroke eyes; every morph emote ends with a `.wobble 0.12`.
 
 ## Sizes
 

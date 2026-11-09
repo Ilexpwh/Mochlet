@@ -124,8 +124,9 @@ public enum SlimeEvent: Sendable, Equatable {
 
 /// Per-state styling applied on entry. Loops (hops, darts, sweat drops…) are scheduled separately.
 struct StateStyle: Sendable {
-    var breathAmplitude: Double = 0.02
-    var breathRate: Double = 0.21
+    /// Idle breathing: a slow 2.5 % vertical squash every 3.45 s (the base widens in anti-phase).
+    var breathAmplitude: Double = 0.025
+    var breathRate: Double = 0.29
     var blinkInterval: ClosedRange<Double> = 2.2...5.4
     var blinkSuppressed = false
     /// Eyes and mouth come from `FaceTable` for the face style.

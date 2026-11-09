@@ -37,7 +37,8 @@ import simd
             // The contact chord is quantised by the ring (5 of 24 points sit on the floor, 3 of 16).
             let minContact = params.pointCount < 20 ? 0.8 : 1.1
             #expect(body.contactWidth > minContact && body.contactWidth < 1.8, "contact \(body.contactWidth)")
-            #expect(widest.y > -0.70, "widest point low on the body (y \(widest.y))")
+            // Below the ellipse's centre line (−0.78) and well below mid-height (−0.86): the skirt.
+            #expect(widest.y > -0.80, "widest point low on the body (y \(widest.y))")
             #expect(top > 1.58 && top < 1.82, "top \(top)")
         }
     }
@@ -53,7 +54,8 @@ import simd
                 #expect(abs(body.areaRatio - 1) < 0.08, "\(s) \(feel) area \(body.areaRatio)")
                 #expect(body.contactWidth > 0.3, "\(s) \(feel) contact \(body.contactWidth)")
                 body.apply(.landing(speed: 4))
-                for _ in 0..<Int(1.6 / SoftBodyParams.substep) { _ = body.step(h: SoftBodyParams.substep) }
+                // The jelly rings for two to three seconds before it is still again.
+                for _ in 0..<Int(3.2 / SoftBodyParams.substep) { _ = body.step(h: SoftBodyParams.substep) }
                 var worst = 0.0
                 for (i, p) in body.points.enumerated() { worst = max(worst, simd_distance(p, body.referenceRing[i])) }
                 #expect(worst < 0.05, "\(s) \(feel) settles again: \(worst)")

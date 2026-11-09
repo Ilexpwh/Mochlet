@@ -29,7 +29,10 @@ import simd
         s.simulate(0.5)
         let full = fullRestArea(s.main)
         s.split(extra: 1)
+        // Half a second in, the ring has followed the half-size rest shape (the volume mode is
+        // near-critically damped) while the droplets are still out.
         s.simulate(0.5)
+        #expect(s.droplets.count == 4)
         let dropletArea = s.droplets.reduce(0.0) { $0 + Double.pi * $1.radius * $1.radius }
         let total = s.main.body.area + dropletArea
         #expect(abs(total / full - 1) < 0.06, "total area ratio \(total / full)")

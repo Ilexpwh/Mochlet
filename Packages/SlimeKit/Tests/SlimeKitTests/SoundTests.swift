@@ -102,7 +102,7 @@ import SlimeKitAudio
         #expect(e.drainCues().contains { $0.sound == .puni })
         e.simulate(1)
         e.trigger(.cheer)
-        e.simulate(0.05)
+        e.simulate(0.2)   // the hop's "pyon" comes after its anticipation crouch
         let sounds = Set(e.drainCues().map(\.sound))
         #expect(sounds.contains(.pika) && sounds.contains(.pyon))
     }

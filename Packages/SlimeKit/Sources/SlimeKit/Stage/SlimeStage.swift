@@ -457,7 +457,10 @@ public final class SlimeStage {
         }
         main.beginSplit()
         let n = max(3, min(6, 3 + extra))
-        let r = sqrt(0.75 / Double(n))
+        // The main body shrinks to half size (a quarter of its area); the droplets carry the
+        // other three quarters of the body's full rest area between them.
+        let fullArea = main.body.restArea / (main.body.sizeScale * main.body.sizeScale)
+        let r = sqrt(0.75 * fullArea / (Double.pi * Double(n)))
         let c = main.body.centroid
         var drops: [Droplet] = []
         for k in 0..<n {

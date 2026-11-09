@@ -36,13 +36,30 @@ import simd
         #expect(abs(h - restH * 0.8) < 1e-9)
     }
 
+    /// Jelly keeps its volume: a sudden change of rest size is followed within half a second and
+    /// the area does not ring, while the shape modes (see `landingSettlesWithOvershoots`) do.
+    @Test func volumeModeIsNearCriticallyDamped() {
+        var b = SoftBody(params: .init())
+        b.settle()
+        let restRatio = b.areaRatio
+        b.sizeScale = 0.5
+        var t = 0.0
+        var worstAfterSettle = 0.0
+        while t < 1.0 {
+            _ = b.step(h: SoftBodyParams.substep)
+            t += SoftBodyParams.substep
+            if t >= 0.4 { worstAfterSettle = max(worstAfterSettle, abs(b.areaRatio - restRatio)) }
+        }
+        #expect(worstAfterSettle < 0.05, "area ratio strays \(worstAfterSettle) from rest after 0.4 s")
+    }
+
     @Test func landingSettlesWithOvershoots() {
         var body = SoftBody(params: .main)
         body.drop(fromHeight: 1.6, initialSpeed: 2.0)
         var landedAt: Double?
         var t = 0.0
         var tops: [(Double, Double)] = []
-        while t < 3.0 {
+        while t < 3.5 {
             let ev = body.step(h: SoftBodyParams.substep)
             t += SoftBodyParams.substep
             if landedAt == nil, ev.contains(where: { if case .landed = $0 { return true } else { return false } }) { landedAt = t }
@@ -56,12 +73,13 @@ import simd
         var lastSign = 0.0
         for (_, y) in tops {
             let s = (y - final) > 0 ? 1.0 : -1.0
-            if lastSign != 0, s != lastSign, abs(y - final) > amplitude * 0.03 { signChanges += 1 }
-            if abs(y - final) > amplitude * 0.03 { lastSign = s }
+            if lastSign != 0, s != lastSign, abs(y - final) > amplitude * 0.05 { signChanges += 1 }
+            if abs(y - final) > amplitude * 0.05 { lastSign = s }
         }
-        #expect(signChanges >= 2, "expected visible overshoots, got \(signChanges)")
-        let settleTime = tops.last { abs($0.1 - final) > amplitude * 0.02 }?.0 ?? 0
-        #expect(settleTime > 0.5 && settleTime < 1.6, "settled in \(settleTime)s")
+        // The jelly rings for two to three visible cycles before it settles.
+        #expect(signChanges >= 4, "expected visible overshoots, got \(signChanges)")
+        let settleTime = tops.last { abs($0.1 - final) > amplitude * 0.05 }?.0 ?? 0
+        #expect(settleTime > 1.0 && settleTime < 3.0, "settled in \(settleTime)s")
         #expect(body.points.allSatisfy { $0.y <= 1e-9 })
     }
 

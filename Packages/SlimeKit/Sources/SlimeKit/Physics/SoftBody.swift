@@ -10,6 +10,8 @@ public struct SoftBody: Sendable {
     public private(set) var points: [SIMD2<Double>]
     private var prev: [SIMD2<Double>]
     private var renderPrev: [SIMD2<Double>]
+    /// Area at the previous step, for the bulk viscosity term (0 = not yet stepped).
+    private var lastArea: Double = 0
     private var acc: [SIMD2<Double>]
     private let restRing: [SIMD2<Double>]
     private let edgeRest: [Double]
@@ -202,7 +204,22 @@ public struct SoftBody: Sendable {
             for i in 0..<n { kick(i, outwardNormal(i) * (scale * 4)) }
         case .nudge(let dir):
             for i in 0..<n { kick(i, dir * 0.8) }
+        case .poke(let angle, let depth):
+            // A displacement, not a kick: the dented points keep their velocity and the anchor
+            // springs pull them back, so the dent ripples around the ring and recovers.
+            let dir = SIMD2(cos(angle), sin(angle))
+            for i in 0..<n {
+                let nrm = outwardNormal(i)
+                let w = pow(max(0, simd_dot(nrm, dir)), 8)
+                if w > 1e-3 {
+                    let d = nrm * (depth * w)
+                    points[i] -= d
+                    prev[i] -= d
+                }
+            }
         }
+        // A displacement changes the area in one go; the bulk term should not read it as a rate.
+        lastArea = area
     }
 
     public mutating func step(h: Double) -> [SoftBodyEvent] {
@@ -246,7 +263,11 @@ public struct SoftBody: Sendable {
                 acc[k2] -= f2
             }
         }
-        let coef = params.pressure * (1 - area / restArea)
+        // Pressure toward the rest area, plus bulk viscosity against the rate of area change.
+        let areaNow = area
+        let areaRate = lastArea > 0 ? (areaNow - lastArea) / h : 0
+        lastArea = areaNow
+        let coef = params.pressure * (1 - areaNow / restArea) - params.bulkDamping * areaRate / restArea
         for i in 0..<n {
             let j = (i + 1) % n
             let e = points[j] - points[i]
@@ -275,8 +296,9 @@ public struct SoftBody: Sendable {
         return events
     }
 
-    /// Run the simulation to rest and record the settled shape as the reference.
-    public mutating func settle(seconds: Double = 3) {
+    /// Run the simulation to rest and record the settled shape as the reference. Five seconds
+    /// takes the lightly damped jelly's construction transient down to nothing.
+    public mutating func settle(seconds: Double = 5) {
         let steps = Int(seconds / SoftBodyParams.substep)
         for _ in 0..<steps {
             _ = step(h: SoftBodyParams.substep)
@@ -293,5 +315,6 @@ public struct SoftBody: Sendable {
         prev = points
         renderPrev = points
         rootVelocity = .zero
+        lastArea = area
     }
 }

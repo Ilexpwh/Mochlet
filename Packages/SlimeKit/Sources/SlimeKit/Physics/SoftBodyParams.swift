@@ -4,12 +4,19 @@ import Foundation
 /// y grows downward (screen space), time in seconds.
 public struct SoftBodyParams: Sendable, Codable, Equatable {
     public var pointCount: Int = 24
-    public var anchorStiffness: Double = 90
+    /// The jelly: with the pressure's share the ring rings at about 0.45 s per cycle and keeps
+    /// roughly 0.56 of its swing each cycle (ζ ≈ 0.09), two to three visible wobbles.
+    public var anchorStiffness: Double = 165
     public var edgeStiffness: Double = 1200
     public var bendStiffness: Double = 300
     public var pressure: Double = 60
     /// Velocity damping per second: v *= exp(-damping * h).
-    public var damping: Double = 8
+    public var damping: Double = 2.6
+    /// Bulk viscosity: a pressure term against the rate of area change (per rest area per
+    /// second). Jelly keeps its volume: the breathing mode (every point in or out together) is
+    /// damped to about critical (effective damping 4π·b/n ≈ 0.52 b per point at 24 points) while
+    /// the shape modes, which keep the area, ring with `damping` alone.
+    public var bulkDamping: Double = 30
     /// Gravity on the perimeter points (R/s²).
     public var gravity: Double = 3
     /// Gravity on the root while airborne (R/s²).
@@ -24,7 +31,7 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
     public init() {}
 
     enum CodingKeys: String, CodingKey {
-        case pointCount, anchorStiffness, edgeStiffness, bendStiffness, pressure, damping, gravity, rootGravity, floorFriction, restCenterY, restRadius, silhouette
+        case pointCount, anchorStiffness, edgeStiffness, bendStiffness, pressure, damping, bulkDamping, gravity, rootGravity, floorFriction, restCenterY, restRadius, silhouette
     }
 
     public init(from decoder: Decoder) throws {
@@ -36,6 +43,7 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
         bendStiffness = try c.decodeIfPresent(Double.self, forKey: .bendStiffness) ?? d.bendStiffness
         pressure = try c.decodeIfPresent(Double.self, forKey: .pressure) ?? d.pressure
         damping = try c.decodeIfPresent(Double.self, forKey: .damping) ?? d.damping
+        bulkDamping = try c.decodeIfPresent(Double.self, forKey: .bulkDamping) ?? d.bulkDamping
         gravity = try c.decodeIfPresent(Double.self, forKey: .gravity) ?? d.gravity
         rootGravity = try c.decodeIfPresent(Double.self, forKey: .rootGravity) ?? d.rootGravity
         floorFriction = try c.decodeIfPresent(Double.self, forKey: .floorFriction) ?? d.floorFriction
@@ -53,17 +61,18 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
         case .jelly:
             break
         case .firm:
-            p.damping = mini ? 12 : 11
-            p.anchorStiffness = 120
+            // Calm (ζ ≈ 0.28): about one overshoot and done.
+            p.damping = mini ? 10 : 9
+            p.anchorStiffness = 220
         case .runny:
             p.pressure = 45
-            p.damping = 6
+            p.damping = 2.2
             p.gravity = 4
         case .airy:
             p.gravity = 0.6
-            p.damping = 7
+            p.damping = 2.4
         case .bouncy:
-            p.damping = 6.5
+            p.damping = 1.8
         }
         return p
     }
@@ -73,7 +82,7 @@ public struct SoftBodyParams: Sendable, Codable, Equatable {
     public static var mini: SoftBodyParams {
         var p = SoftBodyParams()
         p.pointCount = 16
-        p.damping = 9
+        p.damping = 3.0
         p.pressure = 50
         return p
     }
@@ -105,6 +114,9 @@ public enum Impulse: Sendable, Equatable {
     case puff(scale: Double)
     /// Gentle push of the whole body.
     case nudge(direction: SIMD2<Double>)
+    /// A finger dent: the points facing `angle` (radians, 0 = right, -π/2 = top) move straight
+    /// in by up to `depth` R and the ring rings back.
+    case poke(angle: Double, depth: Double)
 }
 
 public enum SoftBodyEvent: Sendable, Equatable {

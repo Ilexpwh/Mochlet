@@ -129,6 +129,10 @@ public final class SlimeEngine {
     private var shakeX = AnimatedValue(0)
     private var shakeY = AnimatedValue(0)
     private var pulse: Double = 0
+    /// A hop waiting for its anticipation crouch to finish.
+    private var hopAt: (time: Double, v0: Double)?
+    /// Vertical stretch while airborne (1 on the floor).
+    private var airStretch: Double = 1
     private var coreSpring: Spring2D
     /// The inner core's scale trails the body's and overshoots (secondary motion).
     private var coreScaleSpring = Spring2D(value: SIMD2(1, 1), omega: 10, zeta: 0.35)
@@ -284,7 +288,15 @@ public final class SlimeEngine {
         updateGaze()
         blink.advance(to: time, rng: &rng)
         breath.advance(dt: h, time: time)
-        body.squash = flatten.value * breath.value * (1 + pulse)
+        if let pending = hopAt, time >= pending.time {
+            hopAt = nil
+            launchHop(pending.v0)
+        }
+        // Air stretch: snaps tall at take-off (launchHop) and relaxes toward the speed-based
+        // target, so the body is thinnest leaving the floor and round again at the apex.
+        let stretchTarget = body.airborne && !reduceMotion ? 1 + min(0.20, 0.08 * abs(body.rootVelocity.y)) : 1
+        airStretch = approach(airStretch, toward: stretchTarget, tau: 0.08, dt: h)
+        body.squash = flatten.value * breath.value * (1 + pulse) * airStretch
         body.lean = lean.value
         body.offset = SIMD2(shakeX.value, shakeY.value)
         body.sizeScale = sizeScale.value
@@ -345,6 +357,19 @@ public final class SlimeEngine {
         }
         if speed > 3, !reduceMotion {
             pendingDust = (speed, time + 0.3)
+        }
+        // Landing squash: the top should drop about 0.55 R on a hard landing (height ≈ 0.68) and
+        // less on a hop. The lightly damped ring already compresses by about speed / ω₀ on its
+        // own and then rings out, so the scripted flatten only adds what is missing, with two
+        // small rebounds; pumping more into the anchors would resonate with the ring.
+        if !reduceMotion, morph == nil, state != .sleeping, state != .split, speed > 0.5 {
+            let want = 0.55 * clamp(speed / 2.5, 0.3, 1)
+            let fromPhysics = speed / (body.params.anchorStiffness + 0.52 * body.params.pressure).squareRoot()
+            let depth = max(0, want - fromPhysics) / max(1.0, -body.referenceRing.map(\.y).min()!)
+            if depth > 0.01 {
+                flatten.animate(keys: [.init(to: 1 - depth, duration: 0.07, ease: .outQuad), .init(to: 1 + 0.3 * depth, duration: 0.16, ease: .inOutSine),
+                                       .init(to: 1 - 0.12 * depth, duration: 0.14, ease: .inOutSine), .init(to: 1, duration: 0.20, ease: .outBack)], at: time)
+            }
         }
         onEvent?(.landed(speed: speed))
     }
@@ -423,9 +448,11 @@ public final class SlimeEngine {
         lastInteractionAt = time
         let c = body.centroid
         let side: Double = local.x >= c.x ? 1 : -1
-        if !reduceMotion { body.apply(.slap(side: side, strength: 0.35)) }
-        // Strain creases radiate from the finger and fade; a third quick poke draws sweat.
+        // ぷにぷに: a local dent under the finger that ripples round the ring, a squint, strain
+        // creases that fade, and a sweat drop on the third quick poke.
         strainAngle = atan2(local.y - c.y, local.x - c.x)
+        if !reduceMotion { body.apply(.poke(angle: strainAngle, depth: 0.25)) }
+        if emote == nil, dragDirection == nil { eyeOverride = (.squint, .squint, time + 0.25) }
         strainAmount = AnimatedValue(1)
         strainAmount.animate(to: 0, duration: 0.5, ease: .outQuad, at: time)
         pressBurst = time - lastPressAt < 0.9 ? pressBurst + 1 : 1
@@ -959,7 +986,7 @@ public final class SlimeEngine {
         }
         switch e {
         case .happy:
-            hop(1.4)
+            hop(1.6)
             blush.animate(to: max(baseBlush, 0.55), duration: 0.2, at: time)
         case .love:
             lean.animate(keys: [.init(to: 0.08, duration: 0.3, ease: .inOutSine), .init(to: -0.08, duration: 0.33, ease: .inOutSine),
@@ -1019,8 +1046,9 @@ public final class SlimeEngine {
         case .melt:
             // とけている: the body sags into a puddle and spreads at the base, eyes drooping.
             startMorph(.melt, duration: 0.7, ease: .inOutSine)
+            // The release eases straight back: the jelly ring supplies the overshoot on its own.
             flatten.animate(keys: [.init(to: 0.62, duration: 0.7, ease: .inOutSine), .init(to: 0.62, duration: 1.0, ease: .linear),
-                                   .init(to: 1, duration: 0.5, ease: .outBack)], at: time)
+                                   .init(to: 1, duration: 0.5, ease: .inOutSine)], at: time)
             faceSlide.animate(to: 0.25, duration: 0.6, ease: .inOutSine, at: time)
             scheduler.schedule(at: time + 1.7, tag: Self.emoteTag) { [weak self] in
                 guard let self else { return }
@@ -1039,7 +1067,7 @@ public final class SlimeEngine {
             cue(.squish, rate: 0.7, gain: 0.8)
         case .puff:
             // ふくらむ: cheeks balloon out, a glare, a pout and steam off the top.
-            startMorph(.puff, duration: 0.3, ease: .outBack)
+            startMorph(.puff, duration: 0.2, ease: .outBack)
             sizeScale.animate(to: 1.06, duration: 0.3, ease: .outBack, at: time)
             blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
             for k in 0..<3 {
@@ -1055,8 +1083,8 @@ public final class SlimeEngine {
             // A startled jolt: ring eyes, a wide-open mouth, a quick stretch upward and a "!".
             mouthOpen.animate(to: 0.9, duration: 0.08, at: time)
             eyeScale.animate(keys: [.init(to: style.eyeScale * 1.3, duration: 0.08, ease: .outBack), .init(to: style.eyeScale * 1.15, duration: 0.6, ease: .outCubic)], at: time)
-            flatten.animate(keys: [.init(to: 1.14, duration: 0.08, ease: .outQuad), .init(to: 0.96, duration: 0.14, ease: .outQuad),
-                                   .init(to: 1, duration: 0.3, ease: .outBack)], at: time)
+            // The jolt is a jump with no anticipation: the air stretch supplies the upward snap.
+            hop(1.6, anticipation: 0)
             if !reduceMotion { shakeKicks([(0, -1.8), (0.07, 1.2)]) }
             addAccessory(.exclamation, owner: .emote)
             cue(.pyu, gain: 0.8)
@@ -1069,7 +1097,8 @@ public final class SlimeEngine {
                     guard let self else { return }
                     let f = self.frameNow()
                     for e in f.eyes where e.visible {
-                        let at = e.center + SIMD2(e.side * 0.06, 0.22)
+                        // Tears fall from the ends of the stroke face's ribbons, or from the welling ball eyes.
+                        let at = e.center + SIMD2(e.side * 0.06, self.faceStyle == .anime ? 0.55 : 0.22)
                         self.spawn(.drop, at: at, velocity: SIMD2(e.side * 0.08, 0.3), life: 0.75, size: 0.13)
                     }
                 }
@@ -1127,7 +1156,6 @@ public final class SlimeEngine {
             // ツンツン: a side squish away from the finger with "> <" eyes.
             let side: Double = (pointer?.x ?? 1) >= 0 ? 1 : -1
             mouthOpen.animate(to: 0.25, duration: 0.08, at: time)
-            if !reduceMotion { body.apply(.slap(side: side, strength: 0.55)) }
             lean.animate(keys: [.init(to: -0.12 * side, duration: 0.1, ease: .outQuad), .init(to: style.lean, duration: 0.45, ease: .outBack)], at: time)
             cue(.puni)
         }
@@ -1142,7 +1170,11 @@ public final class SlimeEngine {
         guard let ended = emote else { return }
         emote = nil
         clearGesture(owner: .emote)
-        if morph != nil { morphAmount.animate(to: 0, duration: 0.35, ease: .inOutSine, at: time) }
+        if let m = morph {
+            morphAmount.animate(to: 0, duration: 0.35, ease: .inOutSine, at: time)
+            // Everything that stops wobbles once; puffed cheeks let go with a bigger one.
+            if !reduceMotion { body.apply(.wobble(angle: -.pi / 2, strength: m == .puff ? 0.3 : 0.12)) }
+        }
         switch ended {
         case .melt, .shock, .cry, .nod, .stretch:
             flatten.animate(to: userState == .sleeping ? 0.80 : 1, duration: 0.4, ease: .outBack, at: time)
@@ -1179,9 +1211,22 @@ public final class SlimeEngine {
         }
     }
 
-    private func hop(_ v0: Double) {
-        guard !reduceMotion, !body.airborne else { return }
+    /// A hop with the anime's anticipation: a quick crouch, then the launch; the air stretch
+    /// (`substep`) and the landing squash (`landed`) follow. `anticipation: 0` launches at once.
+    private func hop(_ v0: Double, anticipation: Double = 0.12) {
+        guard !reduceMotion, !body.airborne, hopAt == nil else { return }
+        if anticipation <= 0 {
+            launchHop(v0)
+            return
+        }
+        flatten.animate(keys: [.init(to: 0.85, duration: anticipation, ease: .outQuad), .init(to: 1, duration: 0.06, ease: .outQuad)], at: time)
+        hopAt = (time + anticipation, v0)
+    }
+
+    private func launchHop(_ v0: Double) {
+        guard !body.airborne else { return }
         body.apply(.jump(v0: v0))
+        airStretch = 1 + min(0.20, 0.08 * v0)
         cue(.pyon, rate: clamp(2.4 / v0, 0.8, 1.2), gain: 0.5)
         if appearance.look.wings != .none { cue(.fuwa, gain: 0.5) }
     }
@@ -1344,7 +1389,7 @@ public final class SlimeEngine {
         case .finished:
             hop(2.6)
             blush.animate(to: max(baseBlush, 0.6), duration: 0.2, at: time)
-            scheduler.schedule(at: time + 0.26, tag: Self.stateTag) { [weak self] in self?.spawnSparkles(count: 5) }
+            scheduler.schedule(at: time + 0.40, tag: Self.stateTag) { [weak self] in self?.spawnSparkles(count: 5) }
             scheduler.schedule(at: time + 1.9, tag: Self.stateTag) { [weak self] in
                 guard let self else { return }
                 self.blush.animate(to: self.baseBlush, duration: 0.4, at: self.time)
@@ -1394,7 +1439,7 @@ public final class SlimeEngine {
     // MARK: - State loops
 
     private func scheduleMicroIdle() {
-        let dt = rng.range(6...14)
+        let dt = rng.range(8...15)
         scheduler.schedule(at: time + dt, tag: Self.stateTag) { [weak self] in
             guard let self else { return }
             self.microIdle()
@@ -1409,12 +1454,18 @@ public final class SlimeEngine {
             scheduler.schedule(at: time + 1.1, tag: Self.stateTag) { [weak self] in self?.cue(.sip, gain: 0.5) }
             return
         }
-        switch rng.int(0..<3) {
-        case 0:
+        // A random jiggle, a weight shift, a glance or a half-lid; nothing moves linearly.
+        let r = rng.unit()
+        if r < 0.45 {
+            if !reduceMotion { body.apply(.wobble(angle: rng.range(-2.6...(-0.5)), strength: 0.18)) }
+        } else if r < 0.75 {
+            let base = currentStyle().lean
+            let shift = rng.sign() * 0.07
+            lean.animate(keys: [.init(to: base + shift, duration: 1.0, ease: .inOutSine), .init(to: base + shift, duration: 0.6, ease: .linear),
+                                .init(to: base, duration: 1.0, ease: .inOutSine)], at: time)
+        } else if r < 0.90 {
             glance = (SIMD2(rng.sign() * rng.range(0.3...0.5), rng.range(-0.1...0.25)), time + rng.range(0.6...1.0))
-        case 1:
-            if !reduceMotion { body.apply(.wobble(angle: rng.range(-2.6...(-0.5)), strength: 0.25)) }
-        default:
+        } else {
             eyeOverride = (.half, .half, time + 0.35)
         }
     }
@@ -1855,7 +1906,9 @@ public final class SlimeEngine {
             hatSpring.target = SIMD2(clamp(-dx * 0.05, -0.08, 0.08), clamp(-dy * 0.04, -0.08, 0.08))
             if landed { hatSpring.velocity.y -= 1.6 }
             hatSpring.advance(h)
-            hatSpring.value = SIMD2(clamp(hatSpring.value.x, -0.08, 0.08), clamp(hatSpring.value.y, -0.08, 0.08))
+            // The hat never leaves the crown by more than 0.08 R, whichever way it swings.
+            let hatLen = simd_length(hatSpring.value)
+            if hatLen > 0.08 { hatSpring.value *= 0.08 / hatLen }
             if simd_length(hatSpring.value - hatSpring.target) < 1e-3, simd_length(hatSpring.velocity) < 1e-3 { hatSpring.value = hatSpring.target; hatSpring.velocity = .zero }
             traitAnim.hat = hatSpring.value
         } else {
